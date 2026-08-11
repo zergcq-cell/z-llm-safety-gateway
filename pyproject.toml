@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "z-llm-safety-gateway"
+version = "0.1.0"
+description = "Open-source, modular LLM content safety gateway"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "z LLM Safety Gateway Contributors" },
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.27.0",
+    "structlog>=24.1.0",
+    "pyyaml>=6.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "respx>=0.21.0",
+    "httpx[testing]>=0.27.0",
+]
+
+[project.scripts]
+z-safety-gateway = "z_llm_safety_gateway.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/z_llm_safety_gateway"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["z_llm_safety_gateway"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false

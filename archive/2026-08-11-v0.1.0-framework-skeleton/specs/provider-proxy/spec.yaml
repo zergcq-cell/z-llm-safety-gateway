@@ -1,0 +1,155 @@
+meta:
+  capability: "provider-proxy"
+  change_id: "2026-08-11-v0.1.0-framework-skeleton"
+  created: "2026-08-11T00:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "ModelRouter matches model field against routing rules using glob patterns, first match wins"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[2], DESIGN.md Section 9.3"
+        given: "a routing configuration with rules in YAML order: 'gpt-4*' -> openai, 'gpt-3.5*' -> openai, 'azure-*' -> azure_openai, 'llama*' -> local_llama"
+        when: "a request with model 'gpt-4-turbo' is routed through the ModelRouter"
+        then: "the ModelRouter SHALL match 'gpt-4*' (first matching pattern in YAML order) and return the 'openai' provider"
+        and: []
+
+      - id: SC-002
+        confidence: high
+        evidence: "DESIGN.md Section 9.3"
+        given: "a routing configuration with overlapping patterns 'gpt-4*' -> openai and 'gpt-*' -> local_llama in that YAML order"
+        when: "a request with model 'gpt-4-turbo' is routed through the ModelRouter"
+        then: "the ModelRouter SHALL match 'gpt-4*' (first match in YAML order) and return the 'openai' provider"
+        and:
+          - "the 'gpt-*' pattern SHALL NOT be evaluated for this model since first match wins"
+
+      - id: SC-003
+        confidence: high
+        evidence: "DESIGN.md Section 9.3"
+        given: "a routing configuration with rule 'llama*' -> local_llama"
+        when: "a request with model 'llama3-70b' is routed through the ModelRouter"
+        then: "the ModelRouter SHALL match 'llama*' and return the 'local_llama' provider"
+        and: []
+
+  - id: REQ-002
+    description: "If no routing rule matches, return HTTP 404 model_not_found error"
+    scenarios:
+      - id: SC-004
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria, DESIGN.md Section 4.4"
+        given: "a routing configuration with rules 'gpt-4*' -> openai and 'llama*' -> local_llama"
+        when: "a request with model 'claude-3-opus' is routed and no routing pattern matches"
+        then: "the gateway SHALL return HTTP 404 with error type 'invalid_request_error' and code 'model_not_found'"
+        and:
+          - "the error message SHALL indicate that no routing rule matches the requested model"
+
+  - id: REQ-003
+    description: "OpenAIProvider forwards request to OpenAI API with configured base_url and api_key"
+    scenarios:
+      - id: SC-005
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[2], DESIGN.md Section 9.2-9.3"
+        given: "an OpenAI provider configured with base_url 'https://api.openai.com/v1' and api_key sourced from environment variable"
+        when: "a chat completion request is forwarded to the OpenAI provider"
+        then: "the OpenAIProvider SHALL forward the request to the configured base_url using httpx.AsyncClient"
+        and:
+          - "the Authorization header SHALL contain 'Bearer <api_key>'"
+          - "the request body SHALL be passed through unmodified"
+          - "the response from the provider SHALL be returned to the client"
+
+  - id: REQ-004
+    description: "OpenAICompatibleProvider forwards to any OpenAI-compatible endpoint (Ollama, vLLM, etc.)"
+    scenarios:
+      - id: SC-006
+        confidence: high
+        evidence: "DESIGN.md Section 9.2"
+        given: "an OpenAI-compatible provider configured with base_url 'http://localhost:11434/v1'"
+        when: "a chat completion request is forwarded to the OpenAI-compatible provider"
+        then: "the OpenAICompatibleProvider SHALL forward the request to the configured base_url"
+        and:
+          - "the request format SHALL be OpenAI-compatible with no format conversion"
+          - "the response SHALL be returned to the client as-is"
+
+  - id: REQ-005
+    description: "AzureOpenAIProvider forwards to Azure OpenAI with api_version parameter"
+    scenarios:
+      - id: SC-007
+        confidence: high
+        evidence: "DESIGN.md Section 9.2, 9.5"
+        given: "an Azure OpenAI provider configured with base_url, api_key, and api_version '2024-06-01'"
+        when: "a chat completion request is forwarded to the Azure OpenAI provider"
+        then: "the AzureOpenAIProvider SHALL forward the request to the configured base_url with the api_version as a query parameter"
+        and:
+          - "the 'api-version' query parameter SHALL be set to the configured value"
+          - "the Authorization header SHALL contain 'Bearer <api_key>'"
+
+  - id: REQ-006
+    description: "Provider timeout (exceeds security.timeout.upstream) -> HTTP 502 provider_error"
+    scenarios:
+      - id: SC-008
+        confidence: high
+        evidence: "DESIGN.md Section 9.7, 11.5"
+        given: "a provider configured with upstream timeout of 120 seconds"
+        when: "the provider does not respond within the configured timeout"
+        then: "the gateway SHALL return HTTP 502 with error type 'provider_error' and code 'provider_error'"
+        and:
+          - "the upstream request SHALL be aborted"
+          - "the error.details SHALL contain the provider name and a timeout message"
+
+  - id: REQ-007
+    description: "Provider 4xx/5xx errors wrapped as HTTP 502 provider_error with original details in error.details"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "DESIGN.md Section 9.7"
+        given: "a provider that returns an HTTP 4xx (e.g., 400 Bad Request) or 5xx (e.g., 500 Internal Server Error) response"
+        when: "the gateway receives the provider error response"
+        then: "the gateway SHALL wrap the error as HTTP 502 with error type 'provider_error'"
+        and:
+          - "the error.details SHALL contain the original provider status code"
+          - "the error.details SHALL contain the original provider error message"
+          - "the error.details SHALL contain the provider name"
+          - "if the provider returns a Retry-After header, it SHALL be forwarded to the client"
+
+  - id: REQ-008
+    description: "Provider network error (connection refused, DNS failure) -> HTTP 502 provider_error"
+    scenarios:
+      - id: SC-010
+        confidence: high
+        evidence: "DESIGN.md Section 9.7"
+        given: "a provider with base_url pointing to an unreachable endpoint"
+        when: "the gateway attempts to forward a request and encounters a network error (connection refused, DNS failure, etc.)"
+        then: "the gateway SHALL return HTTP 502 with error type 'provider_error'"
+        and:
+          - "the error.details SHALL contain the provider name"
+          - "the error.details SHALL contain a generic network error message"
+          - "detailed network error information SHALL be logged for debugging but not exposed to the client"
+
+  - id: REQ-009
+    description: "No retry in MVP - provider errors are returned directly to client"
+    scenarios:
+      - id: SC-011
+        confidence: high
+        evidence: "DESIGN.md Section 9.7"
+        given: "a provider that returns an error (timeout, 4xx, 5xx, or network error)"
+        when: "the gateway receives the provider error"
+        then: "the gateway SHALL return the error response to the client without retrying the request"
+        and:
+          - "only one attempt SHALL be made to the provider"
+          - "provider failover SHALL NOT be available in MVP"
+
+  - id: REQ-010
+    description: "Routing conflict detection - overlapping glob patterns produce startup warning"
+    scenarios:
+      - id: SC-012
+        confidence: high
+        evidence: "DESIGN.md Section 9.3, 10.4"
+        given: "a routing configuration with overlapping patterns 'gpt-4*' -> openai and 'gpt-*' -> local_llama"
+        when: "the gateway starts up and validates the routing configuration"
+        then: "the gateway SHALL log a warning about overlapping routing rules"
+        and:
+          - "the warning SHALL identify which patterns overlap and for which model names"
+          - "the warning SHALL state which pattern will take precedence (first match)"
+          - "the gateway SHALL still start successfully (warning does not block startup)"

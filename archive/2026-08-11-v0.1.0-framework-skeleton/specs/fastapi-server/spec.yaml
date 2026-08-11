@@ -1,0 +1,160 @@
+meta:
+  capability: "fastapi-server"
+  change_id: "2026-08-11-v0.1.0-framework-skeleton"
+  created: "2026-08-11T00:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "App factory pattern: create_app(config_path) creates a FastAPI instance with loaded configuration"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[0]; design.md -> Decision 2 (FastAPI App Factory)"
+        given: "a valid YAML config file path containing server, providers, and routing sections"
+        when: "create_app(config_path) is called"
+        then: "the function SHALL return a FastAPI application instance"
+        and:
+          - "the returned app SHALL have loaded the configuration from the given path"
+          - "the returned app SHALL have registered all route handlers (/v1/chat/completions, /v1/models, /health, /ready, /metrics)"
+          - "the returned app SHALL have registered RequestIDMiddleware"
+          - "the returned app SHALL have registered global exception handlers for ProviderError and ConfigError"
+          - "calling create_app with different config paths SHALL produce independent app instances"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md -> Decision 2; proposal.yaml -> constraints (factory pattern)"
+        given: "a config file that does not exist on disk"
+        when: "create_app(config_path) is called"
+        then: "the function SHALL raise an exception that prevents the app from starting"
+        and:
+          - "the exception message SHALL include the config file path that was not found"
+
+  - id: REQ-002
+    description: "/v1/chat/completions endpoint accepts POST requests, parses the body, forwards to the matched provider, and returns the provider response"
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[1]; DESIGN.md -> Section 4.1 (endpoints table)"
+        given: "a running gateway instance with a configured provider and a routing rule matching model 'gpt-4*'"
+        when: "a POST request is sent to /v1/chat/completions with a JSON body containing model 'gpt-4' and a messages array"
+        then: "the endpoint SHALL accept the request and return the provider response as-is to the client"
+        and:
+          - "the response status code SHALL match the provider response status code"
+          - "the response body SHALL be the provider response body forwarded transparently"
+          - "the response SHALL include the X-Request-ID header"
+          - "the response SHALL include the X-Safety-Action: allow header"
+
+      - id: SC-004
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[1]; design.md -> Architecture (request flow)"
+        given: "a running gateway instance with a routing rule matching model 'gpt-4*'"
+        when: "a POST request is sent to /v1/chat/completions with a model field that matches no routing rule"
+        then: "the endpoint SHALL return HTTP 404 with an OpenAI-compatible error of type invalid_request_error and code model_not_found"
+        and:
+          - "the error response SHALL include the X-Request-ID header"
+          - "the error message SHALL indicate that no routing rule matches the requested model"
+
+      - id: SC-005
+        confidence: medium
+        evidence: "proposal.yaml -> constraints (Phase 1 direct forward); DESIGN.md -> Section 4.1"
+        given: "a running gateway instance"
+        when: "a POST request is sent to /v1/chat/completions with a body that is not valid JSON"
+        then: "the endpoint SHALL return HTTP 400 with an OpenAI-compatible error"
+        and:
+          - "the error response SHALL include the X-Request-ID header"
+
+  - id: REQ-003
+    description: "/v1/models endpoint forwards the request to the first configured provider and returns the model list as-is"
+    scenarios:
+      - id: SC-006
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[2]; DESIGN.md -> Section 9.8 (/v1/models passthrough)"
+        given: "a running gateway instance with at least one configured provider"
+        when: "a GET request is sent to /v1/models"
+        then: "the endpoint SHALL forward the request to the first configured provider and return the provider response as-is"
+        and:
+          - "the response status code SHALL match the provider response status code"
+          - "the response body SHALL be the provider model list forwarded transparently"
+          - "the response SHALL include the X-Request-ID header"
+          - "no model aggregation across multiple providers SHALL be performed in Phase 1"
+
+  - id: REQ-004
+    description: "Server starts and listens on the configured host:port"
+    scenarios:
+      - id: SC-007
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[0]; design.md -> Decision 2 (app factory)"
+        given: "a valid config file with server.host set to '127.0.0.1' and server.port set to '8080'"
+        when: "the server is started using the created app instance"
+        then: "the server SHALL bind to and listen on 127.0.0.1:8080"
+        and:
+          - "the server SHALL accept incoming HTTP connections on the configured port"
+          - "the server configuration SHALL be loaded once at startup, not per request"
+
+      - id: SC-008
+        confidence: medium
+        evidence: "design.md -> Decision 2 (factory pattern supports uvicorn multi-worker)"
+        given: "a valid config file with a custom host and port"
+        when: "the server is started with uvicorn referencing the app factory"
+        then: "the server SHALL start successfully without import-time side effects"
+        and:
+          - "the app factory SHALL be importable without starting the server"
+
+  - id: REQ-005
+    description: "Global error handler wraps provider errors as OpenAI-compatible format with HTTP 502 provider_error"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[20]; DESIGN.md -> Section 9.7 (provider error handling); design.md -> Decision 9"
+        given: "a running gateway instance with a configured provider that returns a 5xx error"
+        when: "a request is forwarded to the provider and the provider returns an error response"
+        then: "the gateway SHALL return HTTP 502 with an OpenAI-compatible error body of type provider_error"
+        and:
+          - "the error body SHALL include a 'details' field containing the provider name and original provider message"
+          - "the error response SHALL include the X-Request-ID header"
+
+      - id: SC-010
+        confidence: high
+        evidence: "DESIGN.md -> Section 9.7 (provider error table); design.md -> Decision 9"
+        given: "a running gateway instance with a configured provider that times out"
+        when: "a request is forwarded to the provider and the upstream timeout is exceeded"
+        then: "the gateway SHALL return HTTP 502 with an OpenAI-compatible error body of type provider_error"
+        and:
+          - "the error message SHALL indicate a connection timeout"
+          - "the gateway SHALL abort the upstream request"
+
+      - id: SC-011
+        confidence: high
+        evidence: "DESIGN.md -> Section 9.7 (provider 4xx); design.md -> Decision 9"
+        given: "a running gateway instance with a configured provider that returns a 4xx error (e.g., 400, 401, 403)"
+        when: "a request is forwarded to the provider and the provider returns a 4xx error"
+        then: "the gateway SHALL wrap the error and return HTTP 502 with an OpenAI-compatible error body of type provider_error"
+        and:
+          - "the error 'details' field SHALL include the original provider status code"
+          - "the error 'details' field SHALL include the original provider message"
+          - "the gateway SHALL NOT retry the request"
+
+  - id: REQ-006
+    description: "Global error handler wraps config errors as HTTP 500 internal_error"
+    scenarios:
+      - id: SC-012
+        confidence: high
+        evidence: "design.md -> Decision 9 (error handling); DESIGN.md -> Section 4.4 (error codes: config_error -> 500 internal_error)"
+        given: "a running gateway instance that encounters a configuration error during request processing"
+        when: "a ConfigError exception is raised within a route handler"
+        then: "the global exception handler SHALL return HTTP 500 with an OpenAI-compatible error body of type internal_error"
+        and:
+          - "the error code SHALL be 'config_error'"
+          - "the error response SHALL include the X-Request-ID header"
+          - "the error message SHALL describe the configuration issue without exposing internal secrets"
+
+      - id: SC-013
+        confidence: medium
+        evidence: "design.md -> Decision 9 (generic Exception -> 500 internal_error); DESIGN.md -> Section 4.4"
+        given: "a running gateway instance that encounters an unexpected exception during request processing"
+        when: "an unhandled Exception is raised within a route handler"
+        then: "the global exception handler SHALL return HTTP 500 with an OpenAI-compatible error body of type internal_error"
+        and:
+          - "the error response SHALL include the X-Request-ID header"
+          - "the internal exception details SHALL be logged but NOT exposed in the response body"

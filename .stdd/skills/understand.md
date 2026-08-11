@@ -1,0 +1,157 @@
+---
+name: stdd-understand
+description: "STDD Phase 1: 需求理解与确认 — 将模糊需求转化为清晰、可验证的变更提案（proposal.md）"
+stdd_version: "2.9.5"
+---
+# STDD Phase 1: UNDERSTAND — 需求理解与确认
+
+## 阶段目标
+
+将用户需求转化为清晰、可验证、经用户确认的变更提案（proposal.md）。
+
+### Step 0: 版本自检
+
+先读取并执行版本自检步骤：`.stdd/skills/_shared/version-check.md`
+
+> 检查项目 `.stdd/version.yaml` 与技能版本是否一致。落后时告警但不阻断执行。
+
+---
+
+## 前置条件
+
+- 用户提出了需求或问题描述
+- 项目已初始化 STDD（存在 `.stdd/` 目录）
+
+## 执行流程
+
+### Step 1: 问题探索
+
+1. 仔细阅读用户的需求描述
+2. 如果需求涉及现有代码，探索相关代码库：
+   - 理解当前系统行为
+   - 识别问题边界和影响范围
+   - 查找已有的相关 spec（`specs/` 目录）
+3. 如果有不明确的地方，向用户提问澄清（不要假设）
+
+### Step 2: 读取模板
+
+先读取模板文件：`.stdd/templates/proposal.md`
+
+严格按照模板的章节结构和字段定义起草 proposal。
+
+### Step 3: 起草 proposal.yaml（V2.9.2: YAML-First）
+
+**V2.9.2 Canonical-First**：优先起草 `proposal.yaml`（Canonical YAML），`proposal.md` 从 YAML 渲染生成。
+
+先读取模板：`.stdd/templates/canonical/proposal.yaml`
+
+按模板起草 proposal.yaml：
+- **meta**：change_id, title, created, status
+- **why**：problem + motivation
+- **what_changes**：变更列表（每项标注 type: new/modified/removed）
+- **capabilities**：new + modified
+- **constraints / stakeholders / risk_areas / non_goals**
+- **critical / anchoring / success_criteria**
+
+然后执行 `python bin/stdd canon generate <change>` 从 YAML 渲染 proposal.md（Human View）。
+
+### Step 3.5: 提案审查（自动化文档 Review）
+
+在提交用户确认之前，自动审查 proposal.md 的质量：
+
+1. **完整性检查**：
+   - Why：是否清晰描述了问题和动机？
+   - What Changes：每项是否具体可执行？
+   - Capabilities：是否正确区分了 Modified 和 New？
+   - Impact：是否评估了代码/配置/基础设施影响？
+   - Success Criteria：每个条件是否可验证（能明确用是/否回答）？
+
+2. **清晰度检查**：
+   - 是否有模糊表述（如"优化"、"改进"等无量化目标的词）？
+   - 技术术语是否正确使用？
+   - 是否有未定义的缩写或概念？
+
+3. **范围检查**：
+   - 变更是否聚焦单一目标？
+   - 是否有不必要的范围蔓延？
+   - 是否与已有 specs/ 中的 Requirement 冲突？
+
+审查发现问题后**自动修复**，然后进入 Step 3.6 模式建议。
+
+### Step 3.6: 复杂度评分与模式建议（V2.9 新增）
+
+在提交用户确认之前，基于 proposal 的复杂度自动计算评分并建议执行模式：
+
+1. **计算复杂度评分**（0-17 分，详见 `.stdd/config.d/lite.yaml`）：
+   - 预估文件数 (0-3) + 预估行数 (0-3) + Capability 数 (0-2) + 风险等级 (0-4) + 数据/API (0-2) + 安全 (0-3)
+2. **映射到模式**：
+   - 0-3 → `lightweight`（微变更，1-3 文件、<50 行）
+   - 4-7 → `standard`（标准变更）
+   - 8+ → `thorough`（大型/关键变更）
+3. **在 Gate 1 确认时展示模式建议**，允许用户调整
+4. 模式确认后写入 `.stdd.yaml`（`mode`, `task_type`, `complexity_score`, `score_confidence: preliminary`）
+
+---
+
+### Step 4: 用户确认（强制门）
+
+向用户展示 draft proposal 后，**必须等待用户明确确认**：
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  STDD Phase 1: UNDERSTAND — 等待确认
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 变更提案：
+
+  【Why】...
+  【What Changes】...
+  【Capabilities】...
+  【Impact】...
+  【Success Criteria】...
+
+🔍 自动审查结果（Step 3.5 提案审查）：
+  审查维度：完整性 / 清晰度 / 范围
+  发现问题：N 项 | 已自动修复：N 项
+  审查结论：✅ 全部通过 / ⚠️ N 项已修复 / ❌ N 项待处理
+
+⚠️ 请确认以上内容：
+  - 范围和边界是否准确？
+  - 成功标准是否可验证？
+  - 是否有遗漏或需要调整的地方？
+
+👉 确认无误请回复，或提出修改意见。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+如果用户提出修改意见 → 根据反馈修订 proposal → 重新展示等待确认
+如果用户确认 → 锁定 proposal，进入 Step 5
+
+**确认前不生成文件。**
+
+> 确认门模板参见: `.stdd/skills/_shared/confirm-gate.md`
+
+### Step 5: 生成终版 proposal.md
+
+用户确认后：
+1. 创建 change 目录：`changes/<YYYY-MM-DD>-<name>/`
+2. 写入 `proposal.md`
+3. 初始化 `.stdd.yaml` 状态文件（phase: understand → completed）
+4. 提示用户：Phase 1 完成，可以执行 `Phase 2: SPEC`
+
+## 产出物
+
+- `changes/<date>-<name>/proposal.md` — 经用户确认的变更提案
+- `changes/<date>-<name>/.stdd.yaml` — 变更状态文件
+
+## 质量检查
+
+完成前确认：
+- [ ] 每个 Success Criteria 可客观验证（能用是/否回答）
+- [ ] 每个 Capability 边界清晰
+- [ ] Impact 评估覆盖代码、配置、基础设施三个维度
+- [ ] 用户已明确确认 proposal 内容
+
+## 下一阶段
+
+Phase 1 确认完成 → 进入 Phase 2: SPEC（规格设计与测试方案）

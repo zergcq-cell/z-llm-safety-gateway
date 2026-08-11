@@ -1,0 +1,603 @@
+---
+name: stdd-verify
+description: "STDD Phase 5: 质量验证 — 运行测试、覆盖率、lint 等质量检查"
+stdd_version: "2.9.3"
+---
+---
+name: stdd-verify
+description: "STDD Phase 5: 质量验证 — 全量检查 + 11类失败模式 + E2E + 覆盖率诊断"
+stdd_version: "2.9.5"
+---
+# STDD Phase 5: VERIFY — 质量验证
+
+### Step 0: 版本自检
+
+先读取并执行版本自检步骤：`.stdd/skills/_shared/version-check.md`
+
+> 检查项目 `.stdd/version.yaml` 与技能版本是否一致。落后时告警但不阻断执行。
+
+---
+
+## ⚠️ 强制步骤清单
+
+Verify 阶段的以下 7 个 Step 全部是强制步骤，**不可跳过任何一步**。
+进入 Gate 3 前必须确认所有步骤已完成：
+
+| Step | 名称 | 完成标志 |
+|------|------|---------|
+| Step 0 | 多路并行技术评审（3 代理） | 3 个代理均返回审查结果 |
+| Step 1 | 全量质量检查 | pytest + coverage + lint 全部执行 |
+| Step 2 | Diff 审查 | 逐文件检查所有变更 |
+| Step 3 | 十一类失败模式检查 (a-k) | 11 项全部检查完成 |
+| Step 3.5 | 经验库自动记录/更新 | 失败模式已记录到 .stdd/experiences/ |
+| Step 4 | 汇总设计调整 | design-adjustments.md 已生成（或确认无需调整） |
+| Step 5 | 生成测试报告 | test-report.md 已写入 |
+
+**Gate 3 前置条件**：上述 6 步全部完成后，才能进入 Gate 3 用户确认。
+
+## 阶段目标
+
+全量质量检查，生成测试报告，追溯设计调整，等待用户最终确认。
+
+## 前置条件
+
+- Phase 4 已完成（所有切片实现完毕）
+- `.stdd.yaml` 中 `phases.build.status == "completed"`
+
+## 执行模式
+
+**迭代检查循环，行为取决于所选模式：**
+
+- **普通模式**：最多 5 轮迭代，达到上限暂停报告用户。完成后必须等待用户确认（Gate 3）。
+- **长程模式**：最多 10 轮迭代（可配置），达上限后在 test-report 中汇总继续。Gate 3 仍为强制确认门，不自动跳过。
+
+进入本阶段时，先读取 `.stdd.yaml` 中的 `long_range.mode` 确定当前模式。
+从 `.stdd/config.d/long_range.yaml` 的 `long_range.pre_auth.iteration.max_rounds` 读取长程模式迭代上限。
+
+## CLI 桥接检查
+
+所有 CLI 操作前必须执行：
+
+1. 检查 CLI 可用性：执行 `python bin/stdd --help`，检查返回码 = 0
+   - 非零返回 → 报告"CLI 不可用"并暂停，不尝试后续 CLI 操作
+2. 执行 CLI 命令后，检查返回码 = 0
+   - 非零返回 → 报告命令失败和退出码，暂停等待用户处理
+
+## 长程模式运行协议（仅在 `long_range.mode == "full_auto"` 时适用）
+
+### ⚠️ 长程模式强制约束 / MANDATORY LONG-RANGE CONSTRAINTS
+
+> 长程模式 ≠ 可以跳过流程步骤。以下规则不可违反。
+
+| # | 中文 | English |
+|---|------|---------|
+| 1 | **Steps 0-5 全部执行** — 长程模式跳过的是授权交互，不是流程步骤。6 个 Step 一个不能少 | **ALL Steps 0-5 MUST execute** — long-range skips authorization, NOT steps. All 6 steps mandatory |
+| 2 | **失败模式检查全量执行** — 12 类检查（含 (l) 锚定缺失）必须全部执行，不得用占位符代替 | **ALL 12 failure modes MUST be checked** — no placeholder "pass" for unexecuted checks |
+| 3 | **Gate 3 报告必须如实** — 不得美化、不得省略缺口、不得用 PASS 代替 SKIPPED | **Gate 3 report MUST be truthful** — no glossing over gaps, no PASS for SKIPPED checks |
+| 4 | **TC 覆盖率必须报告** — Gate 3 必须展示 test-plan TC 与实际测试的对比 | **TC coverage MUST be reported** — Gate 3 must show planned vs actual TC comparison |
+| 5 | **切片完成度必须逐项展示** — 每个切片的验证状态必须在 Gate 3 中可见 | **Slice completion MUST be shown per-slice** — verification status visible for each slice |
+| 6 | **稻草人检查必须标注** — 任何未实际执行逻辑的检查必须标注为 SKIPPED，不得标注为 PASS | **Straw-man checks MUST be labeled** — unexecuted checks = SKIPPED, never PASS |
+| 7 | **未完成项必须逐项说明** — 当存在未完成项时，必须逐项列出名称、原因、影响、补完计划。不得仅给出数量（如"7 项未完成"）就不加说明。用户需要完整信息才能做出知情决策 | **Incomplete items MUST be itemized** — list each item's name, reason, impact, and remediation plan. NEVER just report a count (e.g., "7 remaining") without detail. Users need full information for informed decisions |
+
+### 运行协议
+
+1. **无交互原则**：Steps 0-5 全部自动执行，不使用 AskUserQuestion，不等待用户回复
+2. **强制步骤**：Step 0-5 共 6 个步骤**必须全部执行**，不可跳过任何一步
+3. **自动降级检测**：每步操作后检查是否触发降级条件：
+   - 连续 3 次修复失败
+   - 通过率 < 95%
+   - 安全问题
+   - **TC 覆盖率 < 50%（新增·V2.7 复盘）**
+   - **失败模式检查有 > 3 项 SKIPPED（新增·V2.7 复盘）**
+4. **进度汇报**：每个 Step 完成后输出简短结果，但不等待回复
+5. **Gate 3 强制确认**：仅 Gate 3 使用 AskUserQuestion 等待用户确认
+6. **仅降级时暂停**：仅在触发降级条件时才暂停
+
+## 执行流程
+
+### Step -1: 上下文预算检查（V2.7 context-budget-check）
+
+在开始本阶段之前，检查当前会话的上下文状态。**本步骤不可跳过。**
+
+1. 估算对话轮次：> 80 轮 → 强烈建议重置
+2. 确认 phase-context.md 已更新到最新状态
+3. 如建议重置：输出 `stdd state --resume` 结果
+
+> 软建议，不阻断。
+
+---
+
+### 迭代循环（普通模式最多 5 轮，长程模式最多 N 轮可配置）
+
+每轮执行以下步骤，有失败则修复后重新开始：
+
+> 长程模式下，Steps 0-5 全部按协议自动执行，不做交互暂停。仅在触发降级条件时暂停。
+
+---
+
+### Step 0: 多路并行技术评审（Review）
+
+在运行自动化质量检查之前，**必须先执行多路并行技术评审**。此步骤确保代码、测试、文档的全面审查，发现测试和 lint 无法检测的问题（设计不一致、死代码、文档过时等）。
+
+#### Step 0.1: 启动并行审查
+
+读取 `.stdd/config.d/quality.yaml` 中的 `review` 配置。
+
+同时启动 3 个审查代理，每个代理审查不同维度：
+
+1. **代码质量审查**（`code` 代理）：
+   - Bug 风险：未处理的边界情况、潜在崩溃、类型错误
+   - 死代码：未使用的导入、不可达的代码块
+   - 一致性：不同模块间相似操作的模式差异
+   - 错误处理：缺失验证、差劲的错误消息、异常吞没
+   - 安全：命令注入、路径遍历、YAML 问题
+   - --dry-run 完整性：所有命令是否正确处理 dry_run 标志
+
+2. **测试/配置审查**（`test_config` 代理）：
+   - 测试覆盖：每个模块/函数是否有测试
+   - Fixture 质量：正确性、隔离性、可复用性
+   - 配置完整性：config.d/ 的 schema 正确性、配置引用有效性
+   - 测试隔离：是否使用 tmp_path、是否修改真实文件系统
+   - 测试质量：断言是否有意义（不只是 != None）
+
+3. **文档/Skills 审查**（`docs_skills` 代理）：
+   - 版本一致性：所有文档是否引用正确的版本号
+   - 引用正确性：config 路径、文件路径、模板名称是否正确
+   - 模板完整性：所有模板是否存在且内容合理
+   - Skill 正确性：Skill 文件中的路径引用是否有效
+   - 过时内容：是否有已删除文件/功能的残留引用
+
+**审查原则**：
+- 每轮运行所有 3 个代理（不可减为 1 个或 2 个）
+- 代理不得修改任何文件（只读审查）
+- 汇总所有发现按严重性分类：Critical(C), High(H), Medium(M), Low(L)
+
+#### Step 0.2: 按阈值判断
+
+将发现与 `review.severity_thresholds` 对比：
+- C（致命）= 0：必须全部修复
+- H（高危）≤ 3：超出需修复
+- M（中等）≤ 10：超出需记录到 test-report
+
+**判断规则**：
+- C > 0 或 H > 阈值或 M > 阈值 → 进入 Step 0.3 修复 → 回到 Step 0.1
+- C = 0 且 H ≤ 阈值且 M ≤ 阈值 → 进入 Step 1
+- 达到 `review.max_rounds` 上限 → 在 test-report 中记录剩余问题并继续
+
+#### Step 0.3: 自动修复 Review 发现
+
+对 C 和 H 级问题自动修复：
+- 修复范围限制在变更涉及的文件
+- 每个修复完成后验证（运行测试确认无回归）
+- 修复结果记录到 `pending-adjustments.md`
+
+M 级问题：记录到 test-report，不强制修复。
+L 级问题：仅在 test-report 的附录中列出，不阻塞。
+
+**降级条件**（长程模式）：
+- 连续修复同一 C/H 问题 3 次仍失败 → 降级暂停
+- Review 迭代达到上限但 C > 0 → 降级暂停
+
+---
+
+#### Step 1: 运行全量质量检查
+
+读取 `.stdd/config.d/quality.yaml` 中的 `quality` 配置，按以下顺序执行：
+
+**1a. 全量测试**：`pytest tests/ -v`
+
+**1b. 覆盖率诊断**（配置 `quality.coverage.enabled: true`，默认开启）：
+- 工具选择：根据 `quality.coverage.tool` 配置，执行对应的覆盖率命令
+  - `pytest-cov`：`pytest tests/ --cov=<source> --cov-report=term-missing --cov-fail-under=0`
+  - `coverage.py`：`coverage run -m pytest tests/ && coverage report -m`
+- 范围限定：根据 `quality.coverage.scope` 决定统计范围
+  - `changed_files_only`（默认）：仅统计 git diff 涉及的变更文件
+  - `full`：全量统计
+- 关键原则：`fail_under` 固定为 0，覆盖率仅作为诊断信号，**不作为阻断条件**。覆盖率结果记录到 test-report 的 1.1 节
+
+**1c. Lint 检查**：`ruff check app/ tests/`
+
+**1d. 类型检查**（如配置了 mypy/pyright）
+
+**1e. 多 Python 版本测试**（配置 `quality.python_versions` 非空时执行）：
+- 对 `quality.python_versions` 中列出的每个 Python 版本，运行 `pytest tests/ -v`
+- 如果某个版本测试失败，记录失败内容但不触发自动修复循环（修复由开发者决定）
+- 失败结果记录到 test-report
+
+**1f. E2E 测试**（配置 `quality.e2e.enabled: true` 时执行）：
+- **执行时机**：仅在 Step 1a-1d 全部通过后执行，且每轮只执行一次。E2E 不参与迭代修复循环
+- **范围选择**：
+  - `scope: critical_only`（默认）：只执行 `critical_paths` 中定义的测试用例
+  - `scope: full`：执行全量 E2E 套件
+- **运行命令**：从 `quality.e2e.command` 读取。常见示例：
+  - `npx playwright test` — Playwright 浏览器测试
+  - `npx cypress run` — Cypress E2E
+  - `pytest tests/e2e/ -v` — Python-based E2E
+- **E2E 失败处理**：不触发自动修复循环（修复成本过高）。记录所有失败到 test-report 第三节，由用户在 Gate 3 决策是否继续
+
+→ Step 1a-1d 有失败：修复 → 重新运行直到全部通过
+→ 全部通过（1e 多版本和 1f E2E 结果单独评估，不参与自动修复循环）：进入 Step 2
+
+---
+
+#### Step 2: Diff 审查
+
+检查 git diff 的每个变更文件，逐项检查：
+
+- **死代码**：print 调试语句、注释掉的代码块、未使用的 import/变量
+- **命名**：名称是否匹配实际行为（不产生误导）
+- **Deletion test**：每个新模块是否值得存在？移除它复杂度会集中在调用方吗？
+- **Magic strings/numbers**：应该是常量或枚举
+- **错误处理**：边界输入是否验证、外部调用是否包装
+- **类型安全**：是否有需要收敛的宽类型
+- **安全**：认证/授权/注入防护是否到位
+- **测试断言正确性**：每个断言，如果实现中有一个字符的 bug，它能否检测到？
+- **范围蔓延**：diff 中有没有超出 Phase 2 计划的改动？
+- **注释**：只保留 WHY（非显而易见的约束、微妙的不变性），删掉 WHAT 注释
+
+→ 发现问题：修复 → 回到 Step 1
+→ 无问题：进入 Step 2.1
+
+---
+
+#### Step 2.1: 非代码 Change 检测（V2.8 C4）
+
+**执行条件**：自动检测。如果 diff 中不包含代码文件（无 .py / .go / .java / .rs / .ts 文件变更），自动切换检查维度：
+
+1. **检测方法**：`git diff --name-only` 检查变更文件扩展名
+2. **触发条件**：所有变更文件扩展名均不在 CODE_EXTENSIONS 列表中
+3. **切换后的替代检查项**：
+   - (a) 幻觉行为 → 所有引用链接是否有效？
+   - (b) 范围蔓延 → 变更文件数是否与 proposal 声明的 Impact 一致？
+   - (g) 管线断链 → 内部 href/src 引用是否可达？
+   - (h) 内容质量 → 与 spec/test-plan 逐项对照内容完整性？
+   - (j) 覆盖真空 → 所有 TC 是否都有对应的目视验证记录？
+4. **输出**：`检测到非代码 Change（<N> 个文档/配置文件），已切换检查维度`
+5. **经验记录**：非代码 Change 的检查结果照常记录到经验库，project_type 标记为 docs/config/static_site
+
+> CODE_EXTENSIONS = {'.py', '.go', '.java', '.rs', '.ts', '.tsx', '.js', '.jsx', '.c', '.cpp', '.h'}
+
+---
+
+#### Step 3: 失败模式检查（V2.9 模式缩放）
+
+**先检查 `.stdd.yaml` 中的 `mode`**：
+
+- **lightweight**：仅检查核心 5 类 — (a)幻觉, (b)范围蔓延, (c)级联错误, (e)工具误用, (f)运行时行为偏差
+- **standard**：全部 12 类 — (a)-(l)
+- **thorough**：全部 12 类 + subagent 交叉验证
+
+对 diff 进行以下专项检查：
+
+---
+
+**(a) 幻觉行为** — 编造的文件路径、环境变量、函数名、库 API
+- 检查：引用的文件路径是否存在？环境变量是否在 config 中定义？
+- 检查：引用的第三方库/API/函数是否真实存在？
+
+**(b) 范围蔓延** — 超出计划文件的改动、打包进来的重构
+- 检查：diff 中的每个文件是否在 Phase 1 proposal 的 Impact 中？
+- 如果有额外改动：是否必要？应该拆分到独立的 change 吗？
+
+**(c) 级联错误** — 静默吞掉的异常、空数组 fallback 掩盖问题
+- 检查：每个 try/catch 是否在正确的层级？是否有 `return []` 掩盖了真错误？
+- 原则：只在系统边界捕获异常
+
+**(d) 上下文丢失** — 与 proposal/design/spec 决策矛盾
+- 检查：实现是否与 Phase 2 的设计文档一致？
+- 如果不一致：是有意调整（应记录在 pending-adjustments），还是无意偏离？
+
+**(e) 工具误用** — 错误的工具选择或参数
+- 检查：文件操作是否用了专用工具而不是 shell 命令？
+
+---
+
+> 以下 (f)-(i) 为 V1.1 新增项，基于 FPPT 项目实测中发现的 TDD 系统性盲区。(j)-(k) 为 V1.2 新增项，基于 FPPT 验收测试回溯。
+
+**(f) 运行时行为偏差** — 静态结构正确但动态行为异常
+- 来源：FPPT 盲区A "静态结构 vs 动态行为"
+- 检查：静态验证通过的项，在运行时是否真正生效？
+- 典型信号：
+  - CSS 规则/类名存在但 JS 未初始化导致元素隐藏或样式失效
+  - DOM 结构存在但交互函数缺失或未绑定
+  - 事件绑定声明存在但实际未挂载到元素
+  - 动画标记存在但动画引擎未正确加载
+- 检查方法：对每个关键交互路径验证其函数定义 + 调用链完整性
+  - 声明了快捷键（ESC/T/←/→）→ 对应 handler 函数是否存在且被绑定？
+  - 声明了 CSS 过渡/动画 → 配套 JS 初始化代码是否存在？
+  - 声明了数据属性标记 → 是否有处理该标记的逻辑？
+
+**(g) 管线断链** — 多步骤转换/构建链路不完整
+- 来源：FPPT 盲区B "单元测试 vs 集成链路"
+- 检查：多步骤转换或构建链路中，每一步是否有显式的转换器或生成指令？
+- 典型信号：
+  - 格式 A→格式 C 的链路中，B→C 步骤有脚本但 A→B 步骤缺失
+  - 链路中存在"由 AI 生成"的隐式假定而无显式脚本或 Prompt 指令
+  - 中间产物的坐标系/单位/路径约定在不同步骤间不一致
+- 检查方法：
+  - 列出设计文档中定义的所有格式转换步骤
+  - 逐个确认每个转换步骤存在对应的转换器（脚本或明确的 Prompt 输出要求）
+  - 对关键链路执行端到端烟雾测试（用已知输入跑完整链路，验证最终输出）
+- 原则：每个文件格式转换步骤必须有对应的脚本或明确的 AI 输出要求，不能靠隐式假定
+
+**(h) 内容质量偏差** — 技术规范满足但内容可用性不足
+- 来源：FPPT 盲区C "结构合规 vs 内容质量"
+- 检查：技术规范满足的前提下，内容质量是否有问题？
+- 典型信号：
+  - 跨页/跨文件数据不一致（数字、名称、描述在不同位置矛盾）
+  - 文案长度超出容器约束（grid 单元格、卡片、表格列）
+  - 引用/数据来源缺失（统计数字、排名、百分比无出处）
+  - 多对象对比使用了不当的展示模式（如表格适合纵向属性但对比需要横向扫描）
+- 检查方法：
+  - **数据自洽对比**：同类数据在不同页面/文件的表述是否一致？不一致标记
+  - **排版一致性扫描**：文案长度是否超出容器合理范围？超长标记
+  - **受众适配审查**：面向专业受众时，引用标注是否充分？
+  - **设计模式审查**：多列对比 → 推荐卡片/pipeline；纵向属性 → 推荐 rowline 表格
+
+**(i) 指令衰减** — Prompt 中明确写了但 AI 未充分执行
+- 来源：FPPT 盲区D "Prompt测试 vs 执行结果测试"
+- 检查：关键 Prompt/指令中的约束是否被 AI 实际遵守？
+- 典型信号：
+  - 建议性措辞（"建议""可以"）被 AI 解读为可选，实际跳过了
+  - 分批/心跳/进度反馈等运行时行为被忽略
+  - 多阶段生成中后期产出偏离前期约束
+- 检查方法：
+  - 搜索 Prompt 中的强制指令关键词（"必须""严禁""强制""不可"）
+  - 对比每个强制指令与实际产出是否一致
+  - 搜索 Prompt 中的建议指令关键词（"建议""可以"），判断是否被误跳
+  - 对关键行为约束进行执行结果审计
+- 修复原则：将确实需要执行的"建议"升级为"强制"措辞
+
+---
+
+> 以下 (j)-(k) 为 V1.2 新增项，基于 FPPT 项目验收测试回溯中发现的 STDD 流程盲区。
+
+**(j) 覆盖真空** — 某 capability 零自动化测试覆盖
+
+- 来源：FPPT 验收测试回溯 "类别A：Desktop App 零自动化测试"（16 个问题中占 8 个）
+- 检查：test-plan.md 中是否存在测试用例数 > 0 但自动化覆盖数 = 0 的 capability？
+- 典型信号：
+  - test-plan.md 某个 capability 所有 TC 标记为 🔴 或标注"手动验证"
+  - tasks.md 中某切片 test 文件数为 0，以"需特殊环境运行"作为豁免理由
+  - 一个面向用户的 capability 完全依赖手动验收作为交付标准
+  - "手动验证"被当作可接受的交付标准，Phase 5 不再追究
+- 检查方法：
+  - 读取 test-plan.md，逐 capability 统计 TC 总数 vs 自动化覆盖数
+  - 任一 capability 的自动化覆盖数 = 0 → **标记为阻塞**
+  - 任一 capability 的自动化覆盖率 < 50% → 标记为警告
+- 原则：零自动化覆盖不可作为交付标准。如果一个 capability 的所有测试都依赖手动验证，要么补充自动化测试，要么在 Gate 3 中由用户明确豁免（需说明理由）
+- 修复方向：
+  - 前端 UI：使用 Playwright 或 Flask test client 直接请求页面，模拟操作
+  - 桌面端：不需要 PyWebView 也能测 HTML/JS/CSS——直接对静态文件做集成测试
+  - 管理后台：对模板渲染 + 表单提交做 test client 级别的自动化
+
+**(k) 契约断层** — 跨 capability 的接口字段名/格式不一致
+
+- 来源：FPPT 验收测试回溯 "类别B：前后端API契约不一致（token_balance vs balance, X-Device-Id header 缺失）"
+- 检查：API 端点返回的 JSON 字段名、header 名与消费方代码中读取的名称是否一致？
+- 典型信号：
+  - 后端返回 `data.token_balance`，前端读取 `data.balance`
+  - 后端要求 `X-Device-Id` header，前端 fetch 调用中未发送该 header
+  - 后端返回 `{result: {...}}`，前端读取 `data.result`（多层或少层包装）
+  - 两个 capability 的 spec 用了相同的"概念名"但实际字段名不同
+- 检查方法：
+  - 搜索后端代码中的 JSON 序列化/响应构造（jsonify、json.dumps、Response 构造），提取每个端点的返回字段名清单
+  - 搜索前端代码中的字段访问（`data.xxx`、`response.data.xxx`、解构赋值），提取消费字段名清单
+  - 对每个 API 端点，比对其"后端输出字段名"和"前端消费字段名"是否一致
+  - 搜索后端要求的 header 名（`request.headers.get('X-...')`），对比前端是否发送了对应 header
+  - 不一致 → 标记为 bug 或契约变更，需在 test-report 中记录
+- 原则：API 契约不能靠两个 capability 的 spec 各自定义了相同的"概念字段名"就认为一致。必须做静态或运行时交叉验证
+
+---
+
+#### Step 3 分支：非代码类 Change 替代检查清单（V2.5 non-code-change-support）
+
+**触发条件**：执行 Step 3 前，先检查 change 目录的文件类型。IF change 目录不包含 `*.py`, `*.go`, `*.java`, `*.rs`, `*.ts` 文件，THEN 使用以下 5 项替代检查，ELSE 使用上述 11 类失败模式检查。
+
+**替代检查 (a) 链接有效性**：
+- 检查所有外部引用（CDN、图片 URL、href 链接）是否可达
+- 不可达的链接标记为潜在问题
+
+**替代检查 (b) 文件范围一致性**：
+- 对比 proposal.md 声明的变更范围与 `git diff --stat` 的实际变更
+- 若实际文件数远超声明 → 标记为范围蔓延
+
+**替代检查 (c) 内部引用可达性**：
+- 检查所有 `<a href>` / `<link href>` / `<script src>` 引用是否指向存在的文件
+- 断链标记为错误
+
+**替代检查 (d) 内容完整性**：
+- 逐项对照 spec 和 test-plan，确认每个 TC 有对应的验证记录
+- 缺失验证记录的 TC 标记为覆盖缺口
+
+**替代检查 (e) TC 目视验证覆盖**：
+- 确认 test-report.md 中每个 TC 都有对应的 PASS/FAIL 记录
+- 无验证记录的 TC 标记为覆盖真空
+
+---
+
+### Step 3.5: 自动记录/更新经验
+
+在完成十一类失败模式检查后，将本次发现的失败模式记录到项目经验库，供后续 BUILD 阶段复用：
+
+1. 对 Step 3 中每个**命中的失败模式**，构造经验条目：
+   - `category`：对应 11 类失败模式的 snake_case 别名（如 `cascading_errors`, `contract_gap`）
+   - `pattern`：具体错误模式描述（≤80 字，清晰陈述而非冗长叙述）
+   - `root_cause`：AI 产生此错误的根本原因推测
+   - `detection_trigger`：什么信号可以检测到此模式（如 "async 超时测试不稳定"）
+   - `fix_template`：修复此模式的标准步骤
+   - `severity`：`high` / `medium` / `low`，基于是否为阻塞性问题
+   - `source_change`：当前 change 名称
+   - `language`：项目语言（从 project.yaml 读取）
+
+2. 对每个命中的模式执行 CLI 记录：
+   ```bash
+   python bin/stdd experience add \
+     --category <category> \
+     --pattern "<pattern>" \
+     --root-cause "<root_cause>" \
+     --detection-trigger "<detection_trigger>" \
+     --fix-template "<fix_template>" \
+     --severity <severity> \
+     --language <language> \
+     --source-change <change_name> \
+     --tags "<comma-separated-tags>"
+   ```
+
+3. 对已存在的经验条目（相同 category + 相似 pattern），更新而非新建：
+   - 执行 `python bin/stdd experience list --category <category> --format json` 查询现有条目
+   - 如 pattern 与现有条目高度相似（>70% 文本重叠或同一 root_cause）→ 该经验非新记录而是复用，不重复添加
+
+4. 记录完成后执行 `python bin/stdd experience stats` 获取概要，输出格式：
+   ```
+   经验库更新: 新增 N 条, 命中 M 条已有记录, 总计 T 条
+   ```
+
+5. 将经验更新结果写入 test-report.md 的"经验库更新"章节
+
+---
+
+#### Step 4: 汇总设计调整（V2.9.2: Canonical YAML）
+
+1. 读取 `pending-adjustments.yaml`（Phase 3-4 期间记录的偏离）
+2. 对比最终实现与 Phase 2 原始文档的差异
+3. 识别调整类型：spec 增删改 / design 变更 / test-plan 调整 / 边界情况
+4. **读取模板 `.stdd/templates/canonical/design-adjustments.yaml`**
+5. **生成 `design-adjustments.yaml`**（Canonical YAML，AI 可精确消费）
+6. 从 YAML 渲染 `design-adjustments.md`（Human View）
+7. 如果 `requires_re_spec: true`，标记此 change 需要回到 Phase 2 重新 spec
+
+> **闭环机制**：design-adjustments.yaml 本质上是"修订后的需求"。Phase 6 DELIVER 归档后，如有 requires_re_spec，AI 应将其作为新一轮的 proposal 输入，重新走 Phase 2-5。
+
+---
+
+#### Step 5: 生成测试报告
+
+读取模板：`.stdd/templates/test-report.md`
+
+生成 `test-report.md`，包含：
+1. **总体概况**：总数/通过/失败/跳过/通过率/耗时
+   - 1.1 覆盖率诊断（仅变更文件，如配置启用）
+2. **按模块统计**：每个测试文件的详细统计
+3. **E2E 测试结果**（如配置启用）：总体概况 + 关键路径结果 + 结论
+4. **失败项详细分析**（如有）：根因 + 影响 + 结论
+5. **功能/测试覆盖对照**：功能-实现-测试三方对照
+6. **设计调整说明**：引用 design-adjustments.md（如有）
+7. **修复确认记录**：Phase 5 迭代中发现并修复的问题
+8. **结论**：总体评估 + 质量信号汇总表 + 部署建议
+
+---
+
+### 停止条件
+
+**正常停止**（全部满足）：
+- 全量测试通过（排除已知环境问题）
+- Lint 通过
+- Diff 审查无新问题
+- 十一类失败模式无命中
+- design-adjustments.md 已生成（如有调整）
+- test-report.md 已生成
+
+**硬上限停止**：
+
+*普通模式*：
+- 达到 5 轮迭代仍未全部通过
+- 向用户报告剩余问题，由用户决定：继续迭代 or 回到 Phase 2
+
+*长程模式*：
+- 达到配置的迭代上限（默认 10 轮）仍未全部通过
+- 在 `test-report.md` 中汇总所有剩余问题
+- 根据通过率判断：
+  - 通过率 ≥ 95%：继续进入 Gate 3（在 test-report 中标注剩余问题）
+  - 通过率 < 95%：降级为暂停等待，向用户报告
+- 连续自动修复同一问题达到上限（默认 3 次）仍失败 → 降级暂停
+
+### 降级触发条件
+
+长程模式下，以下情况自动降级为暂停等待用户：
+
+- 连续自动修复同一问题达到 3 次仍失败
+- test-report 中测试通过率低于 95%
+- 发现安全相关问题（认证/授权/注入/SQL/CORS）
+- 遇到预授权范围外的未预期情况
+- 执行了超出预授权范围的操作类型
+
+### Step 6: 用户确认（强制门 — 两种模式均必须）
+
+向用户展示测试结果和设计调整后，**必须等待用户明确确认**。Gate 3 在普通模式和长程模式下均为强制确认门，不可自动跳过。
+
+> 长程模式下，Phase 3-5 内部交互点已被预授权覆盖，但 Gate 3 确认仍然需要用户介入。
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  STDD Phase 5: VERIFY — 等待确认
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 产出物：
+  ✅ test-report.md — 测试报告
+
+📊 测试结果：
+  - 单元/集成: 总数 N / 通过 N / 失败 N / 跳过 N (通过率 N%)
+  - E2E: 总数 N / 通过 N / 失败 N (通过率 N%) [如配置]
+  - Lint: ✅ / ❌
+  - 覆盖率: <变更文件数>文件, <低覆盖文件数>文件需关注
+
+🔍 多路并行技术评审结果（Step 0）：
+  代码质量审查：C:N H:N M:N L:N
+  测试/配置审查：C:N H:N M:N L:N
+  文档/Skills审查：C:N H:N M:N L:N
+  自动修复：N 项 C/H 问题已修复
+  审查结论：✅ 通过 / ⚠️ 有 N 项 M 级问题记录在 test-report
+
+🧠 经验库更新（Step 3.5）：
+  新增经验: N 条 | 复用已有: N 条 | 总计: N 条
+
+📋 步骤完成确认：
+  ✅ Step 0: 多路并行技术评审 — 已完成
+  ✅ Step 1: 全量质量检查 — 已完成
+  ✅ Step 2: Diff 审查 — 已完成
+  ✅ Step 3: 十一类失败模式检查 (a-k) — 已完成
+  ✅ Step 3.5: 经验库更新 — 已完成
+  ✅ Step 4: 汇总设计调整 — 已完成 / N/A（无需调整）
+  ✅ Step 5: 生成测试报告 — 已完成
+
+📝 设计调整（如有）：
+  <design-adjustments.md 摘要>
+
+⚠️ 请确认：
+  - 测试结果是否满意？
+  - E2E 失败项（如有）是否可以接受？
+  - 覆盖率低覆盖文件是否需要补测？
+  - 设计调整是否合理？
+  - 是否可以进入交付阶段？
+
+👉 确认继续，或提出需要调整的地方。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+- 用户确认 → 进入 Phase 6
+- 用户有异议或变更需求 → 回到 Phase 2 修订
+
+> 确认门模板参见: `.stdd/skills/_shared/confirm-gate.md`
+
+## 产出物
+
+- `test-report.md` — 测试执行报告
+- `design-adjustments.md` — 设计调整说明（如有）
+- 更新 `.stdd.yaml`（phase: verify → completed）
+
+## 质量检查
+
+完成前确认：
+- 通过率计算正确（通过 / (总数 - 跳过) × 100%）
+- 失败项都有根因分析和结论（区分代码 bug vs 环境问题）
+- E2E 失败项（如有）已记录并评估影响
+- 覆盖率诊断已生成，低覆盖文件已标注
+- 功能覆盖表与 test-plan.md 的执行矩阵一致
+- 设计调整（如有）已完整记录
+- 十一类失败模式检查全部完成（含新增 f/g/h/i 四项）
+
+## 下一阶段
+
+Phase 5 用户确认 → 进入 Phase 6: DELIVER（交付）
+Phase 5 用户有异议 → 回到 Phase 2: SPEC（修订规格）

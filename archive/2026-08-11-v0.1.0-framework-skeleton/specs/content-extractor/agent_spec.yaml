@@ -1,0 +1,116 @@
+meta:
+  task_id: "content-extractor"
+  change_id: "2026-08-11-v0.1.0-framework-skeleton"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is set up with pytest, pytest-asyncio, and Pydantic v2 installed"
+    - "Project structure (src/ layout) exists with content/ module"
+    - "Shared models module (models.py) is available for ExtractedContent and Modification definitions"
+    - "ruff and mypy are configured and available"
+
+steps:
+  - id: CP-1
+    description: "Extract text from messages with role user, system, developer (SC-001)"
+    action: "Run unit tests: pytest tests/unit/content/test_extractor.py::test_extract_user_system_developer -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-2
+    description: "Skip messages with role assistant, function, tool (SC-002)"
+    action: "Run unit tests: pytest tests/unit/content/test_extractor.py::test_skip_assistant_function_tool -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-3
+    description: "Handle string content directly (SC-003)"
+    action: "Run unit tests: pytest tests/unit/content/test_extractor.py::test_string_content -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-4
+    description: "Handle multimodal content - extract text parts, skip image_url parts (SC-004)"
+    action: "Run unit tests: pytest tests/unit/content/test_extractor.py::test_multimodal_text_only -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-5
+    description: "For multimodal, join text parts with newline (SC-005)"
+    action: "Run unit tests: pytest tests/unit/content/test_extractor.py::test_multimodal_join_newline -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-6
+    description: "Each extracted message includes correct message_index and role (SC-006)"
+    action: "Run unit tests: pytest tests/unit/content/test_extractor.py::test_message_index_and_role -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-7
+    description: "apply_modifications sorts by priority (lower = first) before applying (SC-007)"
+    action: "Run unit tests: pytest tests/unit/content/test_writeback.py::test_sort_by_priority -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-8
+    description: "For string content, modification replaces content directly (SC-008)"
+    action: "Run unit tests: pytest tests/unit/content/test_writeback.py::test_string_content_replacement -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-9
+    description: "For multimodal content, modification writes to first text part, clears remaining, preserves image parts (SC-009)"
+    action: "Run unit tests: pytest tests/unit/content/test_writeback.py::test_multimodal_writeback -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-10
+    description: "Empty modifications list returns request unchanged (SC-010)"
+    action: "Run unit tests: pytest tests/unit/content/test_writeback.py::test_empty_modifications -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-11
+    description: "ExtractedContent model has fields message_index (int), role (str), text (str) (SC-011)"
+    action: "Run unit tests: pytest tests/unit/content/test_models.py::test_extracted_content_fields -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-12
+    description: "Modification model has fields detector_name (str), modified_content (str), priority (int), message_index (int) (SC-012)"
+    action: "Run unit tests: pytest tests/unit/content/test_models.py::test_modification_fields -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-13
+    description: "All content extractor unit tests pass collectively"
+    action: "Run all content tests: pytest tests/unit/content/ -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-14
+    description: "Lint and type check pass for content module"
+    action: "ruff check src/z_llm_safety_gateway/content/ tests/unit/content/ && mypy src/z_llm_safety_gateway/content/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "Remove all files under src/z_llm_safety_gateway/content/"
+    - "Remove all files under tests/unit/content/"
+    - "Revert any changes to models.py that define ExtractedContent or Modification"
+    - "Revert any changes to __init__.py exports that reference content extractor"

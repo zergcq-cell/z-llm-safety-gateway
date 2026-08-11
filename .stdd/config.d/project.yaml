@@ -1,0 +1,15 @@
+paths:
+  archive_dir: archive
+  changes_dir: changes
+  platforms_dir: .stdd/platforms
+  skills_dir: .stdd/skills
+  specs_dir: specs
+  standards_dir: .stdd/standards
+  templates_dir: .stdd/templates
+  experiences_dir: .stdd/experiences
+project:
+  language: python
+  name: z_llm_safety_gateway
+  python_version: '3.12'
+  source_dir: "src"
+stdd_version: '2.9.3'

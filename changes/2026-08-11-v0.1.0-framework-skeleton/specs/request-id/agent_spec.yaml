@@ -1,0 +1,128 @@
+# agent_spec.yaml - Agent 验证规格（Canonical YAML）
+# Capability: request-id
+# Change: 2026-08-11-v0.1.0-framework-skeleton
+
+meta:
+  task_id: "request-id"
+  change_id: "2026-08-11-v0.1.0-framework-skeleton"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ 环境已安装"
+    - "项目依赖已安装（FastAPI, httpx, Pydantic v2, pytest, pytest-asyncio）"
+    - "src/z_llm_safety_gateway/middleware/request_id.py 模块已实现"
+    - "src/z_llm_safety_gateway/middleware/safety_headers.py 模块已实现"
+    - "app.py app factory 已注册 RequestID 和 SafetyHeaders 中间件"
+
+steps:
+  - id: CP-1
+    description: "验证请求未携带 X-Request-ID 时网关生成 UUID v4"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_generate_uuid_when_absent -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-2
+    description: "验证请求携带合法 X-Request-ID 时网关使用客户端值"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_use_client_id_when_valid -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-3
+    description: "验证请求携带非法 X-Request-ID 时网关丢弃并重新生成 UUID v4"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_discard_invalid_client_id -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-4
+    description: "验证空 X-Request-ID 头被丢弃并重新生成 UUID v4"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_discard_empty_client_id -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-5
+    description: "验证生成 UUID 时响应包含 X-Request-ID 头"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_response_has_generated_request_id -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-6
+    description: "验证传播客户端 ID 时响应包含 X-Request-ID 头（值为客户端提供值）"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_response_has_propagated_request_id -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-7
+    description: "验证所有响应包含 X-Safety-Action: allow 头"
+    action: "pytest tests/unit/middleware/test_safety_headers.py::test_response_has_safety_action_allow -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-8
+    description: "验证 action 为 allow 时响应不包含 X-Safety-Risk-Level 头"
+    action: "pytest tests/unit/middleware/test_safety_headers.py::test_no_risk_level_when_allow -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-9
+    description: "验证请求 ID 存储在 request.state.request_id"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_request_id_stored_in_state -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-10
+    description: "验证生成的 UUID v4 符合标准格式（36 字符，version 4，RFC 4122 变体）"
+    action: "pytest tests/unit/middleware/test_request_id.py::test_generated_uuid_v4_format -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-11
+    description: "运行 ruff lint 检查中间件模块"
+    action: "ruff check src/z_llm_safety_gateway/middleware/ tests/unit/middleware/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-12
+    description: "运行 mypy 类型检查中间件模块"
+    action: "mypy src/z_llm_safety_gateway/middleware/request_id.py src/z_llm_safety_gateway/middleware/safety_headers.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "删除 src/z_llm_safety_gateway/middleware/request_id.py"
+    - "删除 src/z_llm_safety_gateway/middleware/safety_headers.py"
+    - "删除 tests/unit/middleware/test_request_id.py"
+    - "删除 tests/unit/middleware/test_safety_headers.py"
+    - "从 app.py 中移除 RequestID 和 SafetyHeaders 中间件注册"

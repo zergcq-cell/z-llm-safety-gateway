@@ -1,0 +1,103 @@
+meta:
+  task_id: "provider-proxy"
+  change_id: "2026-08-11-v0.1.0-framework-skeleton"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is set up with pytest, pytest-asyncio, httpx, and FastAPI installed"
+    - "Project structure (src/ layout) exists with providers/ module"
+    - "Config system is implemented and can load provider and routing configuration"
+    - "Pydantic v2 is available for data model validation"
+
+steps:
+  - id: CP-1
+    description: "ModelRouter correctly matches model field to provider using glob patterns with first-match-wins (SC-001, SC-002, SC-003)"
+    action: "Run unit tests: pytest tests/unit/providers/test_router.py::test_glob_match_first_wins -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-2
+    description: "ModelRouter returns HTTP 404 model_not_found when no routing rule matches (SC-004)"
+    action: "Run unit tests: pytest tests/unit/providers/test_router.py::test_no_match_returns_404 -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-3
+    description: "OpenAIProvider forwards request with correct base_url, api_key, and passes body through (SC-005)"
+    action: "Run unit tests: pytest tests/unit/providers/test_openai.py -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-4
+    description: "OpenAICompatibleProvider forwards request to OpenAI-compatible endpoint without format conversion (SC-006)"
+    action: "Run unit tests: pytest tests/unit/providers/test_openai_compatible.py -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-5
+    description: "AzureOpenAIProvider forwards request with api_version as query parameter (SC-007)"
+    action: "Run unit tests: pytest tests/unit/providers/test_azure_openai.py -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-6
+    description: "Provider timeout returns HTTP 502 provider_error and aborts upstream request (SC-008)"
+    action: "Run unit tests: pytest tests/unit/providers/test_provider_errors.py::test_timeout -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-7
+    description: "Provider 4xx/5xx errors wrapped as HTTP 502 provider_error with original details in error.details (SC-009)"
+    action: "Run unit tests: pytest tests/unit/providers/test_provider_errors.py::test_provider_http_error -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-8
+    description: "Provider network error (connection refused, DNS failure) returns HTTP 502 provider_error (SC-010)"
+    action: "Run unit tests: pytest tests/unit/providers/test_provider_errors.py::test_network_error -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-9
+    description: "No retry on provider errors - error returned directly to client with single attempt (SC-011)"
+    action: "Run unit tests: pytest tests/unit/providers/test_provider_errors.py::test_no_retry -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-10
+    description: "Routing conflict detection logs startup warning for overlapping glob patterns (SC-012)"
+    action: "Run unit tests: pytest tests/unit/providers/test_router.py::test_routing_conflict_warning -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-11
+    description: "Full provider proxy integration test with mock provider validates end-to-end request forwarding"
+    action: "Run integration tests: pytest tests/integration/test_proxy_flow.py -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-12
+    description: "Lint and type check pass for provider module"
+    action: "ruff check src/z_llm_safety_gateway/providers/ tests/unit/providers/ tests/integration/test_proxy_flow.py && mypy src/z_llm_safety_gateway/providers/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "Remove all files under src/z_llm_safety_gateway/providers/"
+    - "Remove all files under tests/unit/providers/"
+    - "Remove tests/integration/test_proxy_flow.py"
+    - "Revert any changes to route handlers that reference the provider proxy"
+    - "Revert any changes to config models that define provider or routing configuration"
