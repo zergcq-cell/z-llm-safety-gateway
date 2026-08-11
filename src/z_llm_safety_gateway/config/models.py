@@ -1,10 +1,28 @@
-"""Pydantic v2 configuration models for the z LLM Safety Gateway."""
+"""Pydantic v2 configuration models for the z LLM Safety Gateway.
+
+v0.2.0 refactors the detector configuration system:
+- ``PipelineConfig.detectors`` changes from ``list[dict]`` to ``DetectorsConfig``
+  with bidirectional ``input`` / ``output`` grouping.
+- ``DetectorConfig`` gains ``priority``, ``on_error``, ``circuit_breaker``,
+  ``config`` (nested block), and ``timeout`` fields.  Thresholds
+  (``block_threshold`` / ``flag_threshold``) move into the nested ``config``
+  dict.
+- ``PipelineConfig`` gains ``execution_mode``, ``short_circuit_on``,
+  ``sync_timeout``, and ``flag_escalation`` fields.
+- ``GatewayConfig`` gains a top-level ``model_cache`` section.
+
+Backward compatibility with v0.1.0 configs is preserved: a flat
+``detectors: list[dict]`` is auto-converted to ``DetectorsConfig`` and
+top-level ``block_threshold`` / ``flag_threshold`` keys are moved into the
+nested ``config`` block.
+"""
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ServerConfig(BaseModel):
@@ -43,35 +61,163 @@ class RoutingConfig(BaseModel):
     rules: list[RoutingRule] = []
 
 
-class PipelineConfig(BaseModel):
-    """Pipeline configuration for content safety detection."""
+class FlagEscalationConfig(BaseModel):
+    """Configuration for flag-to-block escalation rules.
 
-    mode: str = "sync"
-    detectors: list[dict[str, Any]] = []
+    When ``enabled`` is True, the ``rule`` expression is parsed at config
+    load time and evaluated at request time to determine whether accumulated
+    ``flag`` results should be escalated to a ``block``.
+    """
+
+    enabled: bool = False
+    rule: str = ""
+    action: str = "block"
+
+
+class CircuitBreakerConfig(BaseModel):
+    """Configuration for a detector-level circuit breaker.
+
+    Prevents cascading failures when a detector (especially external/gRPC)
+    repeatedly errors.  The circuit transitions CLOSED -> OPEN after
+    ``failure_threshold`` consecutive failures, and OPEN -> HALF_OPEN after
+    ``recovery_timeout`` elapses.
+    """
+
+    enabled: bool = False
+    failure_threshold: int = 5
+    recovery_timeout: str = "30s"
+    fallback_action: str = "fail_open"
+
+    @field_validator("fallback_action")
+    @classmethod
+    def _validate_fallback_action(cls, v: str) -> str:
+        if v not in ("fail_open", "fail_closed"):
+            raise ValueError(
+                f"fallback_action must be 'fail_open' or 'fail_closed', got '{v}'"
+            )
+        return v
 
 
 class DetectorConfig(BaseModel):
     """Configuration for a single content safety detector.
 
-    Cross-field validation ensures block_threshold is strictly greater than
-    flag_threshold, so that blocking is always a stricter action than flagging.
+    Thresholds (``block_threshold`` / ``flag_threshold``) live inside the
+    nested ``config`` dict, not as top-level fields.  This allows different
+    detector types to have different config schemas while sharing the same
+    outer structure.
+
+    Cross-field threshold validation (block > flag) is performed in
+    ``validators._validate_detectors_v2()`` because it requires extracting
+    values from the ``config`` dict.
     """
 
     name: str
-    type: str
+    type: str = ""  # optional; "grpc" for gRPC sidecar detectors
     enabled: bool = True
-    block_threshold: float = 0.85
-    flag_threshold: float = 0.50
+    priority: int = 100
+    on_error: str = "fail_open"  # "fail_open" | "fail_closed"
+    circuit_breaker: CircuitBreakerConfig | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    timeout: str | None = None  # per-detector timeout override
 
-    @model_validator(mode="after")
-    def validate_thresholds(self) -> DetectorConfig:
-        """Ensure block_threshold > flag_threshold (strictly)."""
-        if self.block_threshold <= self.flag_threshold:
+    @field_validator("on_error")
+    @classmethod
+    def _validate_on_error(cls, v: str) -> str:
+        if v not in ("fail_open", "fail_closed"):
             raise ValueError(
-                f"Detector '{self.name}': block_threshold ({self.block_threshold}) "
-                f"must be strictly greater than flag_threshold ({self.flag_threshold})"
+                f"on_error must be 'fail_open' or 'fail_closed', got '{v}'"
             )
-        return self
+        return v
+
+
+class DetectorsConfig(BaseModel):
+    """Bidirectional detector grouping.
+
+    ``input`` detectors run on request content before provider forwarding.
+    ``output`` detectors run on response content after provider response.
+    """
+
+    input: list[DetectorConfig] = []
+    output: list[DetectorConfig] = []
+
+
+class ModelCacheConfig(BaseModel):
+    """Global ML model cache configuration.
+
+    Provides defaults for all ML-based detectors.  Individual detectors can
+    override via ``model_cache_dir`` and ``offline_mode`` in their own
+    ``config`` section.
+    """
+
+    dir: str = "~/.cache/z_llm_safety_gateway/models/"
+    offline_mode: bool = False
+
+
+class PipelineConfig(BaseModel):
+    """Pipeline configuration for content safety detection.
+
+    v0.2.0 fields:
+    - ``execution_mode``: MVP supports "parallel" only.
+    - ``short_circuit_on``: "block" (default) or "block_and_modify".
+    - ``sync_timeout``: pipeline-level timeout for output detection in sync mode.
+    - ``flag_escalation``: optional flag-to-block escalation rule.
+    - ``detectors``: ``DetectorsConfig`` with input/output grouping.
+
+    Backward compat: accepts ``detectors`` as ``list[dict]`` (v0.1.0 format)
+    and auto-converts to ``DetectorsConfig`` with all detectors in ``input``.
+    """
+
+    mode: str = "sync"
+    execution_mode: str = "parallel"  # MVP only "parallel"
+    short_circuit_on: str = "block"  # "block" | "block_and_modify"
+    sync_timeout: str = "5s"
+    flag_escalation: FlagEscalationConfig | None = None
+    detectors: DetectorsConfig | list[dict[str, Any]] = Field(
+        default_factory=DetectorsConfig
+    )
+
+    @field_validator("short_circuit_on")
+    @classmethod
+    def _validate_short_circuit_on(cls, v: str) -> str:
+        if v not in ("block", "block_and_modify"):
+            raise ValueError(
+                f"short_circuit_on must be 'block' or 'block_and_modify', got '{v}'"
+            )
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _convert_legacy_detectors(cls, data: Any) -> Any:
+        """Convert v0.1.0-style ``detectors: list[dict]`` to DetectorsConfig.
+
+        Also moves top-level ``block_threshold`` / ``flag_threshold`` keys
+        into the nested ``config`` dict for each detector, preserving
+        backward compatibility with v0.1.0 config files.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        detectors = data.get("detectors")
+        if isinstance(detectors, list):
+            # Old format: flat list -> {input: [...], output: []}
+            converted = [_normalize_detector_dict(d) for d in detectors]
+            data["detectors"] = {"input": converted, "output": []}
+            warnings.warn(
+                "pipeline.detectors as a flat list is deprecated; "
+                "use {input: [...], output: [...]} format. "
+                "All detectors have been assigned to 'input'.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif isinstance(detectors, dict):
+            # New format: normalize detector dicts in input/output lists
+            for key in ("input", "output"):
+                if key in detectors and isinstance(detectors[key], list):
+                    detectors[key] = [
+                        _normalize_detector_dict(d) for d in detectors[key]
+                    ]
+
+        return data
 
 
 class SecurityConfig(BaseModel):
@@ -104,3 +250,35 @@ class GatewayConfig(BaseModel):
     security: SecurityConfig = SecurityConfig()
     audit: AuditConfig = AuditConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
+    model_cache: ModelCacheConfig = ModelCacheConfig()
+
+
+# --------------------------------------------------------------------------- #
+# Internal helpers
+# --------------------------------------------------------------------------- #
+def _normalize_detector_dict(d: Any) -> Any:
+    """Move top-level threshold fields into the nested ``config`` dict.
+
+    This preserves backward compatibility with v0.1.0 configs that specified
+    ``block_threshold`` and ``flag_threshold`` as top-level DetectorConfig
+    fields.  In v0.2.0 these fields live inside the ``config`` block.
+
+    Args:
+        d: A detector dict (or non-dict value, returned as-is).
+
+    Returns:
+        A new dict with thresholds moved into ``config``.
+    """
+    if not isinstance(d, dict):
+        return d
+
+    d = dict(d)  # shallow copy to avoid mutating caller's data
+    config = dict(d.get("config", {}))
+
+    # Move legacy top-level threshold fields into config dict
+    for key in ("block_threshold", "flag_threshold"):
+        if key in d:
+            config[key] = d.pop(key)
+
+    d["config"] = config
+    return d

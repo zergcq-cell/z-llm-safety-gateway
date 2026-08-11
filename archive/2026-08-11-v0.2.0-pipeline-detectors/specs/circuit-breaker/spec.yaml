@@ -1,0 +1,124 @@
+# spec.yaml — circuit-breaker 行为规格
+# 覆盖 DESIGN.md Section 5.8 熔断器状态机的核心行为
+
+meta:
+  capability: "circuit-breaker"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "熔断器实现三状态机：CLOSED（正常）、OPEN（熔断）、HALF_OPEN（试探）"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "一个新创建的 CircuitBreaker 实例，配置 failure_threshold=5, recovery_timeout=30s"
+        when: "熔断器被实例化"
+        then: "初始状态 SHALL 为 CLOSED"
+        and:
+          - "状态枚举 SHALL 包含且仅包含 CLOSED、OPEN、HALF_OPEN 三个值"
+          - "failure_count 初始值 SHALL 为 0"
+          - "last_failure_time 初始值 SHALL 为 None"
+
+  - id: REQ-002
+    description: "CLOSED → OPEN 转换：当连续失败次数达到 failure_threshold 时，状态从 CLOSED 转为 OPEN"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 CLOSED，failure_threshold=5，当前 failure_count=4"
+        when: "record_failure() 被调用（第 5 次连续失败）"
+        then: "状态 SHALL 从 CLOSED 转换为 OPEN"
+        and:
+          - "failure_count SHALL 递增到 5"
+          - "last_failure_time SHALL 被更新为当前时间"
+          - "状态转换 SHALL 被记录到日志中"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 CLOSED，failure_threshold=5，当前 failure_count=3"
+        when: "record_success() 被调用"
+        then: "failure_count SHALL 重置为 0"
+        and:
+          - "状态 SHALL 保持为 CLOSED"
+
+  - id: REQ-003
+    description: "OPEN → HALF_OPEN 转换：当 recovery_timeout 超时后，状态从 OPEN 转为 HALF_OPEN"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 OPEN，recovery_timeout=30s，last_failure_time 为 31 秒前"
+        when: "before_call() 被调用检查是否允许执行"
+        then: "状态 SHALL 从 OPEN 转换为 HALF_OPEN"
+        and:
+          - "该次调用 SHALL 被允许执行（作为试探请求）"
+          - "状态转换 SHALL 被记录到日志中"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 OPEN，recovery_timeout=30s，last_failure_time 为 10 秒前"
+        when: "before_call() 被调用"
+        then: "状态 SHALL 保持为 OPEN"
+        and:
+          - "该次调用 SHALL 不被允许执行"
+
+  - id: REQ-004
+    description: "HALF_OPEN → CLOSED 转换：试探请求成功时，状态从 HALF_OPEN 转为 CLOSED"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 HALF_OPEN"
+        when: "record_success() 被调用（试探请求成功）"
+        then: "状态 SHALL 从 HALF_OPEN 转换为 CLOSED"
+        and:
+          - "failure_count SHALL 重置为 0"
+          - "检测器 SHALL 恢复正常执行"
+          - "状态转换 SHALL 被记录到日志中"
+
+  - id: REQ-005
+    description: "HALF_OPEN → OPEN 转换：试探请求失败时，状态从 HALF_OPEN 转回 OPEN"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 HALF_OPEN"
+        when: "record_failure() 被调用（试探请求失败）"
+        then: "状态 SHALL 从 HALF_OPEN 转换回 OPEN"
+        and:
+          - "last_failure_time SHALL 被更新为当前时间"
+          - "检测器 SHALL 继续被跳过直到下一次 recovery_timeout 超时"
+          - "状态转换 SHALL 被记录到日志中"
+
+  - id: REQ-006
+    description: "OPEN 状态下检测器执行被跳过，直接应用 fallback_action 而不发起检测器调用"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "熔断器状态为 OPEN，fallback_action=fail_open"
+        when: "before_call() 返回不允许执行"
+        then: "PipelineEngine SHALL 跳过该检测器的 detect() 调用"
+        and:
+          - "fallback_action=fail_open 时 SHALL 跳过检测器并继续处理"
+          - "fallback_action=fail_closed 时 SHALL 阻止请求"
+          - "SHALL 不向检测器发起任何网络调用或方法调用"
+
+  - id: REQ-007
+    description: "熔断器按检测器独立配置 failure_threshold、recovery_timeout、fallback_action 参数"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 4; DESIGN.md Section 5.8"
+        given: "两个检测器分别配置了不同的熔断器参数：detector_A(failure_threshold=3, recovery_timeout=10s, fallback_action=fail_closed) 和 detector_B(failure_threshold=5, recovery_timeout=30s, fallback_action=fail_open)"
+        when: "两个检测器同时经历失败"
+        then: "每个检测器 SHALL 拥有独立的 CircuitBreaker 实例和独立的状态"
+        and:
+          - "detector_A 在 3 次连续失败后熔断，detector_B 在 5 次后熔断"
+          - "一个检测器的熔断状态 SHALL 不影响另一个检测器"
+          - "fallback_action SHALL 按各自配置独立应用"

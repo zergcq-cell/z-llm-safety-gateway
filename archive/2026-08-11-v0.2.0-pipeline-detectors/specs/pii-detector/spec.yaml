@@ -1,0 +1,153 @@
+meta:
+  capability: "pii-detector"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "检测多种 PII 类型（email, phone, ssn, credit_card, ip_address）"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[5] (C6), DESIGN.md Section 6.4 MVP Detector List #2"
+        given: "a detector initialized with PII patterns for email, phone, ssn, credit_card, and ip_address"
+        when: "detect() is called with content containing 'Contact me at john.doe@example.com or 555-123-4567'"
+        then: "the detector SHALL detect the email and phone number PII entities"
+        and:
+          - "the DetectionResult.category SHALL be 'pii'"
+          - "the DetectionResult.details SHALL list detected entity types including 'email' and 'phone'"
+
+      - id: SC-002
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[5]"
+        given: "a detector initialized with all default PII entity types"
+        when: "detect() is called with content containing 'SSN: 123-45-6789, Card: 4532-1234-5678-9010, IP: 192.168.1.1'"
+        then: "the detector SHALL detect ssn, credit_card, and ip_address entities"
+        and:
+          - "the DetectionResult.details SHALL list all three detected entity types"
+          - "the DetectionResult.details SHALL include the count of each detected entity type"
+
+      - id: SC-003
+        confidence: high
+        evidence: "proposal.yaml -> constraints"
+        given: "a detector initialized with all default PII entity types"
+        when: "detect() is called with content 'Hello, how are you today?'"
+        then: "the detector SHALL return a DetectionResult with confidence = 0.0"
+        and:
+          - "the DetectionResult.action SHALL be 'allow'"
+          - "the DetectionResult.details SHALL contain no detected entities"
+
+  - id: REQ-002
+    description: "脱敏模式（mask: ***@**.com, replace: [REDACTED], hash: sha256）"
+    scenarios:
+      - id: SC-004
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[5] (C6), design.md Decision 5"
+        given: "a detector configured with redaction_mode='mask'"
+        when: "detect() is called with content containing 'Email: john.doe@example.com'"
+        then: "the detector SHALL return a DetectionResult with action='modify'"
+        and:
+          - "the DetectionResult.modified_content SHALL contain masked email (e.g., '***@**.com')"
+          - "the original PII value SHALL NOT appear in modified_content"
+
+      - id: SC-005
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[5]"
+        given: "a detector configured with redaction_mode='replace'"
+        when: "detect() is called with content containing 'SSN: 123-45-6789'"
+        then: "the detector SHALL return a DetectionResult with action='modify'"
+        and:
+          - "the DetectionResult.modified_content SHALL replace the SSN with '[REDACTED]'"
+          - "the original SSN value SHALL NOT appear in modified_content"
+
+      - id: SC-006
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[5]"
+        given: "a detector configured with redaction_mode='hash'"
+        when: "detect() is called with content containing 'IP: 192.168.1.1'"
+        then: "the detector SHALL return a DetectionResult with action='modify'"
+        and:
+          - "the DetectionResult.modified_content SHALL replace the IP with its SHA-256 hash value"
+          - "the original IP value SHALL NOT appear in modified_content"
+
+  - id: REQ-003
+    description: "action='modify'，modified_content 为脱敏后内容"
+    scenarios:
+      - id: SC-007
+        confidence: high
+        evidence: "DESIGN.md Section 5.2, design.md Decision 5"
+        given: "a detector configured with redaction_mode='mask' and content containing PII"
+        when: "detect() is called and PII is detected"
+        then: "the DetectionResult.action SHALL be 'modify'"
+        and:
+          - "the DetectionResult.modified_content SHALL contain the fully redacted text"
+          - "the DetectionResult SHALL NOT return position-based patch instructions"
+          - "the modified_content SHALL preserve non-PII portions of the original text unchanged"
+
+      - id: SC-008
+        confidence: medium
+        evidence: "DESIGN.md Section 5.5"
+        given: "a detector configured with redaction_mode='replace' and content containing multiple PII entities of different types"
+        when: "detect() is called and multiple PII entities are detected"
+        then: "the DetectionResult.modified_content SHALL have all detected PII entities redacted"
+        and:
+          - "each PII entity type SHALL be redacted according to the configured redaction_mode"
+
+  - id: REQ-004
+    description: "可配置 entity_types 列表"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[5], DESIGN.md Section 10"
+        given: "a detector configured with entity_types=['email', 'phone']"
+        when: "detect() is called with content containing an email, phone, and SSN"
+        then: "the detector SHALL detect only email and phone entities"
+        and:
+          - "the SSN SHALL NOT be detected or redacted"
+          - "the DetectionResult.details SHALL only list 'email' and 'phone' entity types"
+
+      - id: SC-010
+        confidence: medium
+        evidence: "DESIGN.md Section 10"
+        given: "a detector configured without an explicit entity_types list (default)"
+        when: "detect() is called with content containing any supported PII type"
+        then: "the detector SHALL detect all default entity types (email, phone, ssn, credit_card, ip_address)"
+        and: []
+
+  - id: REQ-005
+    description: "initialize 时编译正则模式"
+    scenarios:
+      - id: SC-011
+        confidence: high
+        evidence: "design.md Decision 3, DESIGN.md Section 6.1"
+        given: "a PIIDetector instance with a config containing entity_types and their regex patterns"
+        when: "initialize() is called with the config"
+        then: "the detector SHALL compile all configured PII regex patterns into compiled regex objects"
+        and:
+          - "compiled patterns SHALL be stored for reuse in subsequent detect() calls"
+          - "detect() SHALL NOT recompile patterns on each call"
+          - "initialize() SHALL complete before any detect() call is made"
+
+      - id: SC-012
+        confidence: medium
+        evidence: "design.md Decision 3"
+        given: "a config with an entity_type referencing an invalid regex pattern"
+        when: "initialize() is called with the invalid pattern"
+        then: "initialize() SHALL raise an error indicating the invalid pattern and entity type"
+        and:
+          - "the detector SHALL NOT be registered as available after initialization failure"
+
+  - id: REQ-006
+    description: "details 中记录检测到的 PII 类型和数量"
+    scenarios:
+      - id: SC-013
+        confidence: high
+        evidence: "DESIGN.md Section 5.2"
+        given: "a detector that has detected 2 emails and 1 phone number in the input content"
+        when: "detect() returns a DetectionResult"
+        then: "the DetectionResult.details SHALL contain a mapping of entity types to their counts"
+        and:
+          - "details SHALL include 'email: 2' and 'phone: 1'"
+          - "details SHALL include the total count of detected PII entities"
+          - "details SHALL NOT include the raw PII values (to avoid logging sensitive data)"

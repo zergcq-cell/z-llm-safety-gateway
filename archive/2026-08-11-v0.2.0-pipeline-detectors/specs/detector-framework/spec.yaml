@@ -1,0 +1,163 @@
+# spec.yaml — detector-framework 行为规格
+# 覆盖 DESIGN.md Section 6.1-6.2 检测器框架的核心行为
+
+meta:
+  capability: "detector-framework"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "定义 Detector 抽象基类（ABC），包含 name、category、description、version 四个必需类属性"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.1"
+        given: "一个继承 Detector ABC 的具体检测器类 PromptInjectionDetector"
+        when: "该类被实例化"
+        then: "该实例 SHALL 具有非空的 name、category、description、version 属性"
+        and:
+          - "name SHALL 为字符串类型且在注册表中全局唯一"
+          - "category SHALL 为字符串类型（如 prompt_injection、pii、toxicity）"
+          - "version SHALL 为字符串类型（如 '1.0.0'）"
+          - "Detector SHALL 不可直接实例化（ABC 限制）"
+
+  - id: REQ-002
+    description: "Detector 定义 async initialize(config: dict) -> None 生命周期方法，在启动时被调用一次用于初始化"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.1"
+        given: "一个已注册的检测器实例和其配置字典 config={'block_threshold': 0.85, 'flag_threshold': 0.50}"
+        when: "DetectorRegistry 在网关启动时调用 detector.initialize(config)"
+        then: "initialize SHALL 为 async 方法，接受 config 字典参数"
+        and:
+          - "initialize SHALL 在 detect() 之前被调用且仅调用一次"
+          - "检测器 SHALL 从 config 中读取自身配置（如阈值、词表路径）"
+          - "initialize 中加载的资源 SHALL 在后续 detect() 调用中可用"
+
+  - id: REQ-003
+    description: "Detector 定义 async detect(content: str, context: DetectionContext) -> DetectionResult 核心检测方法"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.1"
+        given: "已初始化的检测器实例，content='Hello world'，DetectionContext(direction='input')"
+        when: "调用 detector.detect(content, context)"
+        then: "detect SHALL 为 async 方法，返回一个 DetectionResult 实例"
+        and:
+          - "DetectionResult.detector_name SHALL 与 detector.name 一致"
+          - "DetectionResult.category SHALL 与 detector.category 一致"
+          - "DetectionResult.action SHALL 为 allow、block、flag、modify 之一"
+          - "DetectionResult.confidence SHALL 为 0.0 到 1.0 之间的浮点数"
+
+  - id: REQ-004
+    description: "Detector 定义 async health_check() -> bool 健康检查方法，默认返回 True"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.1"
+        given: "一个继承 Detector ABC 且未覆盖 health_check 的检测器"
+        when: "调用 detector.health_check()"
+        then: "方法 SHALL 返回 True"
+        and:
+          - "health_check SHALL 为 async 方法"
+          - "子类可覆盖 health_check 以实现自定义健康检查逻辑"
+          - "网关健康检查端点 SHALL 调用所有已注册检测器的 health_check()"
+
+      - id: SC-002
+        confidence: medium
+        evidence: "DESIGN.md Section 6.1"
+        given: "一个覆盖了 health_check 的检测器，其依赖的模型文件缺失"
+        when: "调用 detector.health_check()"
+        then: "方法 SHALL 返回 False"
+        and:
+          - "网关 SHALL 在健康检查响应中标记该检测器为不健康状态"
+
+  - id: REQ-005
+    description: "Detector 定义 async shutdown() -> None 资源清理方法，在网关关闭时被调用"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.1"
+        given: "一个已初始化且加载了 ML 模型的检测器实例"
+        when: "网关关闭时调用 detector.shutdown()"
+        then: "shutdown SHALL 为 async 方法，释放检测器持有的所有资源"
+        and:
+          - "shutdown 后 SHALL 不再调用 detect()"
+          - "shutdown SHALL 清理模型缓存、打开的文件句柄等资源"
+          - "shutdown 中的异常 SHALL 被捕获并记录，不阻止其余检测器的关闭"
+
+  - id: REQ-006
+    description: "DetectionContext 数据模型包含 direction、request_id、user_id、metadata、language、message_index 字段"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 2; DESIGN.md Section 6.1"
+        given: "一个输入方向的检测请求，request_id='req-123'，无 user_id"
+        when: "PipelineEngine 为每条提取的消息创建 DetectionContext"
+        then: "DetectionContext SHALL 包含以下字段且类型正确"
+        and:
+          - "direction SHALL 为 'input' 或 'output'"
+          - "request_id SHALL 为字符串类型"
+          - "user_id SHALL 为 Optional[str]，无 user 字段时为 None"
+          - "metadata SHALL 为 dict 类型"
+          - "language SHALL 为 Optional[str]，初始为 None，由语言检测填充"
+          - "message_index SHALL 为 Optional[int]，input 时为消息索引，output 时为 None"
+
+  - id: REQ-007
+    description: "DetectionResult 数据模型包含 detector_name、category、action、confidence、risk_level、message、details、modified_content、duration_ms、error 字段"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 2; DESIGN.md Section 5.2"
+        given: "一个检测器执行检测后返回 DetectionResult"
+        when: "PipelineEngine 接收该 DetectionResult"
+        then: "DetectionResult SHALL 包含所有定义的字段"
+        and:
+          - "detector_name SHALL 为字符串，标识产生结果的检测器"
+          - "action SHALL 为 allow、block、flag、modify 之一"
+          - "confidence SHALL 为 0.0 到 1.0 之间的浮点数"
+          - "risk_level SHALL 为 low、medium、high、critical 之一"
+          - "duration_ms 和 error SHALL 由网关填充，检测器不应设置这两个字段"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Decision 2; DESIGN.md Section 5.2"
+        given: "一个 PII 检测器返回 action=modify"
+        when: "DetectionResult 被创建"
+        then: "modified_content SHALL 包含修改后的完整文本内容"
+        and:
+          - "当 action 不为 modify 时，modified_content SHALL 为 None"
+          - "details SHALL 为 dict 类型，默认为空字典 {}"
+          - "message SHALL 为人类可读的解释字符串"
+
+  - id: REQ-008
+    description: "DetectorRegistry 提供检测器注册与查找功能，通过硬编码注册表映射 name → class 管理内置检测器"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.2"
+        given: "DetectorRegistry 已注册 5 个内置检测器（prompt_injection, pii, toxicity, sensitive_words, secret_leak）"
+        when: "通过 registry.get('pii') 查找检测器"
+        then: "SHALL 返回 PIIDetector 的实例"
+        and:
+          - "通过不存在的 name 查找 SHALL 抛出 KeyError 或返回 None"
+          - "registry.list() SHALL 返回所有已注册检测器名称列表"
+          - "每个内置检测器 SHALL 在包初始化时被自动注册"
+
+  - id: REQ-009
+    description: "检测器生命周期管理遵循 initialize → detect → shutdown 顺序，由 DetectorRegistry 统一驱动"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 3; DESIGN.md Section 6.1"
+        given: "网关启动，配置了 3 个已启用的检测器"
+        when: "DetectorRegistry 初始化所有检测器"
+        then: "每个检测器 SHALL 按 initialize → detect → shutdown 顺序经历生命周期"
+        and:
+          - "所有检测器的 initialize() SHALL 在网关启动时完成"
+          - "detect() SHALL 在每次请求的 pipeline 执行时被调用"
+          - "所有检测器的 shutdown() SHALL 在网关关闭时被调用"
+          - "initialize() 失败的检测器 SHALL 被标记为不可用且不参与 detect() 调用"

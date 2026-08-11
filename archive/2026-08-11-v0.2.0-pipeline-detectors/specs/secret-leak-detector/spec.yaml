@@ -1,0 +1,150 @@
+meta:
+  capability: "secret-leak-detector"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "检测多种密钥类型（API key, AWS secret, private key, JWT token）"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[8] (C9), DESIGN.md Section 6.4 MVP Detector List #5"
+        given: "a detector initialized with secret patterns for api_key, aws_secret, private_key, and jwt_token"
+        when: "detect() is called with output content containing 'sk-1234567890abcdef1234567890abcdef'"
+        then: "the detector SHALL detect the API key pattern"
+        and:
+          - "the DetectionResult.category SHALL be 'secret_leak'"
+          - "the DetectionResult.details SHALL list 'api_key' as a detected secret type"
+
+      - id: SC-002
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[8]"
+        given: "a detector initialized with all default secret patterns"
+        when: "detect() is called with output content containing '-----BEGIN RSA PRIVATE KEY-----'"
+        then: "the detector SHALL detect the private key pattern"
+        and:
+          - "the DetectionResult.details SHALL list 'private_key' as a detected secret type"
+
+      - id: SC-003
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[8]"
+        given: "a detector initialized with all default secret patterns"
+        when: "detect() is called with output content containing 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'"
+        then: "the detector SHALL detect the JWT token pattern"
+        and:
+          - "the DetectionResult.details SHALL list 'jwt_token' as a detected secret type"
+
+      - id: SC-004
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[8]"
+        given: "a detector initialized with all default secret patterns"
+        when: "detect() is called with output content 'The quick brown fox jumps over the lazy dog'"
+        then: "the detector SHALL return a DetectionResult with confidence = 0.0"
+        and:
+          - "the DetectionResult.action SHALL be 'allow'"
+          - "the DetectionResult.details SHALL contain no detected secret types"
+
+  - id: REQ-002
+    description: "可配置 patterns 列表"
+    scenarios:
+      - id: SC-005
+        confidence: high
+        evidence: "DESIGN.md Section 10, design.md Decision 10"
+        given: "a detector configured with a custom patterns list containing only 'api_key' and 'jwt_token'"
+        when: "detect() is called with output containing an AWS secret key"
+        then: "the detector SHALL NOT detect the AWS secret key"
+        and:
+          - "only the configured patterns (api_key, jwt_token) SHALL be active"
+          - "the DetectionResult.details SHALL NOT list 'aws_secret'"
+
+      - id: SC-006
+        confidence: medium
+        evidence: "DESIGN.md Section 10"
+        given: "a detector configured without an explicit patterns list (default)"
+        when: "detect() is called with output containing any supported secret type"
+        then: "the detector SHALL detect all default secret types (api_key, aws_secret, private_key, jwt_token)"
+        and: []
+
+  - id: REQ-003
+    description: "action='block'（检测到密钥泄露时阻止输出）"
+    scenarios:
+      - id: SC-007
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[8], DESIGN.md Section 6.4"
+        given: "a detector configured for output direction and at least one secret pattern is matched"
+        when: "detect() returns a DetectionResult with confidence > 0"
+        then: "the DetectionResult SHALL have action='block'"
+        and:
+          - "the block SHALL prevent the output from being returned to the client"
+          - "the gateway SHALL return HTTP 422 with a safety error response"
+
+      - id: SC-008
+        confidence: high
+        evidence: "DESIGN.md Section 6.4"
+        given: "a detector configured for output direction and no secret patterns are matched"
+        when: "detect() returns a DetectionResult with confidence = 0.0"
+        then: "the DetectionResult SHALL have action='allow'"
+        and:
+          - "the output SHALL be returned to the client normally"
+
+  - id: REQ-004
+    description: "initialize 时编译正则模式"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "design.md Decision 3, DESIGN.md Section 6.1"
+        given: "a SecretLeakDetector instance with a config containing secret patterns"
+        when: "initialize() is called with the config"
+        then: "the detector SHALL compile all secret regex patterns into compiled regex objects"
+        and:
+          - "compiled patterns SHALL be stored for reuse in subsequent detect() calls"
+          - "detect() SHALL NOT recompile patterns on each call"
+          - "initialize() SHALL complete before any detect() call is made"
+
+      - id: SC-010
+        confidence: medium
+        evidence: "design.md Decision 3"
+        given: "a config with an invalid regex pattern for a secret type"
+        when: "initialize() is called with the invalid pattern"
+        then: "initialize() SHALL raise an error indicating the invalid pattern and secret type"
+        and:
+          - "the detector SHALL NOT be registered as available after initialization failure"
+
+  - id: REQ-005
+    description: "details 中记录检测到的密钥类型和数量"
+    scenarios:
+      - id: SC-011
+        confidence: high
+        evidence: "DESIGN.md Section 5.2"
+        given: "a detector that has detected 2 API keys and 1 JWT token in the output content"
+        when: "detect() returns a DetectionResult"
+        then: "the DetectionResult.details SHALL contain a mapping of secret types to their counts"
+        and:
+          - "details SHALL include 'api_key: 2' and 'jwt_token: 1'"
+          - "details SHALL include the total count of detected secrets"
+          - "details SHALL NOT include the raw secret values (to avoid logging sensitive credentials)"
+
+  - id: REQ-006
+    description: "支持自定义正则模式"
+    scenarios:
+      - id: SC-012
+        confidence: high
+        evidence: "DESIGN.md Section 10, proposal.yaml -> capabilities.new[8]"
+        given: "a detector configured with a custom pattern: {name: 'internal_token', pattern: 'int_[a-f0-9]{32}'}"
+        when: "detect() is called with output content containing 'int_abcdef1234567890abcdef1234567890'"
+        then: "the detector SHALL detect the custom pattern match"
+        and:
+          - "the DetectionResult.details SHALL list 'internal_token' as a detected secret type"
+          - "custom patterns SHALL be compiled alongside default patterns"
+          - "custom pattern names SHALL be distinct from default pattern names"
+
+      - id: SC-013
+        confidence: medium
+        evidence: "DESIGN.md Section 10"
+        given: "a detector configured with custom patterns that override a default pattern name (e.g., 'api_key' with a different regex)"
+        when: "initialize() is called"
+        then: "the custom pattern SHALL replace the default pattern for that name"
+        and:
+          - "the detector SHALL use the custom regex for 'api_key' instead of the default"

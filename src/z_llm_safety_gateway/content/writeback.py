@@ -29,6 +29,8 @@ def apply_modifications(
     sorted_modifications = sorted(modifications, key=lambda m: m.priority)
 
     for mod in sorted_modifications:
+        if mod.message_index is None:
+            continue
         if mod.message_index < 0 or mod.message_index >= len(messages):
             continue
         message = messages[mod.message_index]

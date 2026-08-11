@@ -1,205 +1,417 @@
 meta:
-  capability: "config-system"
-  change_id: "2026-08-11-v0.1.0-framework-skeleton"
-  created: "2026-08-11T00:00:00+08:00"
+  capability: config-system
+  change_id: 2026-08-11-v0.2.0-pipeline-detectors
+  created: "2026-08-11T10:00:00+08:00"
   confidence: high
-
 requirements:
-  - id: REQ-001
-    description: "Load YAML config file using yaml.safe_load"
-    scenarios:
-      - id: SC-001
-        confidence: high
-        evidence: "proposal.yaml -> capabilities.new[1]; design.md -> Decision 3 (config system); DESIGN.md -> Section 10.1"
-        given: "a valid YAML config file containing server, providers, routing, pipeline, detectors, security, audit, observability, and model_cache sections"
-        when: "the config loader reads the file"
-        then: "the loader SHALL parse the YAML content using yaml.safe_load and return a parsed dictionary"
-        and:
-          - "the loader SHALL NOT use yaml.load (unsafe) for parsing"
-          - "the parsed dictionary SHALL preserve the YAML structure including nested objects and lists"
-
-      - id: SC-002
-        confidence: high
-        evidence: "proposal.yaml -> success_criteria[7]; design.md -> Decision 3"
-        given: "a YAML config file with valid syntax but structurally incomplete (e.g., missing providers section)"
-        when: "the config loader reads the file"
-        then: "the loader SHALL parse the YAML successfully and defer structural validation to the Pydantic schema layer"
-        and:
-          - "YAML syntax errors SHALL produce a parse error before Pydantic validation"
-
-  - id: REQ-002
-    description: "Interpolate ${VAR_NAME} patterns with os.environ values before Pydantic validation"
-    scenarios:
-      - id: SC-003
-        confidence: high
-        evidence: "proposal.yaml -> success_criteria[8]; design.md -> Decision 3 (env var interpolation); DESIGN.md -> Section 10.3"
-        given: "a YAML config file containing api_key: ${OPENAI_API_KEY} and an environment variable OPENAI_API_KEY set to 'sk-test123'"
-        when: "the config loader reads and processes the file"
-        then: "the loader SHALL replace ${OPENAI_API_KEY} with the value 'sk-test123' before passing to Pydantic validation"
-        and:
-          - "the interpolation SHALL occur recursively across all nested YAML values (strings in lists, dicts, etc.)"
-          - "the interpolation SHALL occur before Pydantic model validation so the validator sees the resolved value"
-          - "the pattern SHALL match the exact format ${VAR_NAME} (dollar sign, curly braces, variable name, closing brace)"
-
-      - id: SC-004
-        confidence: high
-        evidence: "proposal.yaml -> REQ-008 (unset env var -> empty string); design.md -> Decision 3"
-        given: "a YAML config file containing api_key: ${UNSET_VAR} and no environment variable UNSET_VAR is set"
-        when: "the config loader reads and processes the file"
-        then: "the loader SHALL resolve ${UNSET_VAR} to an empty string ('') rather than crashing"
-        and:
-          - "the resolved empty string SHALL be passed to Pydantic validation"
-          - "if the field is required (e.g., api_key for openai provider), Pydantic validation SHALL then produce a validation error"
-
-  - id: REQ-003
-    description: "Pydantic v2 models validate all config sections (server, providers, routing, pipeline, detectors, security, audit, observability, model_cache)"
-    scenarios:
-      - id: SC-005
-        confidence: high
-        evidence: "proposal.yaml -> capabilities.new[1]; design.md -> Decision 3; DESIGN.md -> Section 10.2 (full config example)"
-        given: "a fully valid config dictionary (after env var interpolation) with all sections present and correctly typed"
-        when: "the config is validated through the GatewayConfig Pydantic v2 model"
-        then: "the model SHALL validate successfully and return a typed GatewayConfig instance"
-        and:
-          - "each config section (server, providers, routing, pipeline, detectors, security, audit, observability, model_cache) SHALL have a corresponding Pydantic model"
-          - "the GatewayConfig SHALL be the root model containing all sub-sections"
-          - "type annotations SHALL enforce correct types (e.g., server.port as int, server.host as str)"
-
-      - id: SC-006
-        confidence: high
-        evidence: "design.md -> Decision 3; DESIGN.md -> Section 10.2"
-        given: "a config dictionary where server.port is a string 'not_a_number' instead of an integer"
-        when: "the config is validated through the GatewayConfig Pydantic v2 model"
-        then: "Pydantic SHALL raise a ValidationError indicating the type mismatch for server.port"
-        and:
-          - "the validation error SHALL include the field path and the expected type"
-          - "the validation error SHALL prevent the config from being loaded"
-
-  - id: REQ-004
-    description: "Cross-field validation: block_threshold > flag_threshold for detectors"
-    scenarios:
-      - id: SC-007
-        confidence: high
-        evidence: "proposal.yaml -> success_criteria[9]; DESIGN.md -> Section 5.3 (validation rule) and Section 10.4 (validation table); design.md -> Decision 3"
-        given: "a config dictionary with a detector having block_threshold: 0.50 and flag_threshold: 0.85"
-        when: "the config is validated through the Pydantic v2 model with cross-field validation"
-        then: "the validator SHALL raise a validation error because block_threshold (0.50) is not greater than flag_threshold (0.85)"
-        and:
-          - "the error message SHALL state that block_threshold must be greater than flag_threshold"
-          - "the error message SHALL include the detector name and both threshold values"
-          - "the validation SHALL use @model_validator(mode='after') for the cross-field check"
-
-      - id: SC-008
-        confidence: high
-        evidence: "DESIGN.md -> Section 5.3 (threshold-driven action decision)"
-        given: "a config dictionary with a detector having block_threshold: 0.85 and flag_threshold: 0.50"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the validator SHALL accept the configuration because block_threshold (0.85) is greater than flag_threshold (0.50)"
-        and:
-          - "no validation error SHALL be raised for valid threshold values"
-
-      - id: SC-009
-        confidence: medium
-        evidence: "DESIGN.md -> Section 5.3; design.md -> Decision 3"
-        given: "a config dictionary with a detector having block_threshold: 0.85 and flag_threshold: 0.85 (equal)"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the validator SHALL raise a validation error because block_threshold must be strictly greater than flag_threshold"
-        and:
-          - "equal values SHALL be rejected, not just reversed values"
-
-  - id: REQ-005
-    description: "Routing conflict detection: overlapping glob patterns produce a warning at startup"
-    scenarios:
-      - id: SC-010
-        confidence: high
-        evidence: "proposal.yaml -> success_criteria[9]; DESIGN.md -> Section 9.3 (routing conflict resolution) and Section 10.4 (overlapping routing rules warning); design.md -> Decision 3"
-        given: "a config dictionary with routing rules 'gpt-4*': openai and 'gpt-*': openai that overlap for model 'gpt-4'"
-        when: "the config validation runs routing conflict detection at startup"
-        then: "the validator SHALL emit a warning indicating that routing rules 'gpt-4*' and 'gpt-*' overlap"
-        and:
-          - "the warning SHALL NOT prevent startup (it is a warning, not an error)"
-          - "the warning message SHALL identify which model(s) are affected by the overlap"
-          - "the warning message SHALL state which rule wins (first match in YAML order)"
-          - "the first matching rule in YAML order SHALL be used for routing at runtime"
-
-      - id: SC-011
-        confidence: high
-        evidence: "DESIGN.md -> Section 9.3; design.md -> Decision 3"
-        given: "a config dictionary with routing rules 'gpt-4*': openai and 'llama*': local_llama that do not overlap"
-        when: "the config validation runs routing conflict detection"
-        then: "the validator SHALL NOT emit any overlap warning"
-        and:
-          - "no models SHALL match more than one routing rule"
-
-  - id: REQ-006
-    description: "Invalid config produces a clear error message and prevents startup"
-    scenarios:
-      - id: SC-012
-        confidence: high
-        evidence: "proposal.yaml -> success_criteria[8]; DESIGN.md -> Section 10.4; design.md -> Decision 3 (ConfigValidationError prevents startup)"
-        given: "a YAML config file with invalid content that fails Pydantic validation"
-        when: "the config loader attempts to load and validate the config"
-        then: "the loader SHALL raise a ConfigValidationError with a clear, human-readable error message"
-        and:
-          - "the error message SHALL identify which field(s) failed validation"
-          - "the error message SHALL include the expected vs. actual value where applicable"
-          - "the ConfigValidationError SHALL prevent the gateway from starting"
-          - "the error SHALL be raised at startup, not deferred to request time"
-
-      - id: SC-013
-        confidence: high
-        evidence: "design.md -> Decision 3; DESIGN.md -> Section 10.4"
-        given: "a YAML config file with a syntax error (e.g., unbalanced brackets)"
-        when: "the config loader attempts to parse the file"
-        then: "the loader SHALL raise an error with a message indicating the YAML syntax error and approximate location"
-        and:
-          - "the error SHALL prevent the gateway from starting"
-          - "the error SHALL NOT be swallowed or silently ignored"
-
-  - id: REQ-007
-    description: "Missing required provider fields (e.g., api_key for openai) produce an error"
-    scenarios:
-      - id: SC-014
-        confidence: high
-        evidence: "proposal.yaml -> REQ-007; DESIGN.md -> Section 10.4 (missing required provider config); design.md -> Decision 3"
-        given: "a config dictionary with an openai provider that has no api_key field (or api_key resolves to empty string via unset env var)"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the validator SHALL raise a validation error indicating that provider 'openai' is missing required field 'api_key'"
-        and:
-          - "the error message SHALL include the provider name and the missing field name"
-          - "the error SHALL prevent the gateway from starting"
-          - "the validation SHALL apply to provider type-specific required fields (e.g., api_key for openai and azure_openai)"
-
-      - id: SC-015
-        confidence: medium
-        evidence: "DESIGN.md -> Section 9.2 (provider types); design.md -> Decision 4"
-        given: "a config dictionary with an openai_compatible provider that has base_url but no api_key"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the validator SHALL accept the configuration because openai_compatible providers do not require api_key"
-        and:
-          - "only providers of type 'openai' and 'azure_openai' SHALL require api_key"
-          - "the 'azure_openai' provider SHALL also require api_version"
-
-  - id: REQ-008
-    description: "Unset environment variable ${VAR} resolves to empty string (not crash)"
-    scenarios:
-      - id: SC-016
-        confidence: high
-        evidence: "proposal.yaml -> REQ-008; design.md -> Decision 3 (os.environ.get with default empty string)"
-        given: "a YAML config file containing a value ${TOTALLY_UNSET_VAR} and the environment variable TOTALLY_UNSET_VAR is not set"
-        when: "the config loader performs environment variable interpolation"
-        then: "the loader SHALL resolve ${TOTALLY_UNSET_VAR} to an empty string ('')"
-        and:
-          - "the loader SHALL NOT raise a KeyError or any exception for unset variables"
-          - "the interpolation SHALL use os.environ.get('VAR_NAME', '') semantics"
-          - "if the resulting empty string fails subsequent Pydantic validation (e.g., required field), the error SHALL come from Pydantic, not from the interpolation step"
-
-      - id: SC-017
-        confidence: medium
-        evidence: "design.md -> Decision 3; DESIGN.md -> Section 10.3"
-        given: "a YAML config file containing multiple ${VAR} references where some are set and some are unset"
-        when: "the config loader performs environment variable interpolation"
-        then: "the loader SHALL resolve all set variables to their values and all unset variables to empty strings in a single pass"
-        and:
-          - "the interpolation SHALL be recursive, processing nested structures (lists, dicts) completely"
-          - "partially resolved values (e.g., 'prefix-${VAR}-suffix') SHALL have ${VAR} replaced inline"
+- id: REQ-001
+  description: Load YAML config file using yaml.safe_load
+  scenarios:
+  - id: SC-001
+    confidence: high
+    evidence: proposal.yaml -> capabilities.new[1]; design.md -> Decision 3 (config system); DESIGN.md -> Section 10.1
+    given: a valid YAML config file containing server, providers, routing, pipeline, detectors, security, audit, observability, and model_cache sections
+    when: the config loader reads the file
+    then: the loader SHALL parse the YAML content using yaml.safe_load and return a parsed dictionary
+    and:
+    - the loader SHALL NOT use yaml.load (unsafe) for parsing
+    - the parsed dictionary SHALL preserve the YAML structure including nested objects and lists
+  - id: SC-002
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[7]; design.md -> Decision 3
+    given: a YAML config file with valid syntax but structurally incomplete (e.g., missing providers section)
+    when: the config loader reads the file
+    then: the loader SHALL parse the YAML successfully and defer structural validation to the Pydantic schema layer
+    and:
+    - YAML syntax errors SHALL produce a parse error before Pydantic validation
+- id: REQ-002
+  description: Interpolate ${VAR_NAME} patterns with os.environ values before Pydantic validation
+  scenarios:
+  - id: SC-003
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[8]; design.md -> Decision 3 (env var interpolation); DESIGN.md -> Section 10.3
+    given: 'a YAML config file containing api_key: ${OPENAI_API_KEY} and an environment variable OPENAI_API_KEY set to ''sk-test123'''
+    when: the config loader reads and processes the file
+    then: the loader SHALL replace ${OPENAI_API_KEY} with the value 'sk-test123' before passing to Pydantic validation
+    and:
+    - the interpolation SHALL occur recursively across all nested YAML values (strings in lists, dicts, etc.)
+    - the interpolation SHALL occur before Pydantic model validation so the validator sees the resolved value
+    - the pattern SHALL match the exact format ${VAR_NAME} (dollar sign, curly braces, variable name, closing brace)
+  - id: SC-004
+    confidence: high
+    evidence: proposal.yaml -> REQ-008 (unset env var -> empty string); design.md -> Decision 3
+    given: 'a YAML config file containing api_key: ${UNSET_VAR} and no environment variable UNSET_VAR is set'
+    when: the config loader reads and processes the file
+    then: the loader SHALL resolve ${UNSET_VAR} to an empty string ('') rather than crashing
+    and:
+    - the resolved empty string SHALL be passed to Pydantic validation
+    - if the field is required (e.g., api_key for openai provider), Pydantic validation SHALL then produce a validation error
+- id: REQ-003
+  description: Pydantic v2 models validate all config sections (server, providers, routing, pipeline, detectors, security, audit, observability, model_cache)
+  scenarios:
+  - id: SC-005
+    confidence: high
+    evidence: proposal.yaml -> capabilities.new[1]; design.md -> Decision 3; DESIGN.md -> Section 10.2 (full config example)
+    given: a fully valid config dictionary (after env var interpolation) with all sections present and correctly typed
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: the model SHALL validate successfully and return a typed GatewayConfig instance
+    and:
+    - each config section (server, providers, routing, pipeline, detectors, security, audit, observability, model_cache) SHALL have a corresponding Pydantic model
+    - the GatewayConfig SHALL be the root model containing all sub-sections
+    - type annotations SHALL enforce correct types (e.g., server.port as int, server.host as str)
+  - id: SC-006
+    confidence: high
+    evidence: design.md -> Decision 3; DESIGN.md -> Section 10.2
+    given: a config dictionary where server.port is a string 'not_a_number' instead of an integer
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: Pydantic SHALL raise a ValidationError indicating the type mismatch for server.port
+    and:
+    - the validation error SHALL include the field path and the expected type
+    - the validation error SHALL prevent the config from being loaded
+- id: REQ-004
+  description: 'Cross-field validation: block_threshold must be strictly greater than flag_threshold when both are present in config'
+  scenarios:
+  - id: SC-007
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[8]; design.md -> Decision 10; DESIGN.md -> Section 5.3 (validation rule) and Section 10.4 (validation table)
+    given: 'a DetectorConfig entry with config containing block_threshold: 0.50 and flag_threshold: 0.85'
+    when: the config is validated through the Pydantic v2 model
+    then: the validator SHALL raise a validation error because block_threshold (0.50) is not greater than flag_threshold (0.85)
+    and:
+    - the error message SHALL state that block_threshold must be greater than flag_threshold
+    - the error message SHALL include the detector name and both threshold values
+    - the error SHALL prevent the gateway from starting
+  - id: SC-008
+    confidence: high
+    evidence: DESIGN.md -> Section 5.3; design.md -> Decision 10
+    given: 'a DetectorConfig entry with config containing block_threshold: 0.85 and flag_threshold: 0.50'
+    when: the config is validated through the Pydantic v2 model
+    then: the validator SHALL accept the configuration because block_threshold (0.85) is strictly greater than flag_threshold (0.50)
+    and:
+    - no validation error SHALL be raised for valid threshold values
+  - id: SC-009
+    confidence: medium
+    evidence: DESIGN.md -> Section 5.3
+    given: 'a DetectorConfig entry with config containing block_threshold: 0.85 and flag_threshold: 0.85 (equal values)'
+    when: the config is validated through the Pydantic v2 model
+    then: the validator SHALL raise a validation error because block_threshold must be strictly greater than flag_threshold
+    and:
+    - equal values SHALL be rejected, not just reversed values
+- id: REQ-005
+  description: 'Routing conflict detection: overlapping glob patterns produce a warning at startup'
+  scenarios:
+  - id: SC-010
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[9]; DESIGN.md -> Section 9.3 (routing conflict resolution) and Section 10.4 (overlapping routing rules warning); design.md -> Decision 3
+    given: 'a config dictionary with routing rules ''gpt-4*'': openai and ''gpt-*'': openai that overlap for model ''gpt-4'''
+    when: the config validation runs routing conflict detection at startup
+    then: the validator SHALL emit a warning indicating that routing rules 'gpt-4*' and 'gpt-*' overlap
+    and:
+    - the warning SHALL NOT prevent startup (it is a warning, not an error)
+    - the warning message SHALL identify which model(s) are affected by the overlap
+    - the warning message SHALL state which rule wins (first match in YAML order)
+    - the first matching rule in YAML order SHALL be used for routing at runtime
+  - id: SC-011
+    confidence: high
+    evidence: DESIGN.md -> Section 9.3; design.md -> Decision 3
+    given: 'a config dictionary with routing rules ''gpt-4*'': openai and ''llama*'': local_llama that do not overlap'
+    when: the config validation runs routing conflict detection
+    then: the validator SHALL NOT emit any overlap warning
+    and:
+    - no models SHALL match more than one routing rule
+- id: REQ-006
+  description: Invalid config produces a clear error message and prevents startup
+  scenarios:
+  - id: SC-012
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[8]; DESIGN.md -> Section 10.4; design.md -> Decision 3 (ConfigValidationError prevents startup)
+    given: a YAML config file with invalid content that fails Pydantic validation
+    when: the config loader attempts to load and validate the config
+    then: the loader SHALL raise a ConfigValidationError with a clear, human-readable error message
+    and:
+    - the error message SHALL identify which field(s) failed validation
+    - the error message SHALL include the expected vs. actual value where applicable
+    - the ConfigValidationError SHALL prevent the gateway from starting
+    - the error SHALL be raised at startup, not deferred to request time
+  - id: SC-013
+    confidence: high
+    evidence: design.md -> Decision 3; DESIGN.md -> Section 10.4
+    given: a YAML config file with a syntax error (e.g., unbalanced brackets)
+    when: the config loader attempts to parse the file
+    then: the loader SHALL raise an error with a message indicating the YAML syntax error and approximate location
+    and:
+    - the error SHALL prevent the gateway from starting
+    - the error SHALL NOT be swallowed or silently ignored
+- id: REQ-007
+  description: Missing required provider fields (e.g., api_key for openai) produce an error
+  scenarios:
+  - id: SC-014
+    confidence: high
+    evidence: proposal.yaml -> REQ-007; DESIGN.md -> Section 10.4 (missing required provider config); design.md -> Decision 3
+    given: a config dictionary with an openai provider that has no api_key field (or api_key resolves to empty string via unset env var)
+    when: the config is validated through the Pydantic v2 model
+    then: the validator SHALL raise a validation error indicating that provider 'openai' is missing required field 'api_key'
+    and:
+    - the error message SHALL include the provider name and the missing field name
+    - the error SHALL prevent the gateway from starting
+    - the validation SHALL apply to provider type-specific required fields (e.g., api_key for openai and azure_openai)
+  - id: SC-015
+    confidence: medium
+    evidence: DESIGN.md -> Section 9.2 (provider types); design.md -> Decision 4
+    given: a config dictionary with an openai_compatible provider that has base_url but no api_key
+    when: the config is validated through the Pydantic v2 model
+    then: the validator SHALL accept the configuration because openai_compatible providers do not require api_key
+    and:
+    - only providers of type 'openai' and 'azure_openai' SHALL require api_key
+    - the 'azure_openai' provider SHALL also require api_version
+- id: REQ-008
+  description: Unset environment variable ${VAR} resolves to empty string (not crash)
+  scenarios:
+  - id: SC-016
+    confidence: high
+    evidence: proposal.yaml -> REQ-008; design.md -> Decision 3 (os.environ.get with default empty string)
+    given: a YAML config file containing a value ${TOTALLY_UNSET_VAR} and the environment variable TOTALLY_UNSET_VAR is not set
+    when: the config loader performs environment variable interpolation
+    then: the loader SHALL resolve ${TOTALLY_UNSET_VAR} to an empty string ('')
+    and:
+    - the loader SHALL NOT raise a KeyError or any exception for unset variables
+    - the interpolation SHALL use os.environ.get('VAR_NAME', '') semantics
+    - if the resulting empty string fails subsequent Pydantic validation (e.g., required field), the error SHALL come from Pydantic, not from the interpolation step
+  - id: SC-017
+    confidence: medium
+    evidence: design.md -> Decision 3; DESIGN.md -> Section 10.3
+    given: a YAML config file containing multiple ${VAR} references where some are set and some are unset
+    when: the config loader performs environment variable interpolation
+    then: the loader SHALL resolve all set variables to their values and all unset variables to empty strings in a single pass
+    and:
+    - the interpolation SHALL be recursive, processing nested structures (lists, dicts) completely
+    - partially resolved values (e.g., 'prefix-${VAR}-suffix') SHALL have ${VAR} replaced inline
+- id: REQ-009
+  description: 'detectors configuration restructured from list[dict] to {input: [...], output: [...]} bidirectional grouping'
+  scenarios:
+  - id: SC-001
+    confidence: high
+    evidence: proposal.yaml -> what_changes C10; design.md -> Decision 10 (config system refactor); DESIGN.md -> Section 10.2 (detectors config example)
+    given: a YAML config file with detectors configured as a dict containing input and output lists, each with DetectorConfig entries
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: the model SHALL parse the detectors section into a DetectorsConfig with input and output fields, each being a list[DetectorConfig]
+    and:
+    - the input list SHALL contain detectors executed on request input (before provider forwarding)
+    - the output list SHALL contain detectors executed on response output (after provider response)
+    - an empty input or output list SHALL be valid (no detectors for that direction)
+  - id: SC-002
+    confidence: high
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 10.2
+    given: a YAML config file with detectors configured as a dict with only an input list and no output list
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL accept the configuration with output defaulting to an empty list
+    and:
+    - only input detection SHALL run at request time
+    - no output detection SHALL be performed
+- id: REQ-010
+  description: DetectorConfig extended with priority, on_error, circuit_breaker, and config fields
+  scenarios:
+  - id: SC-003
+    confidence: high
+    evidence: proposal.yaml -> what_changes C10; design.md -> Decision 10; DESIGN.md -> Section 5.4 (priority), Section 5.7 (on_error), Section 5.8 (circuit_breaker)
+    given: 'a DetectorConfig entry with name, type, enabled, priority: 10, on_error: fail_closed, circuit_breaker config, and a config dict'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL accept and parse all fields into the DetectorConfig instance
+    and:
+    - priority SHALL default to 100 when not specified
+    - on_error SHALL default to 'fail_open' when not specified
+    - circuit_breaker SHALL default to None when not specified
+    - config SHALL default to an empty dict when not specified
+  - id: SC-004
+    confidence: high
+    evidence: DESIGN.md -> Section 5.7 (error handling strategies); design.md -> Decision 10
+    given: a DetectorConfig entry with on_error set to an invalid value 'fail_silently'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL raise a validation error indicating that on_error must be 'fail_open' or 'fail_closed'
+    and:
+    - the validation error SHALL include the detector name and the invalid value
+    - the error SHALL prevent the gateway from starting
+- id: REQ-011
+  description: block_threshold and flag_threshold moved into the nested config block of DetectorConfig
+  scenarios:
+  - id: SC-005
+    confidence: high
+    evidence: design.md -> Decision 10 (nested config block); DESIGN.md -> Section 5.3 (threshold in config) and Section 10.2 (config example)
+    given: 'a DetectorConfig entry with a config dict containing block_threshold: 0.85 and flag_threshold: 0.50'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL parse block_threshold and flag_threshold from within the nested config dict, not from the top-level DetectorConfig fields
+    and:
+    - the top-level DetectorConfig SHALL NOT have block_threshold or flag_threshold as direct fields
+    - detectors that do not use thresholds (e.g., sensitive_words) SHALL not be required to provide block_threshold or flag_threshold
+    - when thresholds are present in config, they SHALL be accessible to the ThresholdDecisionEngine at runtime
+  - id: SC-006
+    confidence: medium
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 5.3
+    given: a DetectorConfig entry for a non-threshold detector (e.g., sensitive_words) with a config dict that does not contain block_threshold or flag_threshold
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL accept the configuration without requiring threshold fields
+    and:
+    - the ThresholdDecisionEngine SHALL apply default thresholds when thresholds are not configured
+- id: REQ-012
+  description: PipelineConfig extended with short_circuit_on, flag_escalation, and sync_timeout fields
+  scenarios:
+  - id: SC-010
+    confidence: high
+    evidence: proposal.yaml -> what_changes C10; design.md -> Decision 10; DESIGN.md -> Section 5.1 (short_circuit_on), Section 5.6 (flag_escalation), Section 3.5 (sync_timeout)
+    given: 'a YAML config file with pipeline section containing short_circuit_on: block_and_modify, flag_escalation config, and output_detection.sync_timeout: 5s'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL parse short_circuit_on, flag_escalation, and sync_timeout into the PipelineConfig instance
+    and:
+    - short_circuit_on SHALL default to 'block' when not specified
+    - short_circuit_on SHALL only accept 'block' or 'block_and_modify' as valid values
+    - flag_escalation SHALL default to disabled when not specified
+    - sync_timeout SHALL be a duration field applicable to non-streaming output detection
+  - id: SC-011
+    confidence: high
+    evidence: DESIGN.md -> Section 5.1 (short-circuit modes); design.md -> Decision 1
+    given: a PipelineConfig with short_circuit_on set to an invalid value 'block_and_flag'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL raise a validation error indicating that short_circuit_on must be 'block' or 'block_and_modify'
+    and:
+    - the error SHALL prevent the gateway from starting
+- id: REQ-013
+  description: flag_escalation.rule syntax validated at config load time (parsed to AST, no runtime parsing overhead)
+  scenarios:
+  - id: SC-012
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[8]; design.md -> Decision 7 (Flag escalation DSL) and Decision 10; DESIGN.md -> Section 5.6 (flag escalation) and Section 10.4 (validation table)
+    given: 'a YAML config file with flag_escalation.enabled: true and rule: ''count >= 3 and max_risk_level >= medium'''
+    when: the config is loaded and validated
+    then: the validator SHALL parse the rule expression into an AST at config load time without raising an error
+    and:
+    - 'the parsed AST SHALL support variables: count, max_risk_level, categories'
+    - 'the parsed AST SHALL support operators: >=, >, <=, <, ==, !='
+    - 'the parsed AST SHALL support logic: and, or (left-to-right evaluation)'
+    - no runtime parsing of the rule SHALL occur during request processing
+  - id: SC-013
+    confidence: high
+    evidence: design.md -> Decision 7; DESIGN.md -> Section 10.4 (invalid flag_escalation rule syntax)
+    given: 'a YAML config file with flag_escalation.enabled: true and rule: ''count >>> 3 and'''
+    when: the config is loaded and validated
+    then: the validator SHALL raise a validation error indicating invalid flag_escalation rule syntax
+    and:
+    - the error message SHALL describe the syntax error and list supported syntax elements
+    - the error SHALL prevent the gateway from starting
+    - the error SHALL be raised at config load time, not at request time
+  - id: SC-014
+    confidence: medium
+    evidence: DESIGN.md -> Section 5.6; design.md -> Decision 7
+    given: 'a YAML config file with flag_escalation.enabled: false and rule: ''invalid syntax >>>'''
+    when: the config is loaded and validated
+    then: the validator SHALL NOT raise an error for the invalid rule syntax because flag_escalation is disabled
+    and:
+    - the rule SHALL not be parsed when enabled is false
+    - the gateway SHALL start successfully
+- id: REQ-014
+  description: model_cache global configuration with dir and offline_mode fields
+  scenarios:
+  - id: SC-015
+    confidence: high
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 10.2 (model_cache config)
+    given: 'a YAML config file with a model_cache section containing dir: ''/app/models'' and offline_mode: false'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL parse the model_cache section into a ModelCacheConfig with dir and offline_mode fields
+    and:
+    - dir SHALL default to '~/.cache/z_llm_safety_gateway/models/' when not specified
+    - offline_mode SHALL default to false when not specified
+    - when offline_mode is true, ML model detectors SHALL skip model downloads and require cached models
+  - id: SC-016
+    confidence: medium
+    evidence: DESIGN.md -> Section 10.2; design.md -> Decision 9 (toxicity offline_mode)
+    given: 'a YAML config file with model_cache.offline_mode: true and a toxicity detector configured'
+    when: the config is loaded and the toxicity detector attempts to load its model
+    then: the detector SHALL NOT attempt to download the model from HuggingFace
+    and:
+    - if the model is not cached locally, the detector SHALL apply its on_error strategy
+    - if the model is cached locally, the detector SHALL load it from the configured cache dir
+- id: REQ-015
+  description: Unknown detector name validation produces an Error at startup
+  scenarios:
+  - id: SC-017
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[8]; design.md -> Decision 10; DESIGN.md -> Section 10.4 (unknown detector name)
+    given: a YAML config file with a detector named 'nonexistent_detector' that is not a built-in detector and not type grpc
+    when: the config is validated at startup
+    then: the validator SHALL raise an Error indicating the detector name is unknown
+    and:
+    - the error message SHALL list available built-in detector names
+    - 'the error message SHALL suggest using type: grpc for third-party detectors'
+    - the error SHALL prevent the gateway from starting
+  - id: SC-018
+    confidence: medium
+    evidence: DESIGN.md -> Section 10.4; design.md -> Decision 3 (DetectorRegistry)
+    given: a YAML config file with a detector named 'prompt_injection' which is a known built-in detector
+    when: the config is validated at startup
+    then: the validator SHALL accept the detector name without error
+    and:
+    - 'the built-in detector names SHALL include: prompt_injection, pii_redaction, toxicity, sensitive_words, secret_leak'
+- id: REQ-016
+  description: word_list_file missing validation produces an Error when referenced file does not exist
+  scenarios:
+  - id: SC-019
+    confidence: high
+    evidence: proposal.yaml -> success_criteria[8]; design.md -> Decision 10; DESIGN.md -> Section 10.4 (missing word_list_file)
+    given: 'a YAML config file with a sensitive_words detector referencing word_list_file: ''config/wordlists/sensitive_en.txt'' and the file does not exist on disk'
+    when: the config is validated at startup
+    then: the validator SHALL raise an Error indicating that the referenced word_list_file is missing
+    and:
+    - the error message SHALL include the detector name and the file path
+    - the error SHALL prevent the gateway from starting
+  - id: SC-020
+    confidence: high
+    evidence: DESIGN.md -> Section 10.4; design.md -> Decision 8 (sensitive words detector)
+    given: 'a YAML config file with a sensitive_words detector referencing word_list_file: ''config/wordlists/sensitive_en.txt'' and the file exists on disk'
+    when: the config is validated at startup
+    then: the validator SHALL accept the configuration without error
+    and:
+    - the word list file SHALL be readable by the detector at initialization time
+- id: REQ-017
+  description: gRPC detector endpoint required validation (reserved for v0.5.0, endpoint field validated in v0.2.0 config)
+  scenarios:
+  - id: SC-021
+    confidence: high
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 10.4 (gRPC detector missing endpoint) and Section 7.3 (gRPC sidecar)
+    given: 'a YAML config file with a detector of type: grpc that does not include an endpoint field in its config'
+    when: the config is validated at startup
+    then: the validator SHALL raise an Error indicating that the gRPC detector is missing the required endpoint config
+    and:
+    - the error message SHALL include the detector name
+    - the error SHALL prevent the gateway from starting
+    - the gRPC detector execution itself SHALL NOT be implemented in v0.2.0 (only config validation is reserved)
+  - id: SC-022
+    confidence: medium
+    evidence: DESIGN.md -> Section 10.4 (gRPC detector without circuit_breaker -> Info); design.md -> Decision 10
+    given: 'a YAML config file with a detector of type: grpc with a valid endpoint but no circuit_breaker configured'
+    when: the config is validated at startup
+    then: the validator SHALL emit an Info-level message recommending a circuit_breaker for external detectors
+    and:
+    - the Info message SHALL NOT prevent the gateway from starting
+    - the Info message SHALL include the detector name
+- id: REQ-018
+  description: 'Backward compatibility: old format detectors: list[dict] automatically converted to new {input: [...], output: [...]} format'
+  scenarios:
+  - id: SC-023
+    confidence: high
+    evidence: 'proposal.yaml -> risk_areas (config-system: backward compat); design.md -> Decision 10 (preserve old field compat)'
+    given: a v0.1.0-style YAML config file with pipeline.detectors as a list[dict] (flat list without input/output grouping)
+    when: the config is loaded and validated through the Pydantic v2 model
+    then: the loader SHALL automatically convert the old list format to the new DetectorsConfig format
+    and:
+    - all detectors in the old list SHALL be placed in the input list of the new format
+    - the output list SHALL be empty after conversion
+    - the converted config SHALL pass all new validation rules
+    - a deprecation warning SHALL be emitted indicating the old format is deprecated
+  - id: SC-024
+    confidence: medium
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 10.2
+    given: 'a YAML config file using the new detectors: {input: [...], output: [...]} format'
+    when: the config is loaded and validated
+    then: the loader SHALL parse the new format directly without any conversion
+    and:
+    - no deprecation warning SHALL be emitted for the new format
+    - the old list format and new dict format SHALL NOT be mixed in the same config file

@@ -3,16 +3,27 @@
 These validators run after Pydantic model validation and enforce semantic
 constraints that span multiple config sections (e.g., routing rules referencing
 providers, detector threshold relationships, provider-type-specific requirements).
+
+v0.2.0 additions:
+- ``_validate_detectors_v2()``: threshold check from nested ``config`` dict,
+  unknown detector name check, gRPC endpoint check, word_list_file existence
+  check, and gRPC circuit_breaker info message.
+- ``_validate_flag_escalation()``: flag_escalation.rule syntax validation at
+  config load time.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import os
+import re
 import warnings
 
-from pydantic import ValidationError
-
-from z_llm_safety_gateway.config.models import DetectorConfig, GatewayConfig
+from z_llm_safety_gateway.config.models import (
+    DetectorConfig,
+    DetectorsConfig,
+    GatewayConfig,
+)
 from z_llm_safety_gateway.exceptions import ConfigValidationError
 
 # Provider types that require a non-empty api_key.
@@ -24,6 +35,18 @@ _PROVIDER_TYPES_REQUIRING_API_VERSION = frozenset({"azure_openai"})
 # Test values used to generate sample strings for glob pattern overlap detection.
 _OVERLAP_TEST_VALUES = ["", "4", "test", "turbo", "x", "70b", "13b", "-", "mini"]
 
+# Built-in detector names recognised at config validation time.
+# Third-party detectors must use ``type: grpc``.
+_BUILTIN_DETECTOR_NAMES = frozenset(
+    {"prompt_injection", "pii_redaction", "toxicity", "sensitive_words", "secret_leak"}
+)
+
+# Variables supported in the flag_escalation rule DSL.
+_FLAG_ESCALATION_VARIABLES = frozenset({"count", "max_risk_level", "categories"})
+
+# Operators supported in the flag_escalation rule DSL.
+_FLAG_ESCALATION_OPERATORS = frozenset({">=", ">", "<=", "<", "==", "!="})
+
 
 def validate_config(config: GatewayConfig) -> None:
     """Run all cross-field validation rules on a GatewayConfig.
@@ -34,32 +57,249 @@ def validate_config(config: GatewayConfig) -> None:
     Raises:
         ConfigValidationError: If any cross-field validation rule fails.
     """
-    _validate_detectors(config)
+    _validate_detectors_v2(config)
+    _validate_flag_escalation(config)
     _validate_providers(config)
     _validate_routing(config)
 
 
-def _validate_detectors(config: GatewayConfig) -> None:
-    """Validate detector configs by instantiating DetectorConfig from dicts.
+# --------------------------------------------------------------------------- #
+# Detector validation (v0.2.0)
+# --------------------------------------------------------------------------- #
+def _validate_detectors_v2(config: GatewayConfig) -> None:
+    """Validate detector configs: thresholds, names, gRPC endpoint, word_list_file.
 
-    The pipeline.detectors field stores raw dicts; this function converts each
-    to a DetectorConfig to trigger the threshold model_validator.
+    Iterates over all detectors in ``pipeline.detectors`` (which is always a
+    ``DetectorsConfig`` after the PipelineConfig model_validator conversion).
+    For each detector:
+
+    1. **Threshold check**: if both ``block_threshold`` and ``flag_threshold``
+       are present in the nested ``config`` dict, verify block > flag.
+    2. **Unknown detector name**: if the name is not a built-in detector and
+       ``type`` is not ``grpc``, raise an error.
+    3. **gRPC endpoint**: if ``type`` is ``grpc``, verify ``endpoint`` is
+       present in the ``config`` dict.
+    4. **gRPC circuit_breaker info**: if ``type`` is ``grpc`` and no
+       circuit_breaker is configured, emit an info-level warning.
+    5. **word_list_file**: if the detector is ``sensitive_words`` and
+       ``word_list_file`` is specified in ``config``, check file existence
+       (warning only, does not block startup).
 
     Args:
         config: GatewayConfig instance.
 
     Raises:
-        ConfigValidationError: If any detector fails validation.
+        ConfigValidationError: If threshold check, unknown name, or gRPC
+            endpoint check fails.
     """
-    for detector_dict in config.pipeline.detectors:
-        try:
-            DetectorConfig(**detector_dict)
-        except ValidationError as exc:
+    detectors = config.pipeline.detectors
+
+    # After PipelineConfig model_validator conversion, detectors is always
+    # a DetectorsConfig.  Guard for safety against unexpected types.
+    if not isinstance(detectors, DetectorsConfig):
+        return
+
+    all_detectors: list[tuple[str, DetectorConfig]] = [
+        ("input", d) for d in detectors.input
+    ] + [
+        ("output", d) for d in detectors.output
+    ]
+
+    for _direction, detector in all_detectors:
+        _validate_thresholds(detector)
+        _validate_detector_name(detector)
+        _validate_grpc_detector(detector)
+        _validate_word_list_file(detector)
+
+
+def _validate_thresholds(detector: DetectorConfig) -> None:
+    """Verify block_threshold > flag_threshold when both are present in config.
+
+    Args:
+        detector: DetectorConfig instance.
+
+    Raises:
+        ConfigValidationError: If block_threshold <= flag_threshold.
+    """
+    cfg = detector.config
+    block = cfg.get("block_threshold")
+    flag = cfg.get("flag_threshold")
+
+    if block is not None and flag is not None and block <= flag:
+        raise ConfigValidationError(
+            f"Detector '{detector.name}': block_threshold ({block}) "
+            f"must be strictly greater than flag_threshold ({flag})"
+        )
+
+
+def _validate_detector_name(detector: DetectorConfig) -> None:
+    """Check that the detector name is a known built-in or has type=grpc.
+
+    Args:
+        detector: DetectorConfig instance.
+
+    Raises:
+        ConfigValidationError: If the name is unknown and type is not grpc.
+    """
+    # gRPC type bypasses the built-in name check
+    if detector.type == "grpc":
+        return
+
+    if detector.name in _BUILTIN_DETECTOR_NAMES:
+        return
+
+    available = ", ".join(sorted(_BUILTIN_DETECTOR_NAMES))
+    raise ConfigValidationError(
+        f"Unknown detector '{detector.name}'. "
+        f"Available built-in detectors: [{available}]. "
+        f"For third-party detectors, use type: grpc."
+    )
+
+
+def _validate_grpc_detector(detector: DetectorConfig) -> None:
+    """Validate gRPC detector: endpoint required, circuit_breaker recommended.
+
+    Args:
+        detector: DetectorConfig instance.
+
+    Raises:
+        ConfigValidationError: If type=grpc and endpoint is missing.
+    """
+    if detector.type != "grpc":
+        return
+
+    endpoint = detector.config.get("endpoint")
+    if not endpoint:
+        raise ConfigValidationError(
+            f"gRPC detector '{detector.name}' is missing required config: endpoint"
+        )
+
+    # Info: recommend circuit_breaker for external detectors
+    if detector.circuit_breaker is None:
+        warnings.warn(
+            f"gRPC detector '{detector.name}' has no circuit_breaker configured. "
+            f"Recommended for external detectors.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+
+def _validate_word_list_file(detector: DetectorConfig) -> None:
+    """Check that word_list_file exists for sensitive_words detectors.
+
+    Emits a warning (not an error) if the file is missing, as per v0.2.0
+    config-system design.
+
+    Args:
+        detector: DetectorConfig instance.
+    """
+    if detector.name != "sensitive_words":
+        return
+
+    word_list_file = detector.config.get("word_list_file")
+    if not word_list_file:
+        return
+
+    if not os.path.isfile(word_list_file):
+        warnings.warn(
+            f"Detector '{detector.name}' references missing word_list_file: "
+            f"{word_list_file}",
+            UserWarning,
+            stacklevel=2,
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Flag escalation validation
+# --------------------------------------------------------------------------- #
+def _validate_flag_escalation(config: GatewayConfig) -> None:
+    """Validate flag_escalation.rule syntax at config load time.
+
+    The rule is only validated when ``flag_escalation.enabled`` is True.
+    When disabled, the rule is not parsed (allowing placeholder values).
+
+    Supported DSL syntax:
+    - Variables: ``count``, ``max_risk_level``, ``categories``
+    - Operators: ``>=``, ``>``, ``<=``, ``<``, ``==``, ``!=``
+    - Special: ``categories contains <value>``
+    - Logic: ``and``, ``or`` (left-to-right, no parentheses in MVP)
+
+    Args:
+        config: GatewayConfig instance.
+
+    Raises:
+        ConfigValidationError: If the rule has invalid syntax.
+    """
+    fe = config.pipeline.flag_escalation
+    if fe is None or not fe.enabled:
+        return
+
+    rule = fe.rule.strip()
+    if not rule:
+        raise ConfigValidationError(
+            "flag_escalation.rule is empty but flag_escalation is enabled"
+        )
+
+    _parse_flag_escalation_rule(rule)
+
+
+def _parse_flag_escalation_rule(rule: str) -> None:
+    """Parse and validate a flag_escalation rule expression.
+
+    Splits the rule by ``and`` / ``or`` keywords (case-insensitive) and
+    validates each condition.  A condition is either:
+    - ``<variable> <operator> <value>`` (e.g., ``count >= 3``)
+    - ``categories contains <value>`` (e.g., ``categories contains pii``)
+
+    Args:
+        rule: The rule expression string.
+
+    Raises:
+        ConfigValidationError: If any condition has invalid syntax.
+    """
+    # Split by 'and'/'or' as whole words (case-insensitive)
+    parts = re.split(r"\s+(and|or)\s+", rule, flags=re.IGNORECASE)
+
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            # Logic operator — already guaranteed by regex group
+            continue
+
+        condition = part.strip()
+        if not condition:
             raise ConfigValidationError(
-                f"Detector validation failed:\n{exc}"
-            ) from exc
+                f"Invalid flag_escalation rule syntax: empty condition in '{rule}'. "
+                f"Supported: count, max_risk_level, categories with "
+                f">=, >, <=, <, ==, !=, and, or."
+            )
+
+        # Check for "categories contains <value>" pattern
+        cat_match = re.match(
+            r"^categories\s+contains\s+(\S+)$", condition, re.IGNORECASE
+        )
+        if cat_match:
+            continue
+
+        # Check for "<variable> <operator> <value>" pattern
+        op_match = re.match(r"^(\w+)\s*(>=|>|<=|<|==|!=)\s*(\S+)$", condition)
+        if not op_match:
+            raise ConfigValidationError(
+                f"Invalid flag_escalation rule syntax: '{condition}'. "
+                f"Supported: count, max_risk_level, categories with "
+                f">=, >, <=, <, ==, !=, and, or."
+            )
+
+        variable = op_match.group(1)
+        if variable not in _FLAG_ESCALATION_VARIABLES:
+            raise ConfigValidationError(
+                f"Invalid flag_escalation variable: '{variable}'. "
+                f"Supported variables: count, max_risk_level, categories."
+            )
 
 
+# --------------------------------------------------------------------------- #
+# Provider validation (unchanged from v0.1.0)
+# --------------------------------------------------------------------------- #
 def _validate_providers(config: GatewayConfig) -> None:
     """Validate provider-type-specific required fields.
 
@@ -90,6 +330,9 @@ def _validate_providers(config: GatewayConfig) -> None:
             )
 
 
+# --------------------------------------------------------------------------- #
+# Routing validation (unchanged from v0.1.0)
+# --------------------------------------------------------------------------- #
 def _validate_routing(config: GatewayConfig) -> None:
     """Validate routing rules: provider existence and pattern conflicts.
 

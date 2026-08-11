@@ -1,8 +1,9 @@
 """FastAPI application factory for the z LLM Safety Gateway.
 
 The :func:`create_app` factory loads configuration, registers middleware and
-routes, creates the ModelRouter, and wires up global exception handlers that
-produce OpenAI-compatible error responses.
+routes, creates the ModelRouter, initializes the safety pipeline (detectors
+and engine), and wires up global exception handlers that produce
+OpenAI-compatible error responses.
 
 Importing this module does NOT start a server or create an app instance —
 :func:`create_app` must be called explicitly.
@@ -10,18 +11,25 @@ Importing this module does NOT start a server or create an app instance —
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
 import structlog
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 
 from z_llm_safety_gateway.config.loader import load_config
+from z_llm_safety_gateway.config.models import DetectorsConfig
+from z_llm_safety_gateway.detectors import create_default_registry
 from z_llm_safety_gateway.exceptions import (
     ConfigError,
     OpenAIErrorBody,
     OpenAIErrorDetail,
+    SafetyBlockError,
 )
 from z_llm_safety_gateway.middleware.request_id import RequestIDMiddleware
 from z_llm_safety_gateway.middleware.safety_headers import SafetyHeadersMiddleware
+from z_llm_safety_gateway.pipeline import FlagEscalationRule, PipelineEngine
 from z_llm_safety_gateway.providers.base import ProviderError
 from z_llm_safety_gateway.providers.router import ModelRouter
 from z_llm_safety_gateway.routes.chat import router as chat_router
@@ -32,6 +40,44 @@ from z_llm_safety_gateway.routes.models import router as models_router
 logger = structlog.get_logger()
 
 
+async def _init_detectors(
+    registry: Any,
+    input_configs: dict[str, dict[str, Any]],
+    output_configs: dict[str, dict[str, Any]],
+) -> tuple[list[Any], list[Any]]:
+    """Initialize input and output detectors asynchronously.
+
+    Returns:
+        A tuple of (input_detectors_list, output_detectors_list).
+    """
+    input_detectors_dict = await registry.initialize_all(input_configs)
+    output_detectors_dict = await registry.initialize_all(output_configs)
+    return list(input_detectors_dict.values()), list(output_detectors_dict.values())
+
+
+def _extract_detector_configs(
+    detectors_list: Any,
+) -> dict[str, dict[str, Any]]:
+    """Extract detector configs from a DetectorsConfig input/output list.
+
+    Args:
+        detectors_list: A list of DetectorConfig objects.
+
+    Returns:
+        A dict mapping detector name to its merged config dict
+        (detector-specific config + priority + on_error).
+    """
+    configs: dict[str, dict[str, Any]] = {}
+    for det in detectors_list:
+        if det.enabled:
+            configs[det.name] = {
+                **det.config,
+                "priority": det.priority,
+                "on_error": det.on_error,
+            }
+    return configs
+
+
 def create_app(config_path: str) -> FastAPI:
     """Create and configure a FastAPI application instance.
 
@@ -40,10 +86,13 @@ def create_app(config_path: str) -> FastAPI:
         2. Create a FastAPI instance.
         3. Register middleware (SafetyHeaders inner, RequestID outer).
         4. Create a ModelRouter and store it in ``app.state``.
-        5. Register route groups (health, chat, models).
-        6. Register global exception handlers (ProviderError, ConfigError, Exception).
-        7. Set the readiness flag to True.
-        8. Return the configured application.
+        5. Initialize the safety pipeline (detectors + engine) and store in
+           ``app.state``.
+        6. Register route groups (health, chat, models).
+        7. Register global exception handlers (ProviderError, ConfigError,
+           SafetyBlockError, Exception).
+        8. Set the readiness flag to True.
+        9. Return the configured application.
 
     Args:
         config_path: Path to the YAML configuration file.
@@ -75,12 +124,57 @@ def create_app(config_path: str) -> FastAPI:
     app.state.router = router
     app.state.config = config
 
-    # 5. Register routes
+    # 5. Initialize the safety pipeline
+    registry = create_default_registry()
+
+    # After Pydantic validation, detectors is always a DetectorsConfig
+    # (the model_validator converts legacy list format).
+    detectors_cfg = config.pipeline.detectors
+    assert isinstance(detectors_cfg, DetectorsConfig)
+
+    input_configs = _extract_detector_configs(detectors_cfg.input)
+    output_configs = _extract_detector_configs(detectors_cfg.output)
+
+    # Initialize detectors eagerly (asyncio.run works because create_app
+    # is called outside of a running event loop).
+    input_detectors, output_detectors = asyncio.run(
+        _init_detectors(registry, input_configs, output_configs)
+    )
+
+    # Create pipeline engine
+    short_circuit_on = config.pipeline.short_circuit_on
+    flag_escalation_rule: FlagEscalationRule | None = None
+    if (
+        config.pipeline.flag_escalation is not None
+        and config.pipeline.flag_escalation.enabled
+        and config.pipeline.flag_escalation.rule
+    ):
+        flag_escalation_rule = FlagEscalationRule(config.pipeline.flag_escalation.rule)
+
+    engine = PipelineEngine(
+        short_circuit_on=short_circuit_on,
+        flag_escalation=flag_escalation_rule,
+    )
+
+    app.state.input_detectors = input_detectors
+    app.state.output_detectors = output_detectors
+    app.state.input_detector_configs = input_configs
+    app.state.output_detector_configs = output_configs
+    app.state.pipeline_engine = engine
+
+    logger.info(
+        "pipeline_initialized",
+        input_detectors=len(input_detectors),
+        output_detectors=len(output_detectors),
+        short_circuit_on=short_circuit_on,
+    )
+
+    # 6. Register routes
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(models_router)
 
-    # 6. Register exception handlers
+    # 7. Register exception handlers
 
     @app.exception_handler(ProviderError)
     async def handle_provider_error(
@@ -126,6 +220,42 @@ def create_app(config_path: str) -> FastAPI:
         )
         return JSONResponse(status_code=500, content=body.model_dump())
 
+    @app.exception_handler(SafetyBlockError)
+    async def handle_safety_block(
+        request: Request, exc: SafetyBlockError
+    ) -> JSONResponse:
+        """Convert SafetyBlockError into an OpenAI-compatible JSON response
+        with a safety extension field.
+
+        - direction == "input" → HTTP 400, code: safety_input_blocked
+        - direction == "output" → HTTP 422, code: safety_output_blocked
+        """
+        if exc.direction == "input":
+            status_code = 400
+            code = "safety_input_blocked"
+        else:
+            status_code = 422
+            code = "safety_output_blocked"
+
+        safety_info = {
+            "detector_name": exc.detector_name,
+            "category": exc.category,
+            "risk_level": exc.risk_level,
+            "confidence": exc.confidence,
+            "message": exc.message,
+            "direction": exc.direction,
+        }
+
+        body: dict[str, Any] = {
+            "error": {
+                "message": exc.message,
+                "type": "safety_block",
+                "code": code,
+                "safety": safety_info,
+            }
+        }
+        return JSONResponse(status_code=status_code, content=body)
+
     @app.exception_handler(Exception)
     async def handle_generic_exception(
         request: Request, exc: Exception
@@ -145,8 +275,8 @@ def create_app(config_path: str) -> FastAPI:
         )
         return JSONResponse(status_code=500, content=body.model_dump())
 
-    # 7. Set readiness state
+    # 8. Set readiness state
     set_ready(True)
 
-    # 8. Return the configured app
+    # 9. Return the configured app
     return app

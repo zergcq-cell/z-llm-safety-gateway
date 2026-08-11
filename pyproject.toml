@@ -32,6 +32,10 @@ dev = [
     "httpx[testing]>=0.27.0",
     "types-PyYAML>=6.0",
 ]
+ml = [
+    "transformers>=4.30.0",
+    "torch>=2.0.0",
+]
 
 [project.scripts]
 z-safety-gateway = "z_llm_safety_gateway.__main__:main"
@@ -62,3 +66,19 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "langdetect.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "ahocorasick.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "transformers.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "torch.*"
+ignore_missing_imports = true

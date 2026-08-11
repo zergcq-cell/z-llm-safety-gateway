@@ -1,0 +1,319 @@
+meta:
+  capability: "fastapi-server"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "/v1/chat/completions integrates input pipeline: input detectors execute before provider forwarding"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C11; design.md -> Decision 11 (request flow integration); DESIGN.md -> Section 3.4 (content extraction) and Section 5.1 (pipeline execution)"
+        given: "a running gateway instance with input detectors configured (e.g., prompt_injection, pii_redaction)"
+        when: "a POST request is sent to /v1/chat/completions with a messages array containing user and system messages"
+        then: "the endpoint SHALL execute the input pipeline on extracted content before forwarding the request to the provider"
+        and:
+          - "the input pipeline SHALL receive DetectionContext objects created from extracted content"
+          - "all enabled input detectors SHALL execute in parallel"
+          - "the input pipeline result SHALL determine whether the request is forwarded, blocked, or modified"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md -> Decision 11; DESIGN.md -> Section 3.2 (request processing flow)"
+        given: "a running gateway with input detectors configured and a request that passes all input detectors (final_action: allow)"
+        when: "the input pipeline completes with final_action allow"
+        then: "the endpoint SHALL forward the original request body to the matched provider"
+        and:
+          - "the forwarded request SHALL be identical to the original when no modifications are applied"
+          - "the provider response SHALL be returned to the output pipeline for further processing"
+
+  - id: REQ-002
+    description: "/v1/chat/completions integrates output pipeline: output detectors execute after receiving provider response"
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C11; design.md -> Decision 11; DESIGN.md -> Section 3.5 (non-streaming output detection)"
+        given: "a running gateway instance with output detectors configured (e.g., toxicity, secret_leak) and a request that passed input detection"
+        when: "the provider returns a non-streaming response and the output pipeline executes"
+        then: "the endpoint SHALL execute the output pipeline on the extracted response content before returning the response to the client"
+        and:
+          - "the output pipeline SHALL receive DetectionContext objects with direction='output'"
+          - "all enabled output detectors SHALL execute in parallel on the response content"
+          - "the output pipeline result SHALL determine whether the response is returned, blocked, or modified"
+          - "in sync mode, the response SHALL NOT be sent to the client until output detection completes"
+
+      - id: SC-004
+        confidence: medium
+        evidence: "design.md -> Decision 11; DESIGN.md -> Section 3.5 (sync_timeout behavior)"
+        given: "a running gateway with output detectors configured and pipeline.output_detection.sync_timeout set to 5s"
+        when: "the output pipeline exceeds sync_timeout before all detectors complete"
+        then: "the endpoint SHALL stop waiting for remaining detector results and aggregate available results"
+        and:
+          - "detectors that did not complete SHALL have their on_error strategy applied"
+          - "the aggregated result SHALL determine the final action"
+
+  - id: REQ-003
+    description: "Input block returns HTTP 400 with OpenAI-compatible error including safety extension fields"
+    scenarios:
+      - id: SC-005
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[7]; design.md -> Decision 12 (block error response); DESIGN.md -> Section 4.2.1 (input block) and Section 4.4 (error codes)"
+        given: "a running gateway with an input detector (e.g., prompt_injection) that returns action: block with confidence above block_threshold"
+        when: "the input pipeline final_action is block"
+        then: "the endpoint SHALL return HTTP 400 with an OpenAI-compatible error response body"
+        and:
+          - "the error type SHALL be 'safety_block'"
+          - "the error code SHALL be 'safety_input_blocked'"
+          - "the error body SHALL include a 'safety' extension field with detection details"
+          - "the request SHALL NOT be forwarded to the provider"
+
+      - id: SC-006
+        confidence: high
+        evidence: "DESIGN.md -> Section 4.2.1; design.md -> Decision 12"
+        given: "an input block triggered by the prompt_injection detector with confidence 0.92 and risk_level critical"
+        when: "the block error response is constructed"
+        then: "the safety extension field SHALL contain detector_name, category, risk_level, confidence, and message"
+        and:
+          - "detector_name SHALL be 'prompt_injection'"
+          - "category SHALL be 'prompt_injection'"
+          - "risk_level SHALL be 'critical'"
+          - "confidence SHALL be 0.92"
+          - "the safety field SHALL include direction: 'input'"
+
+  - id: REQ-004
+    description: "Output block returns HTTP 422 with OpenAI-compatible error including safety extension fields"
+    scenarios:
+      - id: SC-007
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[7]; design.md -> Decision 12; DESIGN.md -> Section 4.2.2 (output block) and Section 4.4 (error codes)"
+        given: "a running gateway with an output detector (e.g., secret_leak) that returns action: block on the provider response"
+        when: "the output pipeline final_action is block"
+        then: "the endpoint SHALL return HTTP 422 with an OpenAI-compatible error response body"
+        and:
+          - "the error type SHALL be 'safety_block'"
+          - "the error code SHALL be 'safety_output_blocked'"
+          - "the error body SHALL include a 'safety' extension field with detection details"
+          - "the original provider response SHALL NOT be returned to the client"
+
+      - id: SC-008
+        confidence: high
+        evidence: "DESIGN.md -> Section 4.2.2; design.md -> Decision 12"
+        given: "an output block triggered by the secret_leak detector with confidence 0.95 and risk_level critical"
+        when: "the block error response is constructed"
+        then: "the safety extension field SHALL contain detector_name, category, risk_level, confidence, and message"
+        and:
+          - "detector_name SHALL be 'secret_leak'"
+          - "category SHALL be 'secret_leak'"
+          - "risk_level SHALL be 'critical'"
+          - "confidence SHALL be 0.95"
+          - "the safety field SHALL include direction: 'output'"
+
+  - id: REQ-005
+    description: "Input modify applies modifications back to the request before forwarding via apply_modifications"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[6]; design.md -> Decision 11; DESIGN.md -> Section 3.4.2 (modify writeback)"
+        given: "a running gateway with an input detector (e.g., pii_redaction) that returns action: modify with modified_content"
+        when: "the input pipeline final_action is modify"
+        then: "the endpoint SHALL call apply_modifications to write the modified content back to the request messages"
+        and:
+          - "modifications SHALL be applied in detector priority order (lower priority number first)"
+          - "the modified request body SHALL be forwarded to the provider instead of the original"
+          - "the response SHALL include X-Safety-Action: modify header"
+
+      - id: SC-010
+        confidence: medium
+        evidence: "DESIGN.md -> Section 3.4.2 (multimodal writeback); design.md -> Decision 11"
+        given: "a request with multimodal content (text and image parts) and an input detector returning modify for a message"
+        when: "apply_modifications is called on the request"
+        then: "the endpoint SHALL replace only the text parts of the targeted message and preserve image parts"
+        and:
+          - "the modified_content SHALL be written to the first text part of the message"
+          - "remaining text parts SHALL be cleared"
+          - "image_url parts SHALL remain unchanged"
+
+  - id: REQ-006
+    description: "Output modify writes modified content back to the response before returning to client"
+    scenarios:
+      - id: SC-011
+        confidence: high
+        evidence: "design.md -> Decision 11; DESIGN.md -> Section 3.5.1 (output modification writeback)"
+        given: "a running gateway with an output detector that returns action: modify with modified_content on the provider response"
+        when: "the output pipeline final_action is modify"
+        then: "the endpoint SHALL write the modified content back to the response choices[0].message.content"
+        and:
+          - "multiple output modifications SHALL be applied sequentially in priority order (chained)"
+          - "each modification SHALL operate on the result of the previous modification"
+          - "the modified response SHALL be returned to the client instead of the original provider response"
+          - "the response SHALL include X-Safety-Action: modify header"
+
+      - id: SC-012
+        confidence: medium
+        evidence: "DESIGN.md -> Section 3.5.1; design.md -> Decision 11"
+        given: "a provider response with multiple choices and an output detector returning modify"
+        when: "the output modification is applied"
+        then: "the endpoint SHALL apply the modification only to the first choice's message content"
+        and:
+          - "other choices SHALL remain unchanged"
+
+  - id: REQ-007
+    description: "SafetyHeadersMiddleware dynamically sets X-Safety-Action header based on pipeline result"
+    scenarios:
+      - id: SC-013
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C11; design.md -> Decision 11 (SafetyHeadersMiddleware reads request.state); DESIGN.md -> Section 4.5 (response headers)"
+        given: "a request where the pipeline final_action is 'block' (input or output)"
+        when: "the SafetyHeadersMiddleware processes the response"
+        then: "the middleware SHALL set the X-Safety-Action response header to 'block'"
+        and:
+          - "the middleware SHALL read the pipeline result from request.state"
+          - "the X-Safety-Action header SHALL reflect the final aggregated action from both input and output pipelines"
+          - "when input is allow and output is block, the header SHALL be 'block'"
+
+      - id: SC-014
+        confidence: high
+        evidence: "DESIGN.md -> Section 4.5; design.md -> Decision 11"
+        given: "a request where the pipeline final_action is 'allow' (no detectors triggered)"
+        when: "the SafetyHeadersMiddleware processes the response"
+        then: "the middleware SHALL set the X-Safety-Action response header to 'allow'"
+        and:
+          - "the X-Safety-Action header SHALL be 'allow' for all passthrough requests without detection"
+          - "the X-Safety-Risk-Level header SHALL NOT be set when action is 'allow'"
+
+      - id: SC-015
+        confidence: high
+        evidence: "DESIGN.md -> Section 4.5; design.md -> Decision 11"
+        given: "a request where the pipeline final_action is 'modify' or 'flag'"
+        when: "the SafetyHeadersMiddleware processes the response"
+        then: "the middleware SHALL set the X-Safety-Action response header to 'modify' or 'flag' respectively"
+        and:
+          - "the X-Safety-Risk-Level header SHALL be set to the overall risk level from the pipeline result"
+
+  - id: REQ-008
+    description: "SafetyHeadersMiddleware sets X-Safety-Risk-Level header based on pipeline overall risk level"
+    scenarios:
+      - id: SC-016
+        confidence: high
+        evidence: "DESIGN.md -> Section 4.5 (response headers); design.md -> Decision 11"
+        given: "a request where the pipeline overall_risk_level is 'high'"
+        when: "the SafetyHeadersMiddleware processes the response and the final action is not 'allow'"
+        then: "the middleware SHALL set the X-Safety-Risk-Level response header to 'high'"
+        and:
+          - "the risk level SHALL be the highest risk_level among all detector results"
+          - "valid risk levels SHALL be: low, medium, high, critical"
+          - "the header SHALL only be set when X-Safety-Action is not 'allow'"
+
+      - id: SC-017
+        confidence: medium
+        evidence: "DESIGN.md -> Section 4.5; design.md -> Decision 11"
+        given: "a request where the pipeline final_action is 'allow' and overall_risk_level is 'low'"
+        when: "the SafetyHeadersMiddleware processes the response"
+        then: "the middleware SHALL NOT set the X-Safety-Risk-Level header"
+        and:
+          - "the X-Safety-Risk-Level header SHALL be omitted when action is 'allow'"
+
+  - id: REQ-009
+    description: "Content extraction, language detection, and pipeline execution follow a strict order"
+    scenarios:
+      - id: SC-018
+        confidence: high
+        evidence: "design.md -> Decision 11 (request flow) and Architecture (request flow diagram); DESIGN.md -> Section 3.4 (extraction) and Section 6.6 (language detection)"
+        given: "a POST request to /v1/chat/completions with messages containing user and system text"
+        when: "the chat_completions handler processes the request"
+        then: "the handler SHALL execute steps in the order: extract_content, language_detection, input_pipeline.run"
+        and:
+          - "extract_content SHALL run first to produce ExtractedContent objects from messages"
+          - "language_detection SHALL run on the extracted text to determine the ISO 639-1 language code"
+          - "the detected language SHALL be stored in DetectionContext.language before pipeline execution"
+          - "the input pipeline SHALL receive DetectionContext objects with the language field populated"
+
+      - id: SC-019
+        confidence: medium
+        evidence: "DESIGN.md -> Section 6.6 (language detection); design.md -> Architecture (output pipeline flow)"
+        given: "a provider response received after input pipeline passes"
+        when: "the output pipeline processes the response"
+        then: "the handler SHALL extract response content, detect language on the response text, and then execute the output pipeline"
+        and:
+          - "the output DetectionContext SHALL have direction='output'"
+          - "the output language detection SHALL use the same LanguageDetector as input"
+
+  - id: REQ-010
+    description: "No detector configuration results in normal passthrough (backward compatible with v0.1.0)"
+    scenarios:
+      - id: SC-020
+        confidence: high
+        evidence: "proposal.yaml -> risk_areas (config-system backward compat); design.md -> Decision 11; DESIGN.md -> Section 3.2 (passthrough)"
+        given: "a running gateway instance with no detectors configured (empty input and output lists)"
+        when: "a POST request is sent to /v1/chat/completions"
+        then: "the endpoint SHALL forward the request to the provider and return the response without executing any pipeline"
+        and:
+          - "the X-Safety-Action header SHALL be 'allow'"
+          - "no DetectionContext objects SHALL be created"
+          - "the response SHALL be transparently passed through as in v0.1.0"
+          - "request.state SHALL still contain a pipeline result with final_action: 'allow'"
+
+      - id: SC-021
+        confidence: medium
+        evidence: "design.md -> Decision 11; DESIGN.md -> Section 3.2"
+        given: "a running gateway instance with only input detectors configured (empty output list)"
+        when: "a POST request is sent and passes input detection"
+        then: "the endpoint SHALL forward the request, receive the provider response, and return it without output detection"
+        and:
+          - "the input pipeline SHALL execute normally"
+          - "the output pipeline SHALL be skipped entirely"
+          - "the X-Safety-Action header SHALL reflect the input pipeline result only"
+
+  - id: REQ-011
+    description: "Pipeline result stored in request.state for middleware access"
+    scenarios:
+      - id: SC-022
+        confidence: high
+        evidence: "design.md -> Decision 11 (SafetyHeadersMiddleware reads request.state); DESIGN.md -> Section 4.5 (response headers from pipeline result)"
+        given: "a POST request processed through the input and/or output pipeline"
+        when: "the pipeline execution completes"
+        then: "the handler SHALL store the pipeline result (PipelineResult) in request.state"
+        and:
+          - "the pipeline result SHALL include final_action, overall_risk_level, detector_results, and modifications"
+          - "the SafetyHeadersMiddleware SHALL read the pipeline result from request.state to set response headers"
+          - "when no pipeline runs (no detectors), request.state SHALL contain a default allow result"
+
+      - id: SC-023
+        confidence: medium
+        evidence: "design.md -> Decision 11"
+        given: "a request where input pipeline returns block (HTTP 400) before provider forwarding"
+        when: "the block error response is returned"
+        then: "the handler SHALL store the input pipeline result in request.state before returning the error response"
+        and:
+          - "the SafetyHeadersMiddleware SHALL read the input pipeline result to set X-Safety-Action: block"
+          - "the output pipeline result SHALL not be present in request.state when input blocks"
+
+  - id: REQ-012
+    description: "Block error response safety extension field format includes detector_name, category, risk_level, confidence, and message"
+    scenarios:
+      - id: SC-024
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria[7]; design.md -> Decision 12 (block error response format); DESIGN.md -> Section 4.2.1 and 4.2.2 (safety field structure)"
+        given: "an input or output block triggered by a detector"
+        when: "the block error response is constructed"
+        then: "the error body SHALL include a 'safety' field within the 'error' object"
+        and:
+          - "the safety field SHALL include 'detector_name' (the name of the blocking detector)"
+          - "the safety field SHALL include 'category' (the risk category of the blocking detector)"
+          - "the safety field SHALL include 'risk_level' (low, medium, high, or critical)"
+          - "the safety field SHALL include 'confidence' (float 0.0-1.0)"
+          - "the safety field SHALL include 'message' (human-readable explanation)"
+
+      - id: SC-025
+        confidence: high
+        evidence: "DESIGN.md -> Section 4.2.1 and 4.2.2; design.md -> Decision 12"
+        given: "an input block by prompt_injection detector and an output block by secret_leak detector"
+        when: "both block error responses are constructed"
+        then: "the input block response SHALL have safety.direction='input' and the output block response SHALL have safety.direction='output'"
+        and:
+          - "the input block response SHALL use HTTP 400 and error code 'safety_input_blocked'"
+          - "the output block response SHALL use HTTP 422 and error code 'safety_output_blocked'"
+          - "both responses SHALL follow the OpenAI error format with the safety field as an extension"
+          - "OpenAI SDK clients SHALL be able to parse the error type and code without knowledge of the safety field"

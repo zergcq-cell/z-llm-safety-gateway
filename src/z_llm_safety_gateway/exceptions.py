@@ -2,11 +2,15 @@
 
 This module provides:
 - ConfigError / ConfigValidationError: configuration-related exceptions.
+- SafetyBlockError: raised when the safety pipeline blocks a request or response.
 - OpenAIErrorDetail / OpenAIErrorBody: Pydantic models that serialize to the
   OpenAI API error format ({"error": {"message": ..., "type": ..., ...}}).
+- SafetyErrorDetail: OpenAI error detail with safety extension field.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -35,6 +39,47 @@ class OpenAIErrorDetail(BaseModel):
     type: str = "internal_error"
     param: str | None = None
     code: str | None = None
+
+
+class SafetyBlockError(Exception):
+    """Raised when the safety pipeline blocks a request or response.
+
+    Attributes:
+        detector_name: Name of the detector that triggered the block.
+        category: Detection category (e.g. "prompt_injection", "pii").
+        risk_level: Risk level of the blocked content ("low" through "critical").
+        confidence: Confidence score [0.0, 1.0] from the blocking detector.
+        message: Human-readable description of why the content was blocked.
+        direction: Whether the block occurred on "input" or "output".
+    """
+
+    def __init__(
+        self,
+        detector_name: str,
+        category: str,
+        risk_level: str,
+        confidence: float,
+        message: str,
+        direction: str,
+    ) -> None:
+        self.detector_name = detector_name
+        self.category = category
+        self.risk_level = risk_level
+        self.confidence = confidence
+        self.message = message
+        self.direction = direction  # "input" or "output"
+        super().__init__(message)
+
+
+class SafetyErrorDetail(OpenAIErrorDetail):
+    """OpenAI error detail with a safety extension field.
+
+    The ``safety`` dict contains: detector_name, category, risk_level,
+    confidence, message, and direction — providing full context about
+    why the safety pipeline blocked the request or response.
+    """
+
+    safety: dict[str, Any] | None = None
 
 
 class OpenAIErrorBody(BaseModel):

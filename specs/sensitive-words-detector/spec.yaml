@@ -1,0 +1,181 @@
+meta:
+  capability: "sensitive-words-detector"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "使用 pyahocorasick 构建 Aho-Corasick 自动机"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[7] (C8), DESIGN.md Section 6.4 MVP Detector List #4, design.md Decision 8"
+        given: "a SensitiveWordsDetector initialized with a word list"
+        when: "initialize() is called with the word list"
+        then: "the detector SHALL build an Aho-Corasick automaton using the pyahocorasick library"
+        and:
+          - "the automaton SHALL support O(n) multi-pattern matching where n is the content length"
+          - "the matching time SHALL be independent of the number of words in the word list"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Decision 8"
+        given: "a detector with a compiled Aho-Corasick automaton containing words ['spam', 'scam', 'fraud']"
+        when: "detect() is called with content 'This is a spam and scam message'"
+        then: "the detector SHALL match both 'spam' and 'scam' in a single pass"
+        and:
+          - "the DetectionResult.category SHALL be 'sensitive_words'"
+
+  - id: REQ-002
+    description: "支持多语言词表（通过 context.language 选择）"
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "DESIGN.md Section 6.6, design.md Decision 8"
+        given: "a detector initialized with both English and Chinese word lists"
+        when: "detect() is called with context.language='zh' on content containing a Chinese sensitive word"
+        then: "the detector SHALL use the Chinese word list for matching"
+        and:
+          - "the matched word SHALL be from the Chinese word list"
+
+      - id: SC-004
+        confidence: high
+        evidence: "DESIGN.md Section 6.6"
+        given: "a detector initialized with both English and Chinese word lists"
+        when: "detect() is called with context.language='en' on content containing an English sensitive word"
+        then: "the detector SHALL use the English word list for matching"
+        and:
+          - "the matched word SHALL be from the English word list"
+
+      - id: SC-005
+        confidence: medium
+        evidence: "DESIGN.md Section 6.6"
+        given: "a detector initialized with word lists and context.language is None or unrecognized"
+        when: "detect() is called"
+        then: "the detector SHALL fall back to the default (English) word list"
+        and: []
+
+  - id: REQ-003
+    description: "匹配模式（exact: 精确匹配, fuzzy: 包含匹配）"
+    scenarios:
+      - id: SC-006
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[7], design.md Decision 8"
+        given: "a detector configured with match_mode='exact' and word list containing 'spam'"
+        when: "detect() is called with content 'This is spamming' (word boundary not matched)"
+        then: "the detector SHALL NOT match 'spam' within 'spamming' in exact mode"
+        and:
+          - "exact mode SHALL match only whole words respecting word boundaries"
+
+      - id: SC-007
+        confidence: high
+        evidence: "design.md Decision 8"
+        given: "a detector configured with match_mode='exact' and word list containing 'spam'"
+        when: "detect() is called with content 'This is spam' (whole word match)"
+        then: "the detector SHALL match 'spam' as a whole word"
+        and: []
+
+      - id: SC-008
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[7]"
+        given: "a detector configured with match_mode='fuzzy' and word list containing 'spam'"
+        when: "detect() is called with content 'This is spamming'"
+        then: "the detector SHALL match 'spam' within 'spamming' in fuzzy mode"
+        and:
+          - "fuzzy mode SHALL match substrings without word boundary requirement"
+
+  - id: REQ-004
+    description: "从文件加载词表（word_list_file, word_list_file_zh）"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[7], DESIGN.md Section 10"
+        given: "a detector configured with word_list_file='words_en.txt' and word_list_file_zh='words_zh.txt'"
+        when: "initialize() is called"
+        then: "the detector SHALL load the English word list from 'words_en.txt'"
+        and:
+          - "the detector SHALL load the Chinese word list from 'words_zh.txt'"
+          - "each word in the files SHALL be added to the respective language automaton"
+          - "empty lines and comment lines (starting with '#') in word list files SHALL be skipped"
+
+      - id: SC-010
+        confidence: medium
+        evidence: "DESIGN.md Section 10"
+        given: "a detector configured with only word_list_file (no word_list_file_zh)"
+        when: "initialize() is called"
+        then: "the detector SHALL load only the English word list"
+        and:
+          - "the Chinese automaton SHALL be empty or None"
+          - "if context.language='zh' is passed to detect(), the detector SHALL return action='allow'"
+
+  - id: REQ-005
+    description: "initialize 时编译自动机"
+    scenarios:
+      - id: SC-011
+        confidence: high
+        evidence: "design.md Decision 8, DESIGN.md Section 6.1"
+        given: "a SensitiveWordsDetector with word list files configured"
+        when: "initialize() is called"
+        then: "the detector SHALL compile the Aho-Corasick automaton from loaded word lists"
+        and:
+          - "the compiled automaton SHALL be stored for reuse in subsequent detect() calls"
+          - "detect() SHALL NOT rebuild the automaton on each call"
+          - "initialize() SHALL complete before any detect() call is made"
+
+  - id: REQ-006
+    description: "action='block' 或 'flag'（基于匹配数量和阈值）"
+    scenarios:
+      - id: SC-012
+        confidence: high
+        evidence: "DESIGN.md Section 5.3, design.md Decision 5"
+        given: "a detector configured with block_threshold=3 and flag_threshold=1"
+        when: "detect() finds 3 or more matched sensitive words"
+        then: "the pipeline engine SHALL determine action='block'"
+        and:
+          - "the detector SHALL compute confidence based on match count and thresholds"
+          - "the threshold values SHALL be read from the detector's config section"
+
+      - id: SC-013
+        confidence: high
+        evidence: "DESIGN.md Section 5.3"
+        given: "a detector configured with block_threshold=3 and flag_threshold=1"
+        when: "detect() finds 1 or 2 matched sensitive words"
+        then: "the pipeline engine SHALL determine action='flag'"
+        and: []
+
+      - id: SC-014
+        confidence: high
+        evidence: "DESIGN.md Section 5.3"
+        given: "a detector configured with block_threshold=3 and flag_threshold=1"
+        when: "detect() finds 0 matched sensitive words"
+        then: "the pipeline engine SHALL determine action='allow'"
+        and: []
+
+  - id: REQ-007
+    description: "details 中记录匹配的词汇列表"
+    scenarios:
+      - id: SC-015
+        confidence: high
+        evidence: "DESIGN.md Section 5.2"
+        given: "a detector that has matched sensitive words ['spam', 'scam'] in the input content"
+        when: "detect() returns a DetectionResult"
+        then: "the DetectionResult.details SHALL contain the list of matched words"
+        and:
+          - "details SHALL include the count of matched words"
+          - "details SHALL include the language of the matched word list used"
+          - "duplicate matches of the same word SHALL be counted separately in the match count"
+
+  - id: REQ-008
+    description: "词表文件缺失时启动报错"
+    scenarios:
+      - id: SC-016
+        confidence: high
+        evidence: "design.md Decision 8, DESIGN.md Section 10"
+        given: "a detector configured with word_list_file='nonexistent.txt'"
+        when: "initialize() is called and the file does not exist"
+        then: "initialize() SHALL raise an error indicating the word list file is missing"
+        and:
+          - "the error message SHALL include the file path that was not found"
+          - "the detector SHALL NOT be registered as available after initialization failure"
+          - "the gateway startup SHALL fail if a required word list file is missing"

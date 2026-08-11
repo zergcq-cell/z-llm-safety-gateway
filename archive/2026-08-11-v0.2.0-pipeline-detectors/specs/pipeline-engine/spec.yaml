@@ -1,0 +1,196 @@
+# spec.yaml — pipeline-engine 行为规格
+# 覆盖 DESIGN.md Section 5 Pipeline Engine 的核心行为
+
+meta:
+  capability: "pipeline-engine"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "Pipeline 引擎使用 asyncio.create_task() 为每个已启用检测器创建独立任务，并行执行所有检测器"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 1; DESIGN.md Section 5.1"
+        given: "3 个已启用的 input 检测器（prompt_injection, pii, sensitive_words）和 1 个 DetectionContext"
+        when: "PipelineEngine.run() 被调用"
+        then: "所有 3 个检测器 SHALL 被并行启动，各自的 detect() 方法在不同 asyncio Task 中执行"
+        and:
+          - "每个检测器的 detect() 调用 SHALL 在独立的 asyncio.Task 中运行"
+          - "检测器之间 SHALL 不存在执行顺序依赖（全部基于相同原始内容）"
+          - "priority 字段 SHALL 不影响并行启动顺序，仅影响修改应用顺序"
+
+  - id: REQ-002
+    description: "当任一检测器返回 action=block 时，引擎立即短路，取消其余正在执行的检测器任务"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 1; DESIGN.md Section 5.1"
+        given: "3 个检测器并行执行，其中 detector_A 的 action 为 block"
+        when: "detector_A 的 Task 完成且 action=block 被检测到"
+        then: "引擎 SHALL 立即取消其余未完成的检测器 Task"
+        and:
+          - "被取消的 Task 的结果 SHALL 不被收集到最终结果中"
+          - "final_action SHALL 被设为 block"
+          - "短路后引擎 SHALL 不等待其余检测器完成"
+
+  - id: REQ-003
+    description: "当 short_circuit_on 配置为 block_and_modify 时，modify 动作也触发短路，立即应用第一个修改并取消其余检测器"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 1; DESIGN.md Section 5.1"
+        given: "pipeline 配置 short_circuit_on=block_and_modify，3 个检测器并行执行"
+        when: "第一个完成的检测器返回 action=modify"
+        then: "引擎 SHALL 立即取消其余未完成的检测器 Task"
+        and:
+          - "该 modify 结果 SHALL 被收集"
+          - "其余被取消检测器的结果 SHALL 不被收集"
+          - "final_action SHALL 被设为 modify"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Decision 1; DESIGN.md Section 5.1"
+        given: "pipeline 配置 short_circuit_on=block（默认值），3 个检测器并行执行"
+        when: "一个检测器返回 action=modify"
+        then: "引擎 SHALL 不短路，继续等待其余检测器完成"
+        and:
+          - "modify 结果 SHALL 被收集但暂不应用"
+          - "所有检测器完成后 SHALL 统一聚合结果"
+
+  - id: REQ-004
+    description: "结果聚合时 final_action 按优先级 block > modify > flag > allow 确定，取所有检测器结果中的最高优先级动作"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 6; DESIGN.md Section 5.5"
+        given: "3 个检测器分别返回 allow、flag、modify"
+        when: "所有检测器完成且未触发短路"
+        then: "final_action SHALL 被设为 modify"
+        and:
+          - "动作优先级顺序 SHALL 为 block > modify > flag > allow"
+          - "若任一检测器返回 block，final_action SHALL 为 block"
+          - "若全部返回 allow，final_action SHALL 为 allow"
+
+      - id: SC-002
+        confidence: high
+        evidence: "DESIGN.md Section 5.5"
+        given: "2 个检测器分别返回 flag 和 allow"
+        when: "所有检测器完成"
+        then: "final_action SHALL 被设为 flag"
+        and:
+          - "请求 SHALL 被原样转发"
+          - "flag 结果 SHALL 被记录到审计日志中"
+
+  - id: REQ-005
+    description: "总体风险等级 overall_risk_level 取所有检测器结果中最高的 risk_level"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 6; DESIGN.md Section 5.5"
+        given: "3 个检测器返回 risk_level 分别为 low、medium、high"
+        when: "结果被聚合"
+        then: "overall_risk_level SHALL 被设为 high"
+        and:
+          - "风险等级排序 SHALL 为 low < medium < high < critical"
+          - "即使 final_action 为 allow，overall_risk_level SHALL 仍反映最高风险等级"
+
+  - id: REQ-006
+    description: "修改列表 modifications 按检测器配置的 priority 升序排列（数字越小优先级越高，越先应用）"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Decision 6; DESIGN.md Section 5.4"
+        given: "PII 检测器 priority=10 返回 modify，敏感词检测器 priority=20 返回 modify"
+        when: "所有检测器完成，结果被聚合"
+        then: "modifications 列表 SHALL 按 priority 升序排列"
+        and:
+          - "PII 修改 SHALL 排在敏感词修改之前"
+          - "若两个检测器 priority 相同，SHALL 按 YAML 配置中的出现顺序作为决胜规则"
+          - "每个 Modification SHALL 包含 detector_name、modified_content、priority、message_index"
+
+  - id: REQ-007
+    description: "Flag 升级规则为可选功能，启用时使用 DSL 表达式在配置加载时预编译，请求时求值决定是否将 flag 升级为 block"
+    scenarios:
+      - id: SC-001
+        confidence: medium
+        evidence: "design.md Decision 7; DESIGN.md Section 5.6"
+        given: "pipeline 配置 flag_escalation.enabled=true，rule='count >= 3 and max_risk_level >= medium'，action=block"
+        when: "3 个检测器返回 flag 且最高风险等级为 medium"
+        then: "DSL 求值结果为 True，final_action SHALL 从 flag 升级为 block"
+        and:
+          - "DSL SHALL 在配置加载时被解析为 AST，不在请求时解析"
+          - "DSL SHALL 支持 count、max_risk_level、categories 变量"
+          - "DSL SHALL 支持 >=、>、<=、<、==、!= 比较运算符"
+          - "DSL SHALL 支持 and、or 逻辑运算符（从左到右求值）"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Decision 7; DESIGN.md Section 5.6"
+        given: "pipeline 配置 flag_escalation.enabled=false（默认值）"
+        when: "多个检测器返回 flag"
+        then: "flag SHALL 不升级为 block，final_action SHALL 保持为 flag"
+        and:
+          - "flag 结果 SHALL 仍然被记录到审计日志"
+
+      - id: SC-003
+        confidence: high
+        evidence: "design.md Decision 7; DESIGN.md Section 5.6"
+        given: "pipeline 配置 flag_escalation.rule 包含无效语法"
+        when: "配置加载时解析 DSL"
+        then: "网关 SHALL 启动失败并返回描述性错误消息"
+        and:
+          - "无效规则 SHALL 在配置加载阶段被拒绝，而非请求时"
+
+  - id: REQ-008
+    description: "检测器执行异常时按 on_error 策略处理：fail_open 跳过检测器并继续处理，fail_closed 阻止请求"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Architecture; DESIGN.md Section 5.7"
+        given: "检测器 prompt_injection 配置 on_error=fail_open，其 detect() 抛出异常"
+        when: "PipelineEngine 捕获到该异常"
+        then: "引擎 SHALL 跳过该检测器，记录错误日志，继续处理其余检测器"
+        and:
+          - "该检测器的 DetectionResult.error SHALL 被设置为异常消息"
+          - "该检测器的 DetectionResult.action SHALL 被设为 allow"
+          - "其余检测器 SHALL 不受影响继续执行"
+
+      - id: SC-002
+        confidence: high
+        evidence: "design.md Architecture; DESIGN.md Section 5.7"
+        given: "检测器 pii_redaction 配置 on_error=fail_closed，其 detect() 抛出异常"
+        when: "PipelineEngine 捕获到该异常"
+        then: "引擎 SHALL 阻止请求，final_action SHALL 被设为 block"
+        and:
+          - "错误 SHALL 被记录到日志"
+          - "该检测器的 DetectionResult.error SHALL 被设置为异常消息"
+
+  - id: REQ-009
+    description: "每个检测器支持 per-detector timeout 配置，超时后按 on_error 策略处理"
+    scenarios:
+      - id: SC-001
+        confidence: medium
+        evidence: "design.md Architecture; DESIGN.md Section 5.7"
+        given: "检测器 llm_judge 配置 timeout=5s，on_error=fail_open"
+        when: "该检测器的 detect() 调用在 5 秒内未返回"
+        then: "引擎 SHALL 取消该检测器的 Task 并视为超时错误"
+        and:
+          - "超时 SHALL 按 on_error 策略处理（此处为 fail_open，跳过检测器）"
+          - "DetectionResult.error SHALL 被设置为超时错误消息"
+          - "DetectionResult.duration_ms SHALL 反映实际等待时长"
+
+  - id: REQ-010
+    description: "Pipeline 引擎记录整体执行时间 pipeline_duration_ms，从 run() 开始到所有结果聚合完成"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md Architecture Pipeline 引擎内部流程"
+        given: "PipelineEngine.run() 被调用"
+        when: "所有检测器完成或短路完成，结果聚合完毕"
+        then: "PipelineResult.pipeline_duration_ms SHALL 被记录为从 run() 开始到聚合完成的时间差（毫秒）"
+        and:
+          - "pipeline_duration_ms SHALL 为浮点数，单位为毫秒"
+          - "短路场景下 pipeline_duration_ms SHALL 反映从开始到短路取消完成的时间"

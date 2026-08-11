@@ -1,17 +1,24 @@
 """Tests for cross-field config validation.
 
 Covers: TC-CONFIG-007~015
+
+NOTE: v0.2.0 refactored DetectorConfig — block_threshold/flag_threshold
+are now inside the nested ``config`` dict, not top-level fields. Threshold
+validation is performed by ``validate_config()`` in validators.py rather
+than a Pydantic model_validator on DetectorConfig. These tests have been
+adapted to the new structure while preserving the original test intent.
 """
 
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from z_llm_safety_gateway.config.loader import load_config
 from z_llm_safety_gateway.config.models import (
     DetectorConfig,
+    DetectorsConfig,
     GatewayConfig,
+    PipelineConfig,
     ProviderConfig,
     RoutingConfig,
     RoutingRule,
@@ -22,17 +29,41 @@ from z_llm_safety_gateway.exceptions import ConfigError, ConfigValidationError
 
 
 # --------------------------------------------------------------------------- #
-# TC-CONFIG-007: block_threshold < flag_threshold raises ValidationError
+# Helper: build a minimal GatewayConfig with a single input detector
+# --------------------------------------------------------------------------- #
+def _config_with_detector(detector: DetectorConfig) -> GatewayConfig:
+    return GatewayConfig(
+        server=ServerConfig(),
+        providers=[
+            ProviderConfig(
+                name="openai",
+                type="openai",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+            ),
+        ],
+        routing=RoutingConfig(),
+        pipeline=PipelineConfig(
+            detectors=DetectorsConfig(input=[detector]),
+        ),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# TC-CONFIG-007: block_threshold < flag_threshold raises error (via validate_config)
 # --------------------------------------------------------------------------- #
 def test_detector_config_reversed_thresholds_raises_error() -> None:
-    # TC-CONFIG-007
-    with pytest.raises(ValidationError) as exc_info:
+    # TC-CONFIG-007 — thresholds now in nested config dict
+    config = _config_with_detector(
         DetectorConfig(
             name="test_detector",
             type="keyword",
-            block_threshold=0.50,
-            flag_threshold=0.85,
+            config={"block_threshold": 0.50, "flag_threshold": 0.85},
         )
+    )
+
+    with pytest.raises(ConfigValidationError) as exc_info:
+        validate_config(config)
 
     error_msg = str(exc_info.value)
     assert "test_detector" in error_msg
@@ -46,30 +77,40 @@ def test_detector_config_reversed_thresholds_raises_error() -> None:
 # TC-CONFIG-008: block_threshold > flag_threshold accepted
 # --------------------------------------------------------------------------- #
 def test_detector_config_valid_thresholds_accepted() -> None:
-    # TC-CONFIG-008
-    detector = DetectorConfig(
-        name="test_detector",
-        type="keyword",
-        block_threshold=0.85,
-        flag_threshold=0.50,
+    # TC-CONFIG-008 — thresholds in nested config dict
+    # Use a built-in detector name so the unknown-name check passes
+    config = _config_with_detector(
+        DetectorConfig(
+            name="prompt_injection",
+            type="keyword",
+            config={"block_threshold": 0.85, "flag_threshold": 0.50},
+        )
     )
 
-    assert detector.block_threshold == 0.85
-    assert detector.flag_threshold == 0.50
+    # Should not raise
+    validate_config(config)
+
+    # Verify thresholds are stored in config dict
+    detector = config.pipeline.detectors.input[0]
+    assert detector.config["block_threshold"] == 0.85
+    assert detector.config["flag_threshold"] == 0.50
 
 
 # --------------------------------------------------------------------------- #
-# TC-CONFIG-009: block_threshold == flag_threshold raises ValidationError
+# TC-CONFIG-009: block_threshold == flag_threshold raises error
 # --------------------------------------------------------------------------- #
 def test_detector_config_equal_thresholds_raises_error() -> None:
-    # TC-CONFIG-009
-    with pytest.raises(ValidationError) as exc_info:
+    # TC-CONFIG-009 — equal thresholds in nested config dict
+    config = _config_with_detector(
         DetectorConfig(
             name="test_detector",
             type="keyword",
-            block_threshold=0.85,
-            flag_threshold=0.85,
+            config={"block_threshold": 0.85, "flag_threshold": 0.85},
         )
+    )
+
+    with pytest.raises(ConfigValidationError) as exc_info:
+        validate_config(config)
 
     error_msg = str(exc_info.value)
     assert "test_detector" in error_msg

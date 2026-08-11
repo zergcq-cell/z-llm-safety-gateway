@@ -1,0 +1,13 @@
+# English sensitive words list
+# Used for testing the SensitiveWordsDetector
+# Lines starting with # are comments and are skipped
+
+spam
+scam
+fraud
+
+abuse
+hack
+exploit
+
+# End of English word list

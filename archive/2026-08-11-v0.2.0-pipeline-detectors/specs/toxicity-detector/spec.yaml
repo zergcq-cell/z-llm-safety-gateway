@@ -1,0 +1,188 @@
+meta:
+  capability: "toxicity-detector"
+  change_id: "2026-08-11-v0.2.0-pipeline-detectors"
+  created: "2026-08-11T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "使用 transformers 加载 unitary/toxic-bert 模型"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> capabilities.new[6] (C7), DESIGN.md Section 6.4 MVP Detector List #3, design.md Decision 9"
+        given: "a ToxicityDetector configured with model_name='unitary/toxic-bert'"
+        when: "the model is loaded (on first detect() call)"
+        then: "the detector SHALL load the model using the transformers library"
+        and:
+          - "the loaded model SHALL be 'unitary/toxic-bert' from HuggingFace Hub"
+          - "model inference SHALL run on CPU"
+          - "the detector SHALL use the transformers pipeline API for toxicity classification"
+
+      - id: SC-002
+        confidence: high
+        evidence: "DESIGN.md Section 6.4, design.md Decision 9"
+        given: "a loaded toxic-bert model"
+        when: "detect() is called with content containing toxic language"
+        then: "the detector SHALL return a DetectionResult with confidence reflecting the model's toxicity score"
+        and:
+          - "the DetectionResult.category SHALL be 'toxicity'"
+
+  - id: REQ-002
+    description: "模型懒加载（首次 detect() 时加载，非 initialize 时）"
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "design.md Decision 9, DESIGN.md Section 6.5"
+        given: "a ToxicityDetector that has been initialized but has not yet had detect() called"
+        when: "initialize() is called"
+        then: "the detector SHALL NOT load the ML model during initialization"
+        and:
+          - "the model SHALL remain unloaded until the first detect() call"
+          - "initialize() SHALL only store configuration parameters"
+
+      - id: SC-004
+        confidence: high
+        evidence: "DESIGN.md Section 6.5, design.md Decision 9"
+        given: "a ToxicityDetector that has been initialized but model not yet loaded"
+        when: "detect() is called for the first time"
+        then: "the detector SHALL load the model before performing inference"
+        and:
+          - "subsequent detect() calls SHALL reuse the already loaded model"
+          - "the model SHALL NOT be reloaded on subsequent detect() calls"
+
+  - id: REQ-003
+    description: "支持 offline_mode（跳过下载，要求模型已缓存）"
+    scenarios:
+      - id: SC-005
+        confidence: high
+        evidence: "DESIGN.md Section 6.5, design.md Decision 9"
+        given: "a detector configured with offline_mode=true and the model is already cached in model_cache_dir"
+        when: "detect() is called and triggers model loading"
+        then: "the detector SHALL load the model from the local cache without attempting to download"
+        and:
+          - "no network request SHALL be made to HuggingFace Hub"
+
+      - id: SC-006
+        confidence: high
+        evidence: "DESIGN.md Section 6.5"
+        given: "a detector configured with offline_mode=true and the model is NOT cached locally"
+        when: "detect() is called and triggers model loading"
+        then: "the detector SHALL fail to load the model and raise an error"
+        and:
+          - "the error SHALL indicate that the model is not available in offline mode"
+          - "the failure SHALL be handled according to the on_error strategy"
+
+      - id: SC-007
+        confidence: medium
+        evidence: "DESIGN.md Section 6.5"
+        given: "a detector configured with offline_mode=false"
+        when: "detect() is called and the model is not cached locally"
+        then: "the detector SHALL download the model from HuggingFace Hub"
+        and:
+          - "the downloaded model SHALL be stored in the configured model_cache_dir"
+
+  - id: REQ-004
+    description: "支持 model_cache_dir 和 model_version 配置"
+    scenarios:
+      - id: SC-008
+        confidence: high
+        evidence: "DESIGN.md Section 6.5, design.md Decision 10"
+        given: "a detector configured with model_cache_dir='/app/models' and model_version='v1.0'"
+        when: "the model is loaded"
+        then: "the detector SHALL use '/app/models' as the cache directory for model files"
+        and:
+          - "the detector SHALL request model_version 'v1.0' as the HuggingFace Hub revision parameter"
+          - "detector-level model_cache_dir SHALL override the global model_cache.dir setting"
+
+      - id: SC-009
+        confidence: medium
+        evidence: "DESIGN.md Section 6.5"
+        given: "a detector configured with model_name and model_version omitted"
+        when: "the model is loaded"
+        then: "the detector SHALL use the latest revision of the model"
+        and:
+          - "the cache directory SHALL default to the global model_cache.dir setting"
+
+  - id: REQ-005
+    description: "阈值驱动决策（block_threshold/flag_threshold）"
+    scenarios:
+      - id: SC-010
+        confidence: high
+        evidence: "DESIGN.md Section 5.3, design.md Decision 5"
+        given: "a detector configured with block_threshold=0.90 and flag_threshold=0.60"
+        when: "detect() returns a toxicity confidence >= 0.90"
+        then: "the pipeline engine SHALL determine action='block'"
+        and:
+          - "the detector SHALL NOT hardcode the action; it only computes confidence"
+          - "the threshold values SHALL be read from the detector's config section"
+
+      - id: SC-011
+        confidence: high
+        evidence: "DESIGN.md Section 5.3"
+        given: "a detector configured with block_threshold=0.90 and flag_threshold=0.60"
+        when: "detect() returns a toxicity confidence where 0.60 <= confidence < 0.90"
+        then: "the pipeline engine SHALL determine action='flag'"
+        and: []
+
+      - id: SC-012
+        confidence: high
+        evidence: "DESIGN.md Section 5.3"
+        given: "a detector configured with block_threshold=0.90 and flag_threshold=0.60"
+        when: "detect() returns a toxicity confidence < 0.60"
+        then: "the pipeline engine SHALL determine action='allow'"
+        and: []
+
+  - id: REQ-006
+    description: "返回 DetectionResult（category='toxicity'）"
+    scenarios:
+      - id: SC-013
+        confidence: high
+        evidence: "DESIGN.md Section 5.2, design.md Decision 2"
+        given: "the ToxicityDetector has executed inference on content"
+        when: "detect() returns a DetectionResult"
+        then: "the DetectionResult SHALL have category='toxicity'"
+        and:
+          - "the DetectionResult SHALL have detector_name='toxicity'"
+          - "the DetectionResult SHALL have a confidence value (float, 0.0-1.0) from the model output"
+          - "the DetectionResult SHALL have a risk_level ('low' | 'medium' | 'high' | 'critical')"
+          - "the DetectionResult SHALL have a human-readable message"
+
+  - id: REQ-007
+    description: "模型加载失败时按 on_error 策略处理"
+    scenarios:
+      - id: SC-014
+        confidence: high
+        evidence: "proposal.yaml -> risk_areas, design.md Decision 9"
+        given: "a detector configured with on_error='fail_open' and model loading fails"
+        when: "detect() is called and the model fails to load"
+        then: "the detector SHALL return a DetectionResult with action='allow'"
+        and:
+          - "the DetectionResult.error SHALL contain the failure message"
+          - "the DetectionResult.confidence SHALL be 0.0"
+          - "the request SHALL NOT be blocked due to the detector failure"
+
+      - id: SC-015
+        confidence: high
+        evidence: "design.md Decision 9, DESIGN.md Section 5.7"
+        given: "a detector configured with on_error='fail_closed' and model loading fails"
+        when: "detect() is called and the model fails to load"
+        then: "the detector SHALL return a DetectionResult with action='block'"
+        and:
+          - "the DetectionResult.error SHALL contain the failure message"
+          - "the request SHALL be blocked due to the detector failure"
+
+  - id: REQ-008
+    description: "initialize 时仅保存配置，不加载模型"
+    scenarios:
+      - id: SC-016
+        confidence: high
+        evidence: "design.md Decision 9, DESIGN.md Section 6.5"
+        given: "a ToxicityDetector instance with a config containing model_name, model_cache_dir, offline_mode, and thresholds"
+        when: "initialize() is called with the config"
+        then: "initialize() SHALL store all configuration parameters internally"
+        and:
+          - "initialize() SHALL NOT load the ML model"
+          - "initialize() SHALL NOT make any network requests"
+          - "the stored configuration SHALL be used when the model is lazily loaded on first detect()"
+          - "initialize() SHALL complete quickly (no model I/O blocking)"
