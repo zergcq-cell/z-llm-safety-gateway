@@ -1,0 +1,101 @@
+# STDD Change State File
+# 变更: 2026-08-12-v0.3.0-streaming-audit
+
+change_id: "2026-08-12-v0.3.0-streaming-audit"
+title: "v0.3.0 - Streaming & Audit"
+created: "2026-08-12T10:00:00+08:00"
+
+# 阶段状态
+phase:
+  current: build
+  understand: completed
+  spec: completed
+  slice: completed
+  build: pending
+  verify: pending
+  deliver: pending
+
+# 模式与复杂度
+mode: thorough
+task_type: code
+complexity_score: 12
+score_confidence: confirmed
+
+# 关键性评估
+critical:
+  is_critical: false
+  risk_assessment:
+    safety_critical: false
+    financial: false
+    cross_system: false
+
+# 锚定
+anchoring:
+  level: L1
+  reference_changes:
+    - "2026-08-11-v0.2.0-pipeline-detectors"
+  anchor_implementations: []
+
+# Gate 状态
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: pending
+
+# 长程模式
+long_range:
+  enabled: true
+  mode: "full_auto"
+  pre_auth_completed: true
+  pre_auth_timestamp: "2026-08-12T10:10:00+08:00"
+  max_iterations: 10
+  degradation_triggers:
+    - "连续自动修复 3 次失败"
+    - "测试通过率 < 95%"
+    - "安全相关问题"
+    - "预授权范围外的未预期情况"
+
+# 产出物
+artifacts:
+  proposal_yaml: "proposal.yaml"
+  proposal_md: "proposal.md"
+  design_md: "design.md"
+  test_plan_md: "test-plan.md"
+  phase_context_md: null
+  slices_md: "slices.md"
+  tasks_md: "tasks.md"
+  test_report_md: null
+  design_adjustments_md: null
+
+# 时间戳
+timestamps:
+  understand_completed: "2026-08-12T10:00:00+08:00"
+  spec_completed: "2026-08-12T10:30:00+08:00"
+  slice_completed: "2026-08-12T10:45:00+08:00"
+
+# Phase 4 切片状态
+phase4:
+  slices_completed:
+    "1":
+      status: "done"
+      tc_coverage: "15/15"
+      new_tests: 15
+      verified_at: "2026-08-12T11:00:00+08:00"
+    "2":
+      status: "done"
+      tc_coverage: "16/16"
+      new_tests: 16
+      verified_at: "2026-08-12T11:15:00+08:00"
+    "3":
+      status: "done"
+      tc_coverage: "27/27"
+      new_tests: 27
+      verified_at: "2026-08-12T11:30:00+08:00"
+    "4":
+      status: "done"
+      tc_coverage: "11/11"
+      new_tests: 11
+      verified_at: "2026-08-12T11:45:00+08:00"
+
+# 归档状态
+status: active

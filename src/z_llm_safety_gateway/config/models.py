@@ -153,6 +153,110 @@ class ModelCacheConfig(BaseModel):
     offline_mode: bool = False
 
 
+class StreamingRecallConfig(BaseModel):
+    """Recall delivery configuration for streaming post-audit.
+
+    ``method`` selects how a post-audit recall signal is delivered:
+    - ``sse`` (default): emit a ``safety_recall`` SSE event on the active stream.
+    - ``webhook``: POST the recall to ``webhook_url``.
+    - ``both``: send the SSE event AND POST the webhook.
+    """
+
+    method: str = "sse"  # "sse" | "webhook" | "both"
+    webhook_url: str = ""
+    webhook_auth_header: str = ""
+
+    @field_validator("method")
+    @classmethod
+    def _validate_method(cls, v: str) -> str:
+        if v not in ("sse", "webhook", "both"):
+            raise ValueError(
+                f"recall.method must be 'sse', 'webhook', or 'both', got '{v}'"
+            )
+        return v
+
+
+class StreamingConfig(BaseModel):
+    """Streaming response safety detection configuration (v0.3.0).
+
+    ``mode`` selects the streaming detection strategy:
+    - ``sliding_window`` (default): detect on each character window as tokens
+      arrive; block mid-stream if a risk is found.
+    - ``buffer``: buffer the full response, run detection once, then replay the
+      SSE chunks to the client (maximum safety, higher time-to-first-token).
+    """
+
+    mode: str = "sliding_window"  # "sliding_window" | "buffer"
+    window_size: int = 200  # characters per window
+    overlap: int = 50  # character overlap between consecutive windows
+    send_flag_events: bool = False
+    max_response_size: str = "1MB"  # byte-based accumulation limit
+    on_max_size: str = "block"  # "block" | "truncate"
+    post_audit: bool = True
+    recall: StreamingRecallConfig = StreamingRecallConfig()
+
+    @field_validator("mode")
+    @classmethod
+    def _validate_mode(cls, v: str) -> str:
+        if v not in ("sliding_window", "buffer"):
+            raise ValueError(
+                f"streaming.mode must be 'sliding_window' or 'buffer', got '{v}'"
+            )
+        return v
+
+    @field_validator("on_max_size")
+    @classmethod
+    def _validate_on_max_size(cls, v: str) -> str:
+        if v not in ("block", "truncate"):
+            raise ValueError(
+                f"streaming.on_max_size must be 'block' or 'truncate', got '{v}'"
+            )
+        return v
+
+
+class OutputRecallConfig(BaseModel):
+    """Recall delivery configuration for non-streaming async output detection."""
+
+    webhook_url: str = ""
+    webhook_auth_header: str = ""
+
+
+class OutputDetectionConfig(BaseModel):
+    """Non-streaming output detection configuration (v0.3.0).
+
+    ``mode`` selects how output detection runs for non-streaming responses:
+    - ``sync`` (default): wait for output detection to complete before returning
+      the response. May block (422), modify, or allow.
+    - ``async``: return the response immediately, run detection in background,
+      and send a webhook recall if a risk is found afterwards.
+    """
+
+    mode: str = "sync"  # "sync" | "async"
+    sync_timeout: str = "5s"
+    recall: OutputRecallConfig = OutputRecallConfig()
+
+    @field_validator("mode")
+    @classmethod
+    def _validate_mode(cls, v: str) -> str:
+        if v not in ("sync", "async"):
+            raise ValueError(
+                f"output_detection.mode must be 'sync' or 'async', got '{v}'"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _validate_async_requires_webhook(
+        self,
+    ) -> OutputDetectionConfig:
+        """Async mode requires a non-empty webhook_url for recall delivery."""
+        if self.mode == "async" and not self.recall.webhook_url:
+            raise ValueError(
+                "output_detection.mode 'async' requires "
+                "output_detection.recall.webhook_url to be configured"
+            )
+        return self
+
+
 class PipelineConfig(BaseModel):
     """Pipeline configuration for content safety detection.
 
@@ -163,6 +267,10 @@ class PipelineConfig(BaseModel):
     - ``flag_escalation``: optional flag-to-block escalation rule.
     - ``detectors``: ``DetectorsConfig`` with input/output grouping.
 
+    v0.3.0 fields:
+    - ``streaming``: ``StreamingConfig`` for SSE streaming safety detection.
+    - ``output_detection``: ``OutputDetectionConfig`` for non-streaming output.
+
     Backward compat: accepts ``detectors`` as ``list[dict]`` (v0.1.0 format)
     and auto-converts to ``DetectorsConfig`` with all detectors in ``input``.
     """
@@ -172,6 +280,8 @@ class PipelineConfig(BaseModel):
     short_circuit_on: str = "block"  # "block" | "block_and_modify"
     sync_timeout: str = "5s"
     flag_escalation: FlagEscalationConfig | None = None
+    streaming: StreamingConfig = StreamingConfig()
+    output_detection: OutputDetectionConfig = OutputDetectionConfig()
     detectors: DetectorsConfig | list[dict[str, Any]] = Field(
         default_factory=DetectorsConfig
     )
@@ -226,11 +336,55 @@ class SecurityConfig(BaseModel):
     timeout: dict[str, int] = {"upstream": 120}
 
 
+class FileConfig(BaseModel):
+    """JSONL audit log file output configuration (v0.3.0)."""
+
+    enabled: bool = True
+    path: str = "/var/log/safety-gateway"
+    rotation: str = "daily"  # e.g. "daily", "midnight", "weekly"
+    retention_days: int = 90
+
+
 class AuditConfig(BaseModel):
-    """Audit logging configuration."""
+    """Audit logging configuration.
+
+    v0.3.0 additions:
+    - ``store_content``: whether to store plaintext content (default false).
+    - ``file``: JSONL file output config (enabled/path/rotation/retention_days).
+    - ``stdout``: whether to emit structured JSON to stdout.
+    """
 
     enabled: bool = False
     sanitize_logs: bool = True
+    store_content: bool = False
+    file: FileConfig = FileConfig()
+    stdout: bool = True
+
+
+class LoggingConfig(BaseModel):
+    """Application logging configuration (v0.3.0)."""
+
+    level: str = "INFO"  # DEBUG | INFO | WARNING | ERROR
+    format: str = "json"  # "json" | "text"
+
+    @field_validator("level")
+    @classmethod
+    def _validate_level(cls, v: str) -> str:
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR"}
+        if v not in allowed:
+            raise ValueError(
+                f"logging.level must be one of {sorted(allowed)}, got '{v}'"
+            )
+        return v
+
+    @field_validator("format")
+    @classmethod
+    def _validate_format(cls, v: str) -> str:
+        if v not in ("json", "text"):
+            raise ValueError(
+                f"logging.format must be 'json' or 'text', got '{v}'"
+            )
+        return v
 
 
 class ObservabilityConfig(BaseModel):
@@ -249,6 +403,7 @@ class GatewayConfig(BaseModel):
     pipeline: PipelineConfig = PipelineConfig()
     security: SecurityConfig = SecurityConfig()
     audit: AuditConfig = AuditConfig()
+    logging: LoggingConfig = LoggingConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
     model_cache: ModelCacheConfig = ModelCacheConfig()
 

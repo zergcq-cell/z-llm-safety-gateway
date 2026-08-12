@@ -18,6 +18,7 @@ import structlog
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 
+from z_llm_safety_gateway.audit.logger import AuditLogger
 from z_llm_safety_gateway.config.loader import load_config
 from z_llm_safety_gateway.config.models import DetectorsConfig
 from z_llm_safety_gateway.detectors import create_default_registry
@@ -30,8 +31,10 @@ from z_llm_safety_gateway.exceptions import (
 from z_llm_safety_gateway.middleware.request_id import RequestIDMiddleware
 from z_llm_safety_gateway.middleware.safety_headers import SafetyHeadersMiddleware
 from z_llm_safety_gateway.pipeline import FlagEscalationRule, PipelineEngine
+from z_llm_safety_gateway.post_audit.audit import PostAuditRunner
 from z_llm_safety_gateway.providers.base import ProviderError
 from z_llm_safety_gateway.providers.router import ModelRouter
+from z_llm_safety_gateway.recall.webhook import WebhookRecall
 from z_llm_safety_gateway.routes.chat import router as chat_router
 from z_llm_safety_gateway.routes.health import router as health_router
 from z_llm_safety_gateway.routes.health import set_ready
@@ -167,6 +170,57 @@ def create_app(config_path: str) -> FastAPI:
         input_detectors=len(input_detectors),
         output_detectors=len(output_detectors),
         short_circuit_on=short_circuit_on,
+    )
+
+    # 5b. Initialize v0.3.0 components: audit logger, streaming config,
+    #     post-audit runner, and webhook recall channels.
+    audit_cfg = config.audit
+    audit_logger = AuditLogger(
+        store_content=audit_cfg.store_content,
+        sanitize_logs=audit_cfg.sanitize_logs,
+        file_enabled=audit_cfg.file.enabled,
+        log_dir=audit_cfg.file.path,
+        stdout_enabled=audit_cfg.stdout,
+        enabled=audit_cfg.enabled,
+        rotation=audit_cfg.file.rotation,
+        retention_days=audit_cfg.file.retention_days,
+    )
+    app.state.audit_logger = audit_logger
+    app.state.audit_config = audit_cfg
+
+    streaming_cfg = config.pipeline.streaming
+    app.state.streaming_config = streaming_cfg
+
+    output_detection_cfg = config.pipeline.output_detection
+    app.state.output_detection_config = output_detection_cfg
+
+    # Post-audit runner for streaming responses (reuses pipeline engine).
+    post_audit_runner = PostAuditRunner(
+        engine=engine,
+        output_detectors=output_detectors,
+        detector_configs=output_configs,
+    )
+    app.state.post_audit_runner = post_audit_runner
+
+    # Webhook recall for streaming post-audit (if webhook configured).
+    streaming_webhook = WebhookRecall(
+        webhook_url=streaming_cfg.recall.webhook_url,
+        webhook_auth_header=streaming_cfg.recall.webhook_auth_header,
+    )
+    app.state.streaming_webhook_recall = streaming_webhook
+
+    # Webhook recall for non-streaming async output detection.
+    output_webhook = WebhookRecall(
+        webhook_url=output_detection_cfg.recall.webhook_url,
+        webhook_auth_header=output_detection_cfg.recall.webhook_auth_header,
+    )
+    app.state.output_webhook_recall = output_webhook
+
+    logger.info(
+        "v03_components_initialized",
+        audit_enabled=audit_cfg.enabled,
+        streaming_mode=streaming_cfg.mode,
+        output_detection_mode=output_detection_cfg.mode,
     )
 
     # 6. Register routes

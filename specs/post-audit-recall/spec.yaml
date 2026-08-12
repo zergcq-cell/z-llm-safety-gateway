@@ -1,0 +1,254 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: post-audit-recall
+# Change: 2026-08-12-v0.3.0-streaming-audit
+
+meta:
+  capability: "post-audit-recall"
+  change_id: "2026-08-12-v0.3.0-streaming-audit"
+  created: "2026-08-12T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "后审计在流式完成且 [DONE] 发送后，对完整累积响应执行深度检测（后台运行，不阻塞客户端连接）"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "design.md 决策 5；DESIGN.md Section 8.3 Timing"
+        given: "一个 stream=true 请求，streaming.mode 为 sliding_window，streaming.post_audit 为 true，Provider 通过 SSE 流式返回多段 chunk"
+        when: "流式转发完成，最后一个 SSE chunk 已转发且 data: [DONE] 已发送给客户端"
+        then: "网关 SHALL 在后台启动一次对完整累积响应的深度检测任务"
+        and:
+          - "客户端连接 SHALL 保持已关闭状态，后审计 SHALL NOT 阻塞或延迟客户端连接"
+          - "后审计检测结果 SHALL 与客户端已接收的响应相互独立，客户端无需等待后审计完成即可收到 [DONE]"
+          - "完整累积响应 SHALL 作为单个 content 字符串传递给检测"
+      - id: SC-002
+        confidence: high
+        evidence: "design.md 决策 5；DESIGN.md Section 8.3"
+        given: "流式响应包含跨多个 chunk 才会暴露的风险（如密钥分两段泄露、毒性内容分散在不同窗口）"
+        when: "滑动窗口检测均返回 allow，但完整累积响应的后审计检测返回 block"
+        then: "网关 SHALL 捕获该跨窗口风险并触发召回机制"
+        and:
+          - "后审计结果 SHALL 记录到审计日志的 post_audit 字段"
+          - "该场景 SHALL 证明后审计能捕获滑动窗口漏检的完整上下文风险"
+
+  - id: REQ-002
+    description: "后审计使用所有启用 output 检测器，方向 output，复用 PipelineEngine，阈值与输出检测一致"
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "design.md 决策 5；DESIGN.md Section 8.3 Detectors used / Thresholds"
+        given: "output 侧启用了 N 个检测器（如 toxicity、pii、secret-detection），且每个配置了 block_threshold 和 flag_threshold"
+        when: "后审计对完整累积响应执行深度检测"
+        then: "网关 SHALL 通过 PipelineEngine 并行执行所有启用的 output 检测器"
+        and:
+          - "后审计 SHALL 使用方向为 output，与滑动窗口输出检测使用同一检测器集合"
+          - "后审计 SHALL 复用与输出检测完全一致的每检测器阈值（block_threshold/flag_threshold），SHALL NOT 引入独立的 post-audit 阈值"
+          - "检测器集合 SHALL 与输出检测保持一致，且仅含 output 方向的启用检测器"
+      - id: SC-004
+        confidence: high
+        evidence: "design.md 决策 5；DESIGN.md Section 8.3"
+        given: "检测器配置包含 disable 标志，其中若干输出检测器被禁用"
+        when: "后审计对完整累积响应执行深度检测"
+        then: "被禁用的检测器 SHALL NOT 在后审计中执行"
+        and:
+          - "后审计 SHALL 仅执行所有启用的 output 检测器"
+          - "未启用检测器的结果 SHALL NOT 出现在 post_audit 审计记录中"
+
+  - id: REQ-003
+    description: "后审计 modify 降级为 flag（响应已流式发送），审计记录 original_action: modify, effective_action: flag, applied: false"
+    scenarios:
+      - id: SC-005
+        confidence: high
+        evidence: "design.md 决策 5；DESIGN.md Section 8.3 modify actions"
+        given: "后审计检测中某 output 检测器对完整累积响应返回 action: modify，且携带 modified_content"
+        when: "后审计完成并对该 modify 结果进行动作归并"
+        then: "网关 SHALL 将 modify 结果降级为 flag，且 SHALL NOT 对已发送响应应用任何修改"
+        and:
+          - "审计日志 post_audit 记录 SHALL 包含 original_action: \"modify\""
+          - "审计日志 post_audit 记录 SHALL 包含 effective_action: \"flag\""
+          - "审计日志 post_audit 记录 SHALL 包含 applied: false"
+          - "网关 SHALL NOT 向客户端重发或改写已流式的响应内容"
+
+  - id: REQ-004
+    description: "后审计发现 block 风险时触发响应召回"
+    scenarios:
+      - id: SC-006
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.3 / 8.4"
+        given: "后审计检测对完整累积响应返回 block 且 risk_level 为 high（或更高）"
+        when: "后审计完成并判定存在 block 风险"
+        then: "网关 SHALL 触发响应召回机制"
+        and:
+          - "审计日志 SHALL 记录 recalled: true"
+          - "审计日志 SHALL 记录 recall_method 字段（sse/webhook/both）"
+          - "召回 SHALL NOT 阻塞后续请求，也 SHALL NOT 立即通知安全团队"
+          - "审计日志 SHALL 将召回记录为 severity=critical 的安全发现"
+
+  - id: REQ-005
+    description: "召回 SSE 事件格式：event: safety_recall, data 含 request_id/risk_level/reason/category（design 决策 6）"
+    scenarios:
+      - id: SC-007
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 SSE Event"
+        given: "recall.method 为 sse（默认），后审计发现 block 风险，且客户端 SSE 连接仍活跃"
+        when: "网关发送召回信号"
+        then: "网关 SHALL 在同一 SSE 连接上发送格式为 event: safety_recall 的事件"
+        and:
+          - "data 字段 SHALL 为 JSON，且包含 request_id 字段（值等于本次请求的 request_id）"
+          - "data 字段 SHALL 包含 risk_level 字段"
+          - "data 字段 SHALL 包含 reason 字段"
+          - "data 字段 SHALL 包含 category 字段"
+      - id: SC-008
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 SSE vs Webhook"
+        given: "recall.method 为 sse，但客户端已断开连接"
+        when: "后审计发现 block 风险并尝试通过 SSE 发送 safety_recall"
+        then: "SSE 事件 SHALL 因连接断开而丢失，网关 SHALL NOT 阻塞该失败"
+        and:
+          - "当配置为 sse 且无 webhook 兜底时，该召回 SHALL 记为不可送达"
+          - "审计日志 SHALL 记录该次召回通过 SSE 尝试发送"
+
+  - id: REQ-006
+    description: "Webhook 召回：POST 到 webhook_url，5s 超时，3 次重试（指数退避 1s/2s/4s），HTTP 2xx 为成功，全部失败记录 recall_delivery: failed"
+    scenarios:
+      - id: SC-009
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 Webhook recall retry policy"
+        given: "recall.method 为 webhook 或 both，webhook_url 已配置，后审计发现 block 风险"
+        when: "网关发送 Webhook 召回，webhook 端点返回 HTTP 200"
+        then: "网关 SHALL 以 HTTP POST 方式将 JSON 召回 payload 发送到 webhook_url"
+        and:
+          - "单次请求超时 SHALL 为 5s"
+          - "HTTP 2xx 状态码 SHALL 被视为成功，SHALL NOT 触发重试"
+          - "审计日志 SHALL 记录 recall_delivery 为成功（非 failed）"
+      - id: SC-010
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 Webhook recall retry policy"
+        given: "recall.method 为 webhook，webhook 端点首次返回 HTTP 500"
+        when: "网关发送 Webhook 召回"
+        then: "网关 SHALL 重试发送，最多 3 次，采用指数退避间隔 1s/2s/4s"
+        and:
+          - "每次重试请求超时 SHALL 仍为 5s"
+          - "若第 2 次或第 3 次返回 HTTP 2xx，网关 SHALL 判定成功并停止重试"
+          - "重试 SHALL 仅针对超时、5xx 或连接错误，HTTP 4xx SHALL NOT 触发重试"
+      - id: SC-011
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 Failure"
+        given: "recall.method 为 webhook，webhook 端点连续 3 次均失败（超时或 5xx）"
+        when: "网关完成 3 次重试且全部失败"
+        then: "网关 SHALL 停止重试，并在审计日志中记录 recall_delivery: \"failed\""
+        and:
+          - "全部失败后 SHALL NOT 再采取进一步动作"
+          - "网关重启导致的未完成召回 SHALL 允许丢失（无持久化队列，v1.1+ 计划）"
+
+  - id: REQ-007
+    description: "召回方法可选 sse/webhook/both（recall.method 配置）"
+    scenarios:
+      - id: SC-012
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 配置"
+        given: "recall.method 配置为 sse（默认）"
+        when: "后审计发现 block 风险触发召回"
+        then: "网关 SHALL 仅通过 SSE 发送 safety_recall 事件，SHALL NOT 发送 Webhook"
+        and:
+          - "审计日志 SHALL 记录 recall_method: \"sse\""
+      - id: SC-013
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 配置"
+        given: "recall.method 配置为 both，且 webhook_url 已配置"
+        when: "后审计发现 block 风险触发召回"
+        then: "网关 SHALL 同时发送 SSE safety_recall 事件和 Webhook POST 召回"
+        and:
+          - "审计日志 SHALL 记录 recall_method: \"both\""
+      - id: SC-014
+        confidence: high
+        evidence: "design.md 决策 6；DESIGN.md Section 8.4 配置；config 校验"
+        given: "recall.method 配置为 webhook 或 both，但 webhook_url 未配置"
+        when: "配置校验加载该 streaming 配置"
+        then: "配置校验 SHALL 报错：Recall method 'webhook' requires webhook_url to be configured"
+        and:
+          - "网关 SHALL 拒绝加载该无效配置"
+
+  - id: REQ-008
+    description: "buffer 模式下 post-audit 自动跳过，审计记录 post_audit.executed: false, reason: buffer_mode"
+    scenarios:
+      - id: SC-015
+        confidence: high
+        evidence: "design.md 决策 7；proposal.yaml 约束；DESIGN.md Section 8.3 Disabled detectors"
+        given: "streaming.mode 配置为 buffer，且 streaming.post_audit 为 true，Provider 完整响应已缓冲"
+        when: "缓冲的完整响应已执行检测并回放给客户端"
+        then: "网关 SHALL 自动跳过 post-audit（因完整响应已在发送前检测）"
+        and:
+          - "审计日志 SHALL 记录 post_audit.executed: false"
+          - "审计日志 SHALL 记录 post_audit 的 reason: \"buffer_mode\""
+          - "启动时 SHALL 记录一条 Info 日志：Streaming mode 'buffer' with post_audit: true. Post-audit is automatically skipped in buffer mode"
+      - id: SC-016
+        confidence: high
+        evidence: "design.md 决策 7；DESIGN.md Section 8.3"
+        given: "streaming.mode 配置为 buffer"
+        when: "缓冲模式下完整响应检测返回 block"
+        then: "网关 SHALL 不发送内容 chunks，直接发送 safety_block 事件和 data: [DONE]"
+        and:
+          - "缓冲模式 SHALL 因完整检测发生在发送前而无需召回"
+
+  - id: REQ-009
+    description: "非流式 async 输出检测：立即返回响应，后台执行输出检测，风险发现时 Webhook 召回（design 决策 8，DESIGN.md Section 3.5）"
+    scenarios:
+      - id: SC-017
+        confidence: high
+        evidence: "design.md 决策 8；DESIGN.md Section 3.5 async 模式"
+        given: "output_detection.mode 为 async，非流式（stream=false），且 recall.webhook_url 已配置"
+        when: "客户端发起非流式请求"
+        then: "网关 SHALL 立即返回 LLM 响应给客户端，不等待输出检测完成"
+        and:
+          - "输出检测 SHALL 在后台任务中执行"
+          - "后台检测未发现风险时，网关 SHALL NOT 发送任何召回信号"
+      - id: SC-018
+        confidence: high
+        evidence: "design.md 决策 8；DESIGN.md Section 3.5 async 模式"
+        given: "output_detection.mode 为 async，后台输出检测发现 block 风险"
+        when: "后台输出检测完成并判定存在风险"
+        then: "网关 SHALL 通过 Webhook 发送召回（非流式无活跃 SSE 连接）"
+        and:
+          - "Webhook 召回 SHALL 遵循 5s 超时、3 次重试（1s/2s/4s）、HTTP 2xx 为成功的策略"
+          - "审计日志 completion 记录 SHALL 设置 recalled: true 和 recall_method: \"webhook\""
+      - id: SC-019
+        confidence: high
+        evidence: "design.md 决策 8；DESIGN.md Section 3.5 async；config 校验"
+        given: "output_detection.mode 为 async，但 recall.webhook_url 未配置"
+        when: "配置加载该 output_detection 配置"
+        then: "配置校验 SHALL 记录 Warning：Output detection mode 'async' without recall.webhook_url configured"
+        and:
+          - "未配置 webhook_url 时，异步模式下响应后风险 SHALL NOT 能被传达给客户端"
+
+  - id: REQ-010
+    description: "async 模式写入两条审计记录（initial: async_detection: pending + completion: async_detection: completed），共享 request_id"
+    scenarios:
+      - id: SC-020
+        confidence: high
+        evidence: "design.md 决策 8；DESIGN.md Section 3.5 Async audit logging"
+        given: "output_detection.mode 为 async，非流式请求"
+        when: "网关立即返回响应并启动后台输出检测"
+        then: "网关 SHALL 立即写入 initial 审计记录，方向为 output，含 async_detection: \"pending\""
+        and:
+          - "initial 记录的 final_action SHALL 为 \"allow\"（响应已发送）"
+      - id: SC-021
+        confidence: high
+        evidence: "design.md 决策 8；DESIGN.md Section 3.5 Async audit logging"
+        given: "后台输出检测完成"
+        when: "后台检测结束并归并最终结果"
+        then: "网关 SHALL 写入 completion 审计记录，方向为 output，含 async_detection: \"completed\""
+        and:
+          - "completion 记录 SHALL 与 initial 记录共享同一个 request_id"
+          - "completion 记录 SHALL 包含完整检测器结果（detectors 数组）、final_action、final_risk_level 和 recalled 字段"
+          - "两条记录 SHALL 具有不同的 timestamp，completion 记录时间晚于 initial 记录"
+      - id: SC-022
+        confidence: high
+        evidence: "design.md 决策 8；DESIGN.md Section 3.5 async"
+        given: "async 模式后台检测发现风险"
+        when: "completion 审计记录写入时"
+        then: "completion 记录 SHALL 设置 recalled: true 且 recall_method: \"webhook\""
+        and:
+          - "initial 记录 SHALL 保持 async_detection: \"pending\" 不变"
+          - "两条记录 SHALL 通过 request_id 可关联追踪检测完成状态"

@@ -1,0 +1,284 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: audit-logger
+# Change: 2026-08-12-v0.3.0-streaming-audit
+# 覆盖：JSONL 审计日志格式、审计字段、detectors、流式字段、content_hash、
+#       store_content、双通道输出、日志脱敏、异步写入、audit.enabled 开关
+
+meta:
+  capability: "audit-logger"
+  change_id: "2026-08-12-v0.3.0-streaming-audit"
+  created: "2026-08-12T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: >
+      审计日志采用 JSONL 格式，每个方向（input/output）各写入一条独立记录，
+      两条记录通过共享的 request_id 关联，而不是将 input 与 output 合并到
+      单条记录中。（来源：design 决策 9；DESIGN.md Section 12.1）
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml C9；DESIGN.md 12.1 'one audit entry per direction'；decision 9"
+        given: >
+          一个已完成 input pipeline 和 output pipeline 的请求，request_id 为
+          "req_abc123"，audit.enabled 为 true
+        when: >
+          AuditLogger 为此次请求写入审计日志
+        then: >
+          AuditLogger SHALL 写入两条独立的 JSONL 记录，一条 direction 为 "input"，
+          另一条 direction 为 "output"
+        and:
+          - "input 记录的 request_id 与 output 记录的 request_id 都 SHALL 等于 'req_abc123'"
+          - "两条记录 SHALL 通过相同的 request_id 关联，且彼此保持独立"
+          - "每条记录 SHALL 是合法的单行 JSON 对象（JSON Lines 格式，一行一条）"
+
+  - id: REQ-002
+    description: >
+      每条审计记录包含完整字段集：request_id / timestamp / direction / user_id /
+      model / provider / content_hash / content_length / language / detectors /
+      final_action / final_risk_level / pipeline_duration_ms / total_duration_ms /
+      streaming。（来源：DESIGN.md Section 12.1 字段定义表）
+    scenarios:
+      - id: SC-002
+        confidence: high
+        evidence: "DESIGN.md 12.1 'Field definitions' 表格及 JSON 示例"
+        given: >
+          一个 input 方向、非流式（streaming=false）的请求完成检测，
+          request_id="req_abc123"，user_id="user_001"，model="gpt-4"，
+          provider="openai"，检测语言为 "en"，内容长度 1250 字符
+        when: >
+          AuditLogger 构造并写入该请求的 input 审计记录
+        then: >
+          审计记录 SHALL 包含以下全部字段并具有对应值：request_id="req_abc123"、
+          direction="input"、user_id="user_001"、model="gpt-4"、provider="openai"、
+          content_length=1250、language="en"、streaming=false
+        and:
+          - "记录 SHALL 包含 timestamp 字段，为 ISO 8601 UTC 时间戳（格式形如 '2026-08-10T12:00:00.000Z'）"
+          - "记录 SHALL 包含 content_hash 字段，为 SHA-256 哈希值"
+          - "记录 SHALL 包含 detectors 数组、final_action、final_risk_level、pipeline_duration_ms、total_duration_ms 字段"
+          - "所有字段名 SHALL 与 DESIGN.md Section 12.1 定义完全一致（snake_case）"
+
+  - id: REQ-003
+    description: >
+      审计记录的 detectors 数组为检测器结果数组，每个元素包含 name / action /
+      confidence / risk_level / duration_ms / error 六个字段，逐条记录每个启用
+      检测器的执行结果。（来源：DESIGN.md Section 12.1 JSON 示例；proposal.yaml
+      success_criteria '审计日志包含所有检测器结果'）
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "DESIGN.md 12.1 detectors 数组示例；proposal.yaml success_criteria"
+        given: >
+          一次 output 检测运行了 prompt_injection 与 pii_redaction 两个检测器，
+          prompt_injection 结果 action="block"、confidence=0.92、
+          risk_level="critical"、duration_ms=15；pii_redaction 结果 action="flag"、
+          confidence=0.60、risk_level="medium"、duration_ms=8，均无错误
+        when: >
+          AuditLogger 写入该 output 审计记录
+        then: >
+          detectors 数组 SHALL 包含两个元素，其顺序与执行结果一一对应
+        and:
+          - "第一个元素 SHALL 为 name='prompt_injection'、action='block'、confidence=0.92、risk_level='critical'、duration_ms=15、error=null"
+          - "第二个元素 SHALL 为 name='pii_redaction'、action='flag'、confidence=0.60、risk_level='medium'、duration_ms=8、error=null"
+          - "当检测器执行抛出异常时，其对应元素 SHALL 记录 error 为错误信息（非 null），其余字段按实际结果填充"
+
+  - id: REQ-004
+    description: >
+      流式审计记录（streaming=true）额外包含流式特定字段：streaming /
+      window_count / post_audit（executed / result / category / risk_level）/
+      post_audit_truncated / recalled / recall_method。（来源：DESIGN.md
+      Section 12.1 流式字段表；proposal.yaml C13）
+    scenarios:
+      - id: SC-004
+        confidence: high
+        evidence: "DESIGN.md 12.1 'Streaming-specific fields' JSON 及字段表；proposal.yaml C13"
+        given: >
+          一个 stream=true 的请求完成流式输出，执行了 12 次滑动窗口检测，
+          后审计执行并发现 toxicity 风险（result="block"、risk_level="critical"），
+          通过 SSE 发送召回信号，未被截断
+        when: >
+          AuditLogger 写入该流式请求的 output 审计记录
+        then: >
+          审计记录 SHALL 包含 streaming=true、window_count=12、
+          post_audit_truncated=false、recalled=true、recall_method="sse"
+        and:
+          - "post_audit SHALL 为对象，包含 executed=true、result='block'、category='toxicity'、risk_level='critical'"
+          - "当 post-audit 被禁用或跳过（如 buffer 模式）时，post_audit SHALL 记录为 {'executed': false}，且不要求 result/category/risk_level 字段"
+          - "流式特定字段 SHALL 仅在 streaming=true 的记录中出现；非流式（streaming=false）记录 SHALL 不包含 window_count 等流式字段"
+
+  - id: REQ-005
+    description: >
+      content_hash（SHA-256）始终存储在审计记录中，无论 store_content 配置为何值。
+      它是用于追踪内容而不存储明文的基线字段。（来源：DESIGN.md Section 12.2
+      'content_hash: Always stored'；proposal.yaml C10）
+    scenarios:
+      - id: SC-005
+        confidence: high
+        evidence: "DESIGN.md 12.2 'content_hash | Always stored'；proposal.yaml C10"
+        given: >
+          一个请求内容为 "hello world"，store_content 配置为 false（默认），
+          audit.enabled 为 true
+        when: >
+          AuditLogger 写入该请求的审计记录
+        then: >
+          审计记录 SHALL 始终包含 content_hash 字段
+        and:
+          - "content_hash SHALL 为对原始请求/响应内容计算得到的 SHA-256 十六进制哈希，前缀为 'sha256:'（形如 'sha256:...'）"
+          - "content_hash 的生成 SHALL 不依赖 store_content 配置，无论 true 或 false 均 SHALL 存在且一致"
+          - "对于流式请求，content_hash SHALL 为完整累积流式响应的 SHA-256 哈希"
+
+  - id: REQ-006
+    description: >
+      store_content 配置控制是否存储明文内容：store_content=true 时存储明文，
+      store_content=false（默认）时仅存储 content_hash，不存储明文内容以保护隐私
+      并降低存储成本。（来源：DESIGN.md Section 12.2；proposal.yaml C10）
+    scenarios:
+      - id: SC-006a
+        confidence: high
+        evidence: "DESIGN.md 12.2 'store_content | false'；proposal.yaml C10"
+        given: >
+          audit.store_content 配置为 false（默认值），一个 input 请求内容为 "my secret prompt"
+        when: >
+          AuditLogger 写入该请求的 input 审计记录
+        then: >
+          审计记录 SHALL 不包含任何明文内容字段（不含原请求内容）
+        and:
+          - '审计记录 SHALL 仍包含 content_hash，其值为「my secret prompt」的 SHA-256 哈希'
+          - '审计日志文件与 stdout 输出中 SHALL 均不出现明文「my secret prompt」'
+      - id: SC-006b
+        confidence: high
+        evidence: "DESIGN.md 12.2 'store_content'；proposal.yaml C10"
+        given: >
+          audit.store_content 配置为 true，一个 output 请求的响应内容为 "hello from model"
+        when: >
+          AuditLogger 写入该请求的 output 审计记录
+        then: >
+          审计记录 SHALL 存储明文内容字段，其值为 "hello from model"
+        and:
+          - "审计记录 SHALL 同时包含 content_hash，其值为该明文内容的 SHA-256 哈希"
+
+  - id: REQ-007
+    description: >
+      审计日志支持两个输出通道：JSONL 文件（使用 TimedRotatingFileHandler 每日轮换，
+      可配置路径与保留天数）和 stdout（结构化 JSON，供 Fluentd/Vector/Filebeat 等
+      外部采集器收集）。（来源：DESIGN.md Section 12.3；design 决策 9；proposal.yaml C11）
+    scenarios:
+      - id: SC-007a
+        confidence: high
+        evidence: "DESIGN.md 12.3 'JSONL file'；proposal.yaml C11；decision 9"
+        given: >
+          audit.file.enabled=true、audit.file.path="/var/log/safety-gateway"、
+          audit.file.rotation="daily"、audit.file.retention_days=90，一条审计记录产生
+        when: >
+          AuditLogger 写入该审计记录
+        then: >
+          AuditLogger SHALL 将记录以 JSON Lines 单行形式追加写入配置路径下的 JSONL 文件
+        and:
+          - "日志文件 SHALL 使用 TimedRotatingFileHandler 按天（daily）轮换，而非无限增长"
+          - "轮换产生的历史文件 SHALL 最多保留 90 天（retention_days），超期文件 SHALL 被清理"
+      - id: SC-007b
+        confidence: high
+        evidence: "DESIGN.md 12.3 'stdout'；proposal.yaml C11；decision 9"
+        given: >
+          audit.stdout=true，一条审计记录产生
+        when: >
+          AuditLogger 写入该审计记录
+        then: >
+          AuditLogger SHALL 同时以结构化 JSON 形式将该记录输出到 stdout
+        and:
+          - "stdout 输出 SHALL 为合法单行 JSON，字段与 JSONL 文件记录一致"
+          - "当 audit.stdout=false 时，AuditLogger SHALL 不向 stdout 输出审计记录，但仍按 file.enabled 写入文件"
+
+  - id: REQ-008
+    description: >
+      日志脱敏：sanitize_logs（默认 true）时，审计日志 redact API Key、Authorization
+      头等敏感信息，作为安全网避免凭据泄露。（来源：design 决策 9；DESIGN.md
+      Section 12 前文 'sanitize_logs'；proposal.yaml C12）
+    scenarios:
+      - id: SC-008a
+        confidence: high
+        evidence: "design 决策 9 'sanitize_logs'；proposal.yaml C12；DESIGN.md 2093 行"
+        given: >
+          audit.sanitize_logs=true（默认），一个请求的 Authorization 头携带
+          "Bearer sk-abc123secretkey"，store_content=true
+        when: >
+          AuditLogger 写入该请求的审计记录
+        then: >
+          审计记录 SHALL 不包含明文 "sk-abc123secretkey"，该敏感值 SHALL 被脱敏处理
+        and:
+          - "Authorization 头、Bearer token、API Key 等已知敏感模式 SHALL 在写入日志前被 redact"
+          - "脱敏替换值 SHALL 为统一占位符（如 'REDACTED' 或等长掩码），不泄露原文长度以外的任何信息"
+      - id: SC-008b
+        confidence: high
+        evidence: "design 决策 9 'sanitize_logs 默认 true'；proposal.yaml C12"
+        given: >
+          audit.sanitize_logs=false（显式关闭），一个请求的 Authorization 头携带
+          "Bearer sk-abc123secretkey"，store_content=true
+        when: >
+          AuditLogger 写入该请求的审计记录
+        then: >
+          审计记录 SHALL 原样保留请求内容中的敏感值（不执行脱敏）
+        and:
+          - "sanitize_logs 默认值 SHALL 为 true，未显式配置时 SHALL 启用脱敏"
+
+  - id: REQ-009
+    description: >
+      审计日志异步写入：通过 asyncio.create_task 异步执行，写入失败时仅记录 warning，
+      不阻塞请求流，不影响请求处理结果。（来源：design 决策 12；proposal.yaml risk
+      mitigation '审计日志写入失败影响请求处理'）
+    scenarios:
+      - id: SC-009a
+        confidence: high
+        evidence: "design 决策 12 '审计日志异步写入'；proposal.yaml risk_areas 缓解措施"
+        given: >
+          一个正常请求完成，audit.enabled=true
+        when: >
+          AuditLogger 写入该请求的审计记录
+        then: >
+          审计日志写入 SHALL 通过异步任务（asyncio.create_task）执行，不阻塞请求处理主流程
+        and:
+          - "请求处理 SHALL 在审计写入完成前即返回响应，审计写入与请求响应解耦"
+          - "审计写入 SHALL 不增加请求的端到端延迟"
+      - id: SC-009b
+        confidence: high
+        evidence: "design 决策 12 '写入失败捕获异常记录 warning'；proposal.yaml risk_areas"
+        given: >
+          审计日志文件系统不可写或目标路径无权限，导致异步写入抛异常
+        when: >
+          AuditLogger 异步写入审计记录
+        then: >
+          AuditLogger SHALL 捕获写入异常并记录一条 warning 日志
+        and:
+          - "请求处理结果 SHALL 不受影响，请求 SHALL 正常成功返回，不被审计写入失败阻断"
+          - "审计写入失败 SHALL 不会被抛出到请求处理层或导致请求返回 5xx"
+
+  - id: REQ-010
+    description: >
+      audit.enabled 配置控制审计开关：enabled=false 时不写入任何审计日志（文件与
+      stdout 均不输出）。（来源：DESIGN.md 配置示例 'audit.enabled'；proposal.yaml C15）
+    scenarios:
+      - id: SC-010a
+        confidence: high
+        evidence: "DESIGN.md 1939-1948 配置示例 'audit.enabled: true'；proposal.yaml C15"
+        given: >
+          audit.enabled=true，一个请求完成 input 与 output 检测
+        when: >
+          AuditLogger 处理该请求
+        then: >
+          AuditLogger SHALL 为 input 和 output 各写入一条审计记录
+        and:
+          - "文件通道与 stdout 通道均 SHALL 输出审计记录"
+      - id: SC-010b
+        confidence: high
+        evidence: "DESIGN.md 配置示例 'audit.enabled'；proposal.yaml C15"
+        given: >
+          audit.enabled=false，一个请求完成 input 与 output 检测
+        when: >
+          AuditLogger 处理该请求
+        then: >
+          AuditLogger SHALL 不写入任何审计记录
+        and:
+          - "JSONL 文件通道 SHALL 不追加任何记录"
+          - "stdout 通道 SHALL 不输出任何审计记录"
+          - "请求处理流程本身 SHALL 不受影响，仍正常完成检测与转发"

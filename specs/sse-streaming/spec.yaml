@@ -1,0 +1,233 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: sse-streaming
+# Change: 2026-08-12-v0.3.0-streaming-audit
+
+meta:
+  capability: "sse-streaming"
+  change_id: "2026-08-12-v0.3.0-streaming-audit"
+  created: "2026-08-12T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-001
+    description: "stream=true 请求通过 StreamingResponse 透明转发 Provider SSE chunks"
+    scenarios:
+      - id: SC-001
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C1, C16; design.md -> Decision 1; DESIGN.md -> Section 8.1"
+        given: "a POST request to /v1/chat/completions with stream=true and a provider that returns SSE streaming chunks"
+        when: "the chat_completions handler processes the request through the stream=true branch"
+        then: "the handler SHALL return a StreamingResponse that forwards provider SSE chunks to the client in order"
+        and:
+          - "each data: {chunk} event SHALL be forwarded transparently without modification"
+          - "the stream SHALL end with data: [DONE]"
+          - "the input pipeline SHALL still run before streaming starts"
+          - "the handler SHALL use httpx.AsyncClient.stream() to receive provider chunks asynchronously"
+      - id: SC-002
+        confidence: high
+        evidence: "proposal.yaml -> constraints (仅支持 SSE); design.md -> Decision 1 备选 B; DESIGN.md -> Section 8.1"
+        given: "a stream=true request is being processed and the provider connection is established"
+        when: "the gateway receives chunks from the provider"
+        then: "the gateway SHALL preserve the order of chunks as received from the provider"
+        and:
+          - "the response SHALL be delivered over SSE (Server-Sent Events), not WebSocket"
+          - "no content chunk SHALL be dropped or reordered during transparent forwarding"
+
+  - id: REQ-002
+    description: "滑动窗口检测——字符级累积，window_size（默认 200）满时触发窗口检测，overlap（默认 50）重叠"
+    scenarios:
+      - id: SC-003
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C2; design.md -> Decision 2; DESIGN.md -> Section 8.2"
+        given: "streaming.mode is sliding_window with window_size=200 and overlap=50 and an output detector is configured"
+        when: "the gateway accumulates token text from provider chunks"
+        then: "the gateway SHALL accumulate characters until the buffer reaches window_size (default 200 characters)"
+        and:
+          - "when the buffer reaches window_size, the gateway SHALL trigger one window detection run"
+          - "after detection, the window SHALL slide forward by (window_size - overlap) characters, retaining the last overlap (50) characters for the next window"
+          - "the window unit SHALL be character-based, not tokenizer-based"
+      - id: SC-004
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C2; design.md -> Decision 2; DESIGN.md -> Section 8.2 (overlap purpose)"
+        given: "a sensitive phrase spans a window boundary (split across two consecutive windows)"
+        when: "the sliding window advances with overlap=50"
+        then: "the overlap SHALL retain the trailing 50 characters so that the next window includes the boundary content"
+        and:
+          - "the cross-boundary content SHALL therefore be present in the next window's detection"
+      - id: SC-005
+        confidence: medium
+        evidence: "proposal.yaml -> constraints (字符级计数); design.md -> Decision 2; DESIGN.md -> Section 8.2 (v1.1+ tokenizer), 8.3 (post-audit)"
+        given: "the total streamed content is less than window_size (e.g., 100 characters) and the stream completes"
+        when: "the stream reaches data: [DONE]"
+        then: "the final partial buffer (shorter than window_size) SHALL NOT trigger an additional synchronous window detection"
+        and:
+          - "if post_audit is enabled (default), the trailing partial content SHALL be covered by the background post-audit on the full accumulated response"
+          - "if post_audit is disabled, the gateway SHALL record in the audit log that the trailing partial content was not window-detected (partial_coverage: true)"
+          - "the data: [DONE] SHALL be sent without waiting for any synchronous detection of the partial buffer"
+          - "no window SHALL be triggered until the buffer accumulates window_size characters"
+
+  - id: REQ-003
+    description: "窗口检测 block 时立即停止转发，发送 safety_block SSE 事件 + data: [DONE]"
+    scenarios:
+      - id: SC-006
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C3, success_criteria; design.md -> Decision 3; DESIGN.md -> Section 8.2 table"
+        given: "a window detection returns action=block with a toxicity detector at high risk_level"
+        when: "the gateway evaluates the window result"
+        then: "the gateway SHALL immediately stop forwarding further provider chunks to the client"
+        and:
+          - "the gateway SHALL send a safety_block SSE event with fields blocked_by, category, risk_level, confidence, and reason"
+          - "the gateway SHALL send data: [DONE] after the safety_block event"
+          - "no further content chunks SHALL be forwarded after the block decision"
+          - "the final_action SHALL be recorded as block in the audit log"
+      - id: SC-007
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C3; DESIGN.md -> Section 8.2 (block prevents harmful content)"
+        given: "a block decision occurs at window N and the provider continues to send chunks for windows N+1"
+        when: "the gateway has emitted safety_block and [DONE]"
+        then: "the gateway SHALL terminate the generator and stop consuming further provider chunks"
+        and:
+          - "the client SHALL not receive any content chunks after the block event"
+
+  - id: REQ-004
+    description: "窗口检测 flag 时继续流式，send_flag_events=true 时发送 safety_flag SSE 事件（每窗口一条，多检测器聚合为最高 risk_level + 逗号分隔 flagged_by）"
+    scenarios:
+      - id: SC-008
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C3, success_criteria; design.md -> Decision 3; DESIGN.md -> Section 8.2, 4.3"
+        given: "a window detection returns action=flag from a single detector (pii_redaction) and send_flag_events=true"
+        when: "the gateway evaluates the window result"
+        then: "the gateway SHALL continue streaming the window content to the client"
+        and:
+          - "the gateway SHALL send one safety_flag SSE event for that window with flagged_by=pii_redaction"
+          - "the gateway SHALL record the flag in the audit log"
+      - id: SC-009
+        confidence: high
+        evidence: "proposal.yaml -> success_criteria; design.md -> Decision 3; DESIGN.md -> Section 8.2 (event granularity)"
+        given: "two detectors (pii_redaction, toxicity) both return flag for the same window with risk_levels medium and high respectively, and send_flag_events=true"
+        when: "the gateway aggregates the window results into a safety_flag event"
+        then: "the gateway SHALL emit exactly one safety_flag event for the window"
+        and:
+          - "flagged_by SHALL be a comma-separated list, e.g., \"pii_redaction,toxicity\""
+          - "risk_level SHALL reflect the highest value among flagging detectors (high)"
+          - "the stream SHALL continue normally after emitting the safety_flag event"
+      - id: SC-010
+        confidence: medium
+        evidence: "proposal.yaml -> what_changes C3; design.md -> Decision 3; DESIGN.md -> Section 4.3 (send_flag_events default off)"
+        given: "a window detection returns action=flag and send_flag_events=false (default)"
+        when: "the gateway evaluates the window result"
+        then: "the gateway SHALL continue streaming without emitting a safety_flag SSE event"
+        and:
+          - "the flag SHALL still be recorded in the audit log"
+
+  - id: REQ-005
+    description: "窗口检测 modify 降级为 flag（tokens 已转发），审计记录 action: modify, applied: false"
+    scenarios:
+      - id: SC-011
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C3, success_criteria; design.md -> Decision 3; DESIGN.md -> Section 8.2 (modify note)"
+        given: "a window detection returns action=modify from an output detector and the window tokens have already been forwarded to the client"
+        when: "the gateway processes the modify action in sliding_window mode"
+        then: "the gateway SHALL downgrade the modify action to flag"
+        and:
+          - "the gateway SHALL continue streaming (no modification is applied to the already-sent tokens)"
+          - "the audit log SHALL record action=modify and applied=false"
+          - "if send_flag_events=true, the gateway SHALL emit a safety_flag event for that window"
+
+  - id: REQ-006
+    description: "buffer 模式——缓冲完整 Provider 响应后执行检测，再以 SSE chunks 回放给客户端"
+    scenarios:
+      - id: SC-012
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C7, constraints (buffer 模式 post-audit 自动跳过); design.md -> Decision 7; DESIGN.md -> Section 8.2 (buffer mode)"
+        given: "streaming.mode is buffer and a provider returns a complete SSE response"
+        when: "the gateway buffers the entire provider response and runs detection once"
+        then: "the gateway SHALL buffer the full response before sending any content chunk to the client"
+        and:
+          - "after detection passes (allow), the gateway SHALL replay the original SSE chunks to the client in order, preserving the SSE protocol contract (data: {chunk} ... data: [DONE])"
+          - "post-audit SHALL be automatically skipped, recording post_audit.executed=false with reason=buffer_mode"
+      - id: SC-013
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C7; design.md -> Decision 7; DESIGN.md -> Section 8.2 (buffer block)"
+        given: "streaming.mode is buffer and the buffered response is detected as block"
+        when: "the gateway runs detection on the buffered response"
+        then: "the gateway SHALL not send any content chunks to the client"
+        and:
+          - "the gateway SHALL send a safety_block SSE event followed by data: [DONE]"
+
+  - id: REQ-007
+    description: "max_response_size 限制（默认 1MB），on_max_size block（safety_block + [DONE], blocked_by: streaming_limit, category: response_too_long, risk_level: medium, confidence: 1.0）或 truncate（停止累积继续流式）"
+    scenarios:
+      - id: SC-014
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C4, success_criteria; design.md -> Decision 4; DESIGN.md -> Section 8.5"
+        given: "streaming config has max_response_size=1MB and on_max_size=block"
+        when: "the accumulated response size exceeds max_response_size"
+        then: "the gateway SHALL stop streaming and send a safety_block SSE event"
+        and:
+          - "the safety_block event SHALL include blocked_by=streaming_limit, category=response_too_long, risk_level=medium, confidence=1.0, and a reason referencing the size limit"
+          - "the gateway SHALL send data: [DONE] after the safety_block event"
+          - "no further content chunks SHALL be forwarded"
+      - id: SC-015
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C4; design.md -> Decision 4; DESIGN.md -> Section 8.5 (truncate)"
+        given: "streaming config has on_max_size=truncate"
+        when: "the accumulated response size exceeds max_response_size"
+        then: "the gateway SHALL stop accumulating additional content but continue streaming provider chunks to the client"
+        and:
+          - "the audit log SHALL record post_audit_truncated=true"
+          - "post-audit SHALL run on the truncated accumulated content"
+      - id: SC-016
+        confidence: medium
+        evidence: "design.md -> Decision 4; DESIGN.md -> Section 8.5 (size estimation)"
+        given: "responses contain UTF-8 Chinese characters"
+        when: "the gateway estimates the accumulated response size for max_response_size comparison"
+        then: "the gateway SHALL account for UTF-8 encoding (e.g., 3 bytes per Chinese character) when comparing to the byte-based limit"
+
+  - id: REQ-008
+    description: "检测器在流式中并行执行，任一 block 时短路（复用 PipelineEngine）"
+    scenarios:
+      - id: SC-017
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C2, risk_areas mitigation; design.md -> Decision 2, Decision 5; DESIGN.md -> Section 8.2"
+        given: "a window is full and multiple output detectors are enabled"
+        when: "the gateway runs window detection via the PipelineEngine"
+        then: "the gateway SHALL execute all output detectors for the window in parallel"
+        and:
+          - "if any detector returns block, the gateway SHALL short-circuit and immediately apply the block decision"
+          - "the window result SHALL be aggregated into a single final action"
+      - id: SC-018
+        confidence: medium
+        evidence: "proposal.yaml -> what_changes C2; design.md -> Risk (流式延迟) mitigation"
+        given: "the PipelineEngine is reused for both sliding-window and post-audit detection"
+        when: "the gateway invokes detection for a window"
+        then: "the gateway SHALL reuse the existing PipelineEngine rather than implementing duplicate detection logic"
+        and:
+          - "the detection result SHALL include per-detector action, confidence, risk_level, and duration"
+
+  - id: REQ-009
+    description: "SSE 事件格式——OpenAI 标准 data: {chunk} 事件 + 自定义 safety_block/safety_flag 事件 + data: [DONE]"
+    scenarios:
+      - id: SC-019
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C1, C3; design.md -> Decision 3; DESIGN.md -> Section 4.3, 8.1"
+        given: "a streaming request completes safely with no risk detected"
+        when: "the gateway forwards the provider stream to the client"
+        then: "the client SHALL receive standard OpenAI SSE events: data: {chunk} for each token and a final data: [DONE]"
+        and:
+          - "no custom safety event SHALL be injected when no risk is detected"
+      - id: SC-020
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C3; DESIGN.md -> Section 4.3 (event types)"
+        given: "a mid-stream block decision occurs and send_flag_events=true with a flag decision also occurring"
+        when: "the gateway emits safety events"
+        then: "the gateway SHALL use event: safety_block and event: safety_flag for the custom safety events, each followed by an associated data payload"
+        and:
+          - "the safety_block and safety_flag data payloads SHALL be valid JSON containing request_id and risk fields"
+          - "the stream SHALL always terminate with data: [DONE] regardless of whether it completed normally or was blocked"
+      - id: SC-021
+        confidence: medium
+        evidence: "DESIGN.md -> Section 4.3 (safety_flag format)"
+        given: "send_flag_events=true and a single detector flags a window"
+        when: "the gateway emits a safety_flag event"
+        then: "the safety_flag data payload SHALL contain flagged_by, category, risk_level, confidence, and message fields"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -112,3 +113,57 @@ class BaseProvider(abc.ABC):
     ) -> httpx.Response:
         """Forward a request to the provider's API endpoint."""
         ...
+
+    # ------------------------------------------------------------------ #
+    # Streaming support (v0.3.0)
+    # ------------------------------------------------------------------ #
+
+    async def stream_forward(
+        self, request: dict[str, Any], headers: dict[str, str]
+    ) -> AsyncIterator[str]:
+        """Forward *request* to the provider and yield SSE chunks as they stream.
+
+        Uses ``httpx.AsyncClient.stream()`` so the provider's streaming
+        response is received incrementally.  Yields each raw SSE chunk text.
+        Provider errors (HTTP >= 400) are wrapped as :class:`ProviderError`.
+        """
+        url = self._build_url()
+        merged_headers = self._build_headers(headers)
+        params = self._build_params()
+
+        try:
+            async with (
+                httpx.AsyncClient(timeout=self.timeout) as client,
+                client.stream(
+                    "POST",
+                    url,
+                    json=request,
+                    headers=merged_headers,
+                    params=params,
+                ) as response,
+            ):
+                if response.status_code >= 400:
+                    retry_after = response.headers.get("Retry-After")
+                    raise ProviderError(
+                        provider_name=self.config.name,
+                        message=(
+                            f"Provider '{self.config.name}' returned "
+                            f"HTTP {response.status_code}"
+                        ),
+                        status_code=response.status_code,
+                        retry_after=retry_after,
+                    )
+                async for chunk in response.aiter_text():
+                    yield chunk
+        except ProviderError:
+            raise
+        except httpx.TimeoutException:
+            raise ProviderError(
+                provider_name=self.config.name,
+                message=f"Provider '{self.config.name}' timeout after {self.timeout}s",
+            ) from None
+        except httpx.HTTPError:
+            raise ProviderError(
+                provider_name=self.config.name,
+                message=f"Network error connecting to provider '{self.config.name}'",
+            ) from None
