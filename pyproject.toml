@@ -44,9 +44,14 @@ otel = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
 ]
+grpc = [
+    "grpcio>=1.60",
+    "protobuf>=4.25",
+]
 
 [project.scripts]
 z-safety-gateway = "z_llm_safety_gateway.__main__:main"
+zlg = "z_llm_safety_gateway.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/z_llm_safety_gateway"]
@@ -67,6 +72,13 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["z_llm_safety_gateway"]
+
+[tool.ruff.lint.per-file-ignores]
+# Auto-generated protobuf/gRPC code — do not lint.
+"src/z_llm_safety_gateway/plugins/grpc/proto/**" = ["E501", "N802", "N803", "N806", "N815", "N816", "A", "SIM", "UP", "B", "E741"]
+# gRPC servicer test classes: method names must match the proto contract (PascalCase).
+"tests/unit/plugins/grpc/test_client.py" = ["N802"]
+"tests/integration/test_v5_plugin_app.py" = ["N802"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -93,4 +105,18 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "opentelemetry.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Auto-generated protobuf/gRPC code.
+module = "z_llm_safety_gateway.plugins.grpc.proto.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# grpcio / protobuf are optional dependencies; stubs installed via [grpc] extras.
+module = "grpc.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "google.protobuf.*"
 ignore_missing_imports = true

@@ -1,0 +1,45 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: detector-framework
+# 类型：修改类（v0.5.0 增量：registry 扩展 entry points 注册）
+
+meta:
+  capability: detector-framework
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  created: "2026-08-14T10:30:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-DF-501
+    description: "DetectorRegistry 支持 register_from_entry_points 方法"
+    scenarios:
+      - id: SC-DF-501
+        confidence: high
+        evidence: "proposal C1; DESIGN 7.2.2"
+        given: "DetectorRegistry 实例，环境存在已安装插件的 entry points"
+        when: "registry.register_from_entry_points(group='z_llm_safety_gateway.detectors') 被调用"
+        then: "DetectorRegistry SHALL 发现并注册全部 entry point 检测器类"
+        and:
+          - "已存在的同名注册 SHALL 不被覆盖（内置优先）"
+          - "注册后 list() SHALL 包含新插件名称"
+  - id: REQ-DF-502
+    description: "create_default_registry 返回的 registry 已包含插件发现（通过 app 初始化路径注入）"
+    scenarios:
+      - id: SC-DF-502
+        confidence: high
+        evidence: "proposal C1; design Architecture"
+        given: "网关通过 create_app 启动"
+        when: "初始化默认 registry 后加载插件"
+        then: "内置检测器 SHALL 全部注册，且 SHALL 尝试发现并注册 entry point 插件"
+        and:
+          - "插件发现失败 SHALL 不影响内置检测器（日志记录）"
+  - id: REQ-DF-503
+    description: "GRPCDetector 通过 DetectorRegistry 创建路径（type=grpc 配置映射到 GRPCDetector）"
+    scenarios:
+      - id: SC-DF-503
+        confidence: high
+        evidence: "proposal C2/C4; DESIGN 7.3"
+        given: "config 中检测器 type=grpc 且 endpoint 已配置"
+        when: "初始化该检测器"
+        then: "SHALL 创建 GRPCDetector 实例并通过其 initialize() 完成侧车握手"
+        and:
+          - "GRPCDetector SHALL 满足 Detector 接口（可被 pipeline 引擎直接调用）"

@@ -1,193 +1,245 @@
 meta:
-  capability: "config-system"
-  change_id: "2026-08-12-v0.3.0-streaming-audit"
-  created: "2026-08-12T10:00:00+08:00"
+  capability: config-system
+  change_id: 2026-08-12-v0.3.0-streaming-audit
+  created: '2026-08-12T10:00:00+08:00'
   confidence: high
-
 requirements:
-  - id: REQ-001
-    description: "PipelineConfig gains a streaming config block with mode/window_size/overlap/send_flag_events/max_response_size/on_max_size/post_audit/recall"
-    scenarios:
-      - id: SC-001
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C14; design.md -> Decision 10; DESIGN.md -> Section 8.2 and 10.2"
-        given: "a YAML config file with pipeline.streaming containing mode: sliding_window, window_size: 200, overlap: 50, send_flag_events: false, max_response_size: 1MB, on_max_size: block, post_audit: true, recall.method: sse"
-        when: "the config is validated through the GatewayConfig Pydantic v2 model"
-        then: "the model SHALL parse pipeline.streaming into a StreamingConfig instance with all fields"
-        and:
-          - "streaming.mode SHALL default to 'sliding_window' when not specified"
-          - "streaming.mode SHALL accept 'sliding_window' or 'buffer' as valid values"
-          - "window_size SHALL default to 200 and overlap to 50 when not specified"
-          - "max_response_size SHALL accept duration/size strings like '1MB'"
-          - "on_max_size SHALL accept 'block' or 'truncate' as valid values"
-          - "post_audit SHALL default to true when not specified"
-          - "recall.method SHALL accept 'sse', 'webhook', or 'both' as valid values"
-          - "when not specified, pipeline.streaming SHALL default to a valid StreamingConfig with all defaults"
-
-      - id: SC-002
-        confidence: high
-        evidence: "design.md -> Decision 10; DESIGN.md -> Section 8.2"
-        given: "a PipelineConfig with streaming.mode set to an invalid value 'tokenizer'"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the model SHALL raise a validation error indicating that streaming.mode must be 'sliding_window' or 'buffer'"
-        and:
-          - "the error SHALL prevent the gateway from starting"
-
-      - id: SC-003
-        confidence: medium
-        evidence: "design.md -> Decision 10; DESIGN.md -> Section 8.5"
-        given: "a PipelineConfig with streaming.on_max_size set to an invalid value 'stop'"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the model SHALL raise a validation error indicating that on_max_size must be 'block' or 'truncate'"
-        and:
-          - "the error SHALL prevent the gateway from starting"
-
-  - id: REQ-002
-    description: "PipelineConfig gains output_detection config block for async/sync mode with recall webhook settings"
-    scenarios:
-      - id: SC-004
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C14; design.md -> Decision 8; DESIGN.md -> Section 3.5"
-        given: "a YAML config file with pipeline.output_detection containing mode: async, sync_timeout: 5s, recall.webhook_url and recall.webhook_auth_header"
-        when: "the config is validated through the GatewayConfig Pydantic v2 model"
-        then: "the model SHALL parse pipeline.output_detection into an OutputDetectionConfig instance"
-        and:
-          - "output_detection.mode SHALL default to 'sync' when not specified"
-          - "output_detection.mode SHALL accept 'sync' or 'async' as valid values"
-          - "sync_timeout SHALL be accepted as a duration string"
-          - "recall.webhook_url SHALL be a string that may be empty"
-          - "recall.webhook_auth_header SHALL be an optional string that may be empty"
-
-      - id: SC-005
-        confidence: high
-        evidence: "DESIGN.md -> Section 3.5; design.md -> Decision 8"
-        given: "an OutputDetectionConfig with mode set to 'async'"
-        when: "the config is validated"
-        then: "the model SHALL accept the configuration only if recall.webhook_url is non-empty for async mode"
-        and:
-          - "if mode is async and webhook_url is empty, a validation error SHALL be raised"
-          - "if mode is sync, webhook_url MAY be empty"
-          - "the error SHALL prevent the gateway from starting when async mode lacks webhook_url"
-
-      - id: SC-006
-        confidence: high
-        evidence: "DESIGN.md -> Section 3.5; design.md -> Decision 8"
-        given: "a PipelineConfig with output_detection.mode set to an invalid value 'offline'"
-        when: "the config is validated through the Pydantic v2 model"
-        then: "the model SHALL raise a validation error indicating that output_detection.mode must be 'sync' or 'async'"
-        and:
-          - "the error SHALL prevent the gateway from starting"
-
-  - id: REQ-003
-    description: "AuditConfig extended with store_content, file (enabled/path/rotation/retention_days), and stdout fields"
-    scenarios:
-      - id: SC-007
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C15; design.md -> Decision 9; DESIGN.md -> Section 12.2 and 12.3"
-        given: "a YAML config file with audit containing enabled: true, store_content: false, sanitize_logs: true, file.enabled: true, file.path: /var/log/safety-gateway, file.rotation: daily, file.retention_days: 90, stdout: true"
-        when: "the config is validated through the GatewayConfig Pydantic v2 model"
-        then: "the model SHALL parse the audit section into an extended AuditConfig instance"
-        and:
-          - "store_content SHALL default to false when not specified"
-          - "audit.file SHALL be an optional FileConfig with enabled/path/rotation/retention_days fields"
-          - "audit.file.rotation SHALL default to 'daily' when not specified"
-          - "audit.file.retention_days SHALL default to 90 when not specified"
-          - "audit.stdout SHALL default to true when not specified"
-          - "the existing audit.enabled and audit.sanitize_logs fields SHALL remain valid"
-
-      - id: SC-008
-        confidence: medium
-        evidence: "design.md -> Decision 9; DESIGN.md -> Section 12.3"
-        given: "an AuditConfig with file.rotation set to an invalid value 'hourly'"
-        when: "the config is validated"
-        then: "the model SHALL accept the value as a string (rotation format is validated by the logging handler)"
-        and:
-          - "no startup error SHALL be raised for rotation value"
-
-  - id: REQ-004
-    description: "New LoggingConfig added with level and format fields"
-    scenarios:
-      - id: SC-009
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C15; design.md -> Decision 9; DESIGN.md -> Section 10.2 (logging section)"
-        given: "a YAML config file with a logging section containing level: INFO and format: json"
-        when: "the config is validated through the GatewayConfig Pydantic v2 model"
-        then: "the model SHALL parse the logging section into a LoggingConfig instance"
-        and:
-          - "logging.level SHALL default to 'INFO' when not specified"
-          - "logging.level SHALL accept DEBUG/INFO/WARNING/ERROR"
-          - "logging.format SHALL default to 'json' when not specified"
-          - "logging.format SHALL accept 'json' or 'text' as valid values"
-          - "when the logging section is absent, the config SHALL use default LoggingConfig"
-
-  - id: REQ-005
-    description: "All new v0.3.0 config fields have defaults preserving v0.2.0 backward compatibility"
-    scenarios:
-      - id: SC-010
-        confidence: high
-        evidence: "proposal.yaml -> risk_areas (config-system); design.md -> Decision 10"
-        given: "a v0.2.0-style YAML config file with pipeline (no streaming/output_detection blocks), audit.enabled/sanitize_logs only, and no logging section"
-        when: "the config is loaded and validated through the GatewayConfig Pydantic v2 model"
-        then: "the model SHALL accept the configuration without error"
-        and:
-          - "pipeline.streaming SHALL default to a valid StreamingConfig"
-          - "pipeline.output_detection SHALL default to a valid OutputDetectionConfig with mode sync"
-          - "audit.file and audit.stdout SHALL use defaults"
-          - "logging SHALL use default LoggingConfig"
-          - "no deprecation warning SHALL be emitted for the old config"
-  - id: REQ-CFG-001
-    description: "SecurityConfig 拆分为类型化子模型（Auth/TLS/RateLimit/CORS/RequestID/Timeout），补 max_request_size，统一时长解析"
-    scenarios:
-      - id: SC-CFG-001
-        confidence: high
-        evidence: "proposal C1; design Decision 9"
-        given: "一份包含 security.auth.enabled/api_keys、security.tls、security.rate_limit、security.cors、security.request_id、security.max_request_size 的配置"
-        when: "GatewayConfig 加载该配置"
-        then: "该配置 SHALL 被解析为类型化的 AuthConfig/TLSConfig/RateLimitConfig/CORSConfig/RequestIDConfig 实例"
-        and:
-          - "security.timeout SHALL 解析 '120s'/'5s' 字符串形式的 upstream 与 detector 超时"
-          - "全部新字段 SHALL 有默认值，旧 v0.1.0~v0.3.0 配置无需修改即可加载"
-  - id: REQ-CFG-002
-    description: "ServerConfig 补 workers 与 stop_timeout"
-    scenarios:
-      - id: SC-CFG-002
-        confidence: high
-        evidence: "proposal C2; design Decision 9"
-        given: "server 配置含 workers 与 stop_timeout（如 30s）"
-        when: "GatewayConfig 加载该配置"
-        then: "server.workers 与 server.stop_timeout SHALL 被解析，默认 workers=1、stop_timeout='30s'"
-  - id: REQ-CFG-003
-    description: "ObservabilityConfig 重构为嵌套 MetricsConfig/TracingConfig"
-    scenarios:
-      - id: SC-CFG-003
-        confidence: high
-        evidence: "proposal C2; design Decision 10"
-        given: "observability 配置含 metrics.enabled/endpoint 与 tracing.enabled/exporter/endpoint/sample_rate"
-        when: "GatewayConfig 加载该配置"
-        then: "observability SHALL 解析为 MetricsConfig/TracingConfig 子模型"
-        and:
-          - "tracing.exporter SHALL 支持 'otlp'，sample_rate 默认 0.1"
-          - "metrics.endpoint 默认 '/metrics'"
-  - id: REQ-CFG-004
-    description: "阈值命名空间分离：count 与 confidence 阈值使用不同 key"
-    scenarios:
-      - id: SC-CFG-004
-        confidence: high
-        evidence: "proposal C3; design Decision 11; DESIGN 5.3.1"
-        given: "sensitive_words 检测器 config 含 count_block_threshold=3、count_flag_threshold=1"
-        when: "配置校验运行"
-        then: "配置校验 SHALL 独立校验 count 阈值（count_block > count_flag）与 confidence 阈值"
-        and:
-          - "count 阈值 SHALL 与 confidence 阈值（block_threshold/flag_threshold）互不混淆"
-          - "旧的 block_threshold/flag_threshold 若仍用于 confidence 语义 SHALL 保持可用"
-  - id: REQ-CFG-005
-    description: "PII 检测器命名统一为 pii_redaction"
-    scenarios:
-      - id: SC-CFG-005
-        confidence: high
-        evidence: "proposal C4; design Decision 12"
-        given: "配置引用名为 pii_redaction 的检测器"
-        when: "PIIDetector.name 与注册表/校验器比对"
-        then: "PIIDetector.name SHALL 等于 'pii_redaction'"
-        and:
-          - "engine 按 detector.name 查找配置 SHALL 命中 pii_redaction 的配置"
+- id: REQ-001
+  description: PipelineConfig gains a streaming config block with mode/window_size/overlap/send_flag_events/max_response_size/on_max_size/post_audit/recall
+  scenarios:
+  - id: SC-001
+    confidence: high
+    evidence: proposal.yaml -> what_changes C14; design.md -> Decision 10; DESIGN.md
+      -> Section 8.2 and 10.2
+    given: 'a YAML config file with pipeline.streaming containing mode: sliding_window,
+      window_size: 200, overlap: 50, send_flag_events: false, max_response_size: 1MB,
+      on_max_size: block, post_audit: true, recall.method: sse'
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: the model SHALL parse pipeline.streaming into a StreamingConfig instance
+      with all fields
+    and:
+    - streaming.mode SHALL default to 'sliding_window' when not specified
+    - streaming.mode SHALL accept 'sliding_window' or 'buffer' as valid values
+    - window_size SHALL default to 200 and overlap to 50 when not specified
+    - max_response_size SHALL accept duration/size strings like '1MB'
+    - on_max_size SHALL accept 'block' or 'truncate' as valid values
+    - post_audit SHALL default to true when not specified
+    - recall.method SHALL accept 'sse', 'webhook', or 'both' as valid values
+    - when not specified, pipeline.streaming SHALL default to a valid StreamingConfig
+      with all defaults
+  - id: SC-002
+    confidence: high
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 8.2
+    given: a PipelineConfig with streaming.mode set to an invalid value 'tokenizer'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL raise a validation error indicating that streaming.mode
+      must be 'sliding_window' or 'buffer'
+    and:
+    - the error SHALL prevent the gateway from starting
+  - id: SC-003
+    confidence: medium
+    evidence: design.md -> Decision 10; DESIGN.md -> Section 8.5
+    given: a PipelineConfig with streaming.on_max_size set to an invalid value 'stop'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL raise a validation error indicating that on_max_size must
+      be 'block' or 'truncate'
+    and:
+    - the error SHALL prevent the gateway from starting
+- id: REQ-002
+  description: PipelineConfig gains output_detection config block for async/sync mode
+    with recall webhook settings
+  scenarios:
+  - id: SC-004
+    confidence: high
+    evidence: proposal.yaml -> what_changes C14; design.md -> Decision 8; DESIGN.md
+      -> Section 3.5
+    given: 'a YAML config file with pipeline.output_detection containing mode: async,
+      sync_timeout: 5s, recall.webhook_url and recall.webhook_auth_header'
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: the model SHALL parse pipeline.output_detection into an OutputDetectionConfig
+      instance
+    and:
+    - output_detection.mode SHALL default to 'sync' when not specified
+    - output_detection.mode SHALL accept 'sync' or 'async' as valid values
+    - sync_timeout SHALL be accepted as a duration string
+    - recall.webhook_url SHALL be a string that may be empty
+    - recall.webhook_auth_header SHALL be an optional string that may be empty
+  - id: SC-005
+    confidence: high
+    evidence: DESIGN.md -> Section 3.5; design.md -> Decision 8
+    given: an OutputDetectionConfig with mode set to 'async'
+    when: the config is validated
+    then: the model SHALL accept the configuration only if recall.webhook_url is non-empty
+      for async mode
+    and:
+    - if mode is async and webhook_url is empty, a validation error SHALL be raised
+    - if mode is sync, webhook_url MAY be empty
+    - the error SHALL prevent the gateway from starting when async mode lacks webhook_url
+  - id: SC-006
+    confidence: high
+    evidence: DESIGN.md -> Section 3.5; design.md -> Decision 8
+    given: a PipelineConfig with output_detection.mode set to an invalid value 'offline'
+    when: the config is validated through the Pydantic v2 model
+    then: the model SHALL raise a validation error indicating that output_detection.mode
+      must be 'sync' or 'async'
+    and:
+    - the error SHALL prevent the gateway from starting
+- id: REQ-003
+  description: AuditConfig extended with store_content, file (enabled/path/rotation/retention_days),
+    and stdout fields
+  scenarios:
+  - id: SC-007
+    confidence: high
+    evidence: proposal.yaml -> what_changes C15; design.md -> Decision 9; DESIGN.md
+      -> Section 12.2 and 12.3
+    given: 'a YAML config file with audit containing enabled: true, store_content:
+      false, sanitize_logs: true, file.enabled: true, file.path: /var/log/safety-gateway,
+      file.rotation: daily, file.retention_days: 90, stdout: true'
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: the model SHALL parse the audit section into an extended AuditConfig instance
+    and:
+    - store_content SHALL default to false when not specified
+    - audit.file SHALL be an optional FileConfig with enabled/path/rotation/retention_days
+      fields
+    - audit.file.rotation SHALL default to 'daily' when not specified
+    - audit.file.retention_days SHALL default to 90 when not specified
+    - audit.stdout SHALL default to true when not specified
+    - the existing audit.enabled and audit.sanitize_logs fields SHALL remain valid
+  - id: SC-008
+    confidence: medium
+    evidence: design.md -> Decision 9; DESIGN.md -> Section 12.3
+    given: an AuditConfig with file.rotation set to an invalid value 'hourly'
+    when: the config is validated
+    then: the model SHALL accept the value as a string (rotation format is validated
+      by the logging handler)
+    and:
+    - no startup error SHALL be raised for rotation value
+- id: REQ-004
+  description: New LoggingConfig added with level and format fields
+  scenarios:
+  - id: SC-009
+    confidence: high
+    evidence: proposal.yaml -> what_changes C15; design.md -> Decision 9; DESIGN.md
+      -> Section 10.2 (logging section)
+    given: 'a YAML config file with a logging section containing level: INFO and format:
+      json'
+    when: the config is validated through the GatewayConfig Pydantic v2 model
+    then: the model SHALL parse the logging section into a LoggingConfig instance
+    and:
+    - logging.level SHALL default to 'INFO' when not specified
+    - logging.level SHALL accept DEBUG/INFO/WARNING/ERROR
+    - logging.format SHALL default to 'json' when not specified
+    - logging.format SHALL accept 'json' or 'text' as valid values
+    - when the logging section is absent, the config SHALL use default LoggingConfig
+- id: REQ-005
+  description: All new v0.3.0 config fields have defaults preserving v0.2.0 backward
+    compatibility
+  scenarios:
+  - id: SC-010
+    confidence: high
+    evidence: proposal.yaml -> risk_areas (config-system); design.md -> Decision 10
+    given: a v0.2.0-style YAML config file with pipeline (no streaming/output_detection
+      blocks), audit.enabled/sanitize_logs only, and no logging section
+    when: the config is loaded and validated through the GatewayConfig Pydantic v2
+      model
+    then: the model SHALL accept the configuration without error
+    and:
+    - pipeline.streaming SHALL default to a valid StreamingConfig
+    - pipeline.output_detection SHALL default to a valid OutputDetectionConfig with
+      mode sync
+    - audit.file and audit.stdout SHALL use defaults
+    - logging SHALL use default LoggingConfig
+    - no deprecation warning SHALL be emitted for the old config
+- id: REQ-CFG-001
+  description: SecurityConfig 拆分为类型化子模型（Auth/TLS/RateLimit/CORS/RequestID/Timeout），补
+    max_request_size，统一时长解析
+  scenarios:
+  - id: SC-CFG-001
+    confidence: high
+    evidence: proposal C1; design Decision 9
+    given: 一份包含 security.auth.enabled/api_keys、security.tls、security.rate_limit、security.cors、security.request_id、security.max_request_size
+      的配置
+    when: GatewayConfig 加载该配置
+    then: 该配置 SHALL 被解析为类型化的 AuthConfig/TLSConfig/RateLimitConfig/CORSConfig/RequestIDConfig
+      实例
+    and:
+    - security.timeout SHALL 解析 '120s'/'5s' 字符串形式的 upstream 与 detector 超时
+    - 全部新字段 SHALL 有默认值，旧 v0.1.0~v0.3.0 配置无需修改即可加载
+- id: REQ-CFG-002
+  description: ServerConfig 补 workers 与 stop_timeout
+  scenarios:
+  - id: SC-CFG-002
+    confidence: high
+    evidence: proposal C2; design Decision 9
+    given: server 配置含 workers 与 stop_timeout（如 30s）
+    when: GatewayConfig 加载该配置
+    then: server.workers 与 server.stop_timeout SHALL 被解析，默认 workers=1、stop_timeout='30s'
+- id: REQ-CFG-003
+  description: ObservabilityConfig 重构为嵌套 MetricsConfig/TracingConfig
+  scenarios:
+  - id: SC-CFG-003
+    confidence: high
+    evidence: proposal C2; design Decision 10
+    given: observability 配置含 metrics.enabled/endpoint 与 tracing.enabled/exporter/endpoint/sample_rate
+    when: GatewayConfig 加载该配置
+    then: observability SHALL 解析为 MetricsConfig/TracingConfig 子模型
+    and:
+    - tracing.exporter SHALL 支持 'otlp'，sample_rate 默认 0.1
+    - metrics.endpoint 默认 '/metrics'
+- id: REQ-CFG-004
+  description: 阈值命名空间分离：count 与 confidence 阈值使用不同 key
+  scenarios:
+  - id: SC-CFG-004
+    confidence: high
+    evidence: proposal C3; design Decision 11; DESIGN 5.3.1
+    given: sensitive_words 检测器 config 含 count_block_threshold=3、count_flag_threshold=1
+    when: 配置校验运行
+    then: 配置校验 SHALL 独立校验 count 阈值（count_block > count_flag）与 confidence 阈值
+    and:
+    - count 阈值 SHALL 与 confidence 阈值（block_threshold/flag_threshold）互不混淆
+    - 旧的 block_threshold/flag_threshold 若仍用于 confidence 语义 SHALL 保持可用
+- id: REQ-CFG-005
+  description: PII 检测器命名统一为 pii_redaction
+  scenarios:
+  - id: SC-CFG-005
+    confidence: high
+    evidence: proposal C4; design Decision 12
+    given: 配置引用名为 pii_redaction 的检测器
+    when: PIIDetector.name 与注册表/校验器比对
+    then: PIIDetector.name SHALL 等于 'pii_redaction'
+    and:
+    - engine 按 detector.name 查找配置 SHALL 命中 pii_redaction 的配置
+- id: REQ-CFG-501
+  description: DetectorConfig.type 支持 'grpc'，配置透传字段与网关内部字段分离
+  scenarios:
+  - id: SC-CFG-501
+    confidence: high
+    evidence: proposal C4; DESIGN 7.3.2/7.5.1
+    given: 'detector 配置 name=acme_guard, type=grpc, config={endpoint: localhost:50051,
+      api_key: x, sensitivity: high}'
+    when: GatewayConfig 加载该配置
+    then: DetectorConfig SHALL 接受 type='grpc' 且保留 config 全部字段
+    and:
+    - endpoint/tls_enabled/tls_ca_file SHALL 标记为网关内部字段（不透传）
+    - 其余 config 字段（api_key/sensitivity 等）SHALL 标记为透传字段
+- id: REQ-CFG-502
+  description: type=grpc 缺 endpoint 时启动报错
+  scenarios:
+  - id: SC-CFG-502
+    confidence: high
+    evidence: proposal SC-4; DESIGN 10.4 表 2009 行
+    given: detector 配置 type=grpc 但 config 不含 endpoint（或为空）
+    when: 配置校验运行
+    then: '校验 SHALL 报错：gRPC detector ''xxx'' is missing required config: endpoint'
+- id: REQ-CFG-503
+  description: type=grpc 无 circuit_breaker 时提示 Info
+  scenarios:
+  - id: SC-CFG-503
+    confidence: high
+    evidence: proposal C4; DESIGN 10.4 表 2013 行
+    given: detector 配置 type=grpc 且未配置 circuit_breaker
+    when: 网关启动处理该检测器
+    then: 网关 SHALL 记录 Info 日志：gRPC detector 'xxx' has no circuit_breaker configured.
+      Recommended for external detectors.
+    and:
+    - 该提示 SHALL 不阻断启动

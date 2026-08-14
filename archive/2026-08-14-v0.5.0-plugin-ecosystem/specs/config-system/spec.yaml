@@ -1,0 +1,43 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: config-system
+# 类型：修改类（v0.5.0 增量：type=grpc 支持与校验）
+
+meta:
+  capability: config-system
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  created: "2026-08-14T10:30:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-CFG-501
+    description: "DetectorConfig.type 支持 'grpc'，配置透传字段与网关内部字段分离"
+    scenarios:
+      - id: SC-CFG-501
+        confidence: high
+        evidence: "proposal C4; DESIGN 7.3.2/7.5.1"
+        given: "detector 配置 name=acme_guard, type=grpc, config={endpoint: localhost:50051, api_key: x, sensitivity: high}"
+        when: "GatewayConfig 加载该配置"
+        then: "DetectorConfig SHALL 接受 type='grpc' 且保留 config 全部字段"
+        and:
+          - "endpoint/tls_enabled/tls_ca_file SHALL 标记为网关内部字段（不透传）"
+          - "其余 config 字段（api_key/sensitivity 等）SHALL 标记为透传字段"
+  - id: REQ-CFG-502
+    description: "type=grpc 缺 endpoint 时启动报错"
+    scenarios:
+      - id: SC-CFG-502
+        confidence: high
+        evidence: "proposal SC-4; DESIGN 10.4 表 2009 行"
+        given: "detector 配置 type=grpc 但 config 不含 endpoint（或为空）"
+        when: "配置校验运行"
+        then: "校验 SHALL 报错：gRPC detector 'xxx' is missing required config: endpoint"
+  - id: REQ-CFG-503
+    description: "type=grpc 无 circuit_breaker 时提示 Info"
+    scenarios:
+      - id: SC-CFG-503
+        confidence: high
+        evidence: "proposal C4; DESIGN 10.4 表 2013 行"
+        given: "detector 配置 type=grpc 且未配置 circuit_breaker"
+        when: "网关启动处理该检测器"
+        then: "网关 SHALL 记录 Info 日志：gRPC detector 'xxx' has no circuit_breaker configured. Recommended for external detectors."
+        and:
+          - "该提示 SHALL 不阻断启动"

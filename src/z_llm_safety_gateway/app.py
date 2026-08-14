@@ -12,8 +12,9 @@ Importing this module does NOT start a server or create an app instance —
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request
@@ -54,10 +55,11 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifecycle: startup and graceful shutdown.
 
-    On shutdown, flushes audit logs and releases resources.  This replaces
-    custom SIGTERM/SIGINT handlers that conflicted with uvicorn's own signal
+    On shutdown, flushes audit logs, releases resources, and shuts down gRPC
+    sidecar detectors (remote Shutdown + channel close).  This replaces custom
+    SIGTERM/SIGINT handlers that conflicted with uvicorn's own signal
     management (v0.4.0 fix).  uvicorn triggers lifespan shutdown when it
-    receives SIGTERM/SIGINT, so audit flushing is guaranteed to run.
+    receives SIGTERM/SIGINT, so cleanup is guaranteed to run.
     """
     # Startup: nothing special (detectors initialized synchronously in create_app).
     yield
@@ -69,7 +71,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             audit_logger.close()
         except Exception:  # pragma: no cover - defensive, shutdown must not hang
             logger.warning("audit_shutdown_flush_failed", exc_info=True)
+    # v0.5.0: shut down gRPC sidecar detectors (remote Shutdown + close).
+    for detector in _all_detectors(app):
+        shutdown = getattr(detector, "shutdown", None)
+        if shutdown is None:
+            continue
+        try:
+            await shutdown()
+        except Exception:  # pragma: no cover - defensive
+            logger.warning(
+                "detector_shutdown_failed", detector=getattr(detector, "name", "?"),
+                exc_info=True,
+            )
     logger.info("graceful_shutdown_complete")
+
+
+def _all_detectors(app: FastAPI) -> list[Any]:
+    """Return all initialized detectors (input + output) from app.state."""
+    detectors: list[Any] = []
+    for attr in ("input_detectors", "output_detectors"):
+        items = getattr(getattr(app, "state", None), attr, None) or []
+        detectors.extend(items)
+    return detectors
 
 
 async def _init_detectors(
@@ -79,12 +102,45 @@ async def _init_detectors(
 ) -> tuple[list[Any], list[Any]]:
     """Initialize input and output detectors asynchronously.
 
+    v0.5.0: detectors with ``type == "grpc"`` are created as GRPCDetector
+    instances (sidecar), everything else goes through the registry (built-in
+    or entry-point plugin classes).
+
     Returns:
         A tuple of (input_detectors_list, output_detectors_list).
     """
-    input_detectors_dict = await registry.initialize_all(input_configs)
-    output_detectors_dict = await registry.initialize_all(output_configs)
+    input_detectors_dict = await _initialize_detectors(registry, input_configs)
+    output_detectors_dict = await _initialize_detectors(registry, output_configs)
     return list(input_detectors_dict.values()), list(output_detectors_dict.values())
+
+
+async def _initialize_detectors(
+    registry: Any, configs: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Initialize a set of detectors, creating GRPCDetector for type=grpc."""
+    detectors: dict[str, Any] = {}
+    for name, config in configs.items():
+        try:
+            if config.get("type") == "grpc":
+                from z_llm_safety_gateway.plugins.grpc.client import GRPCDetector
+
+                detector = GRPCDetector()
+                await detector.initialize(config)
+            else:
+                detector = await registry.create_detector(name, config)
+            detectors[name] = detector
+        except Exception:
+            # gRPC sidecar init failure is security-relevant (detector inactive):
+            # log at ERROR level so operators notice the detector is not running.
+            if config.get("type") == "grpc":
+                logger.error(
+                    "gRPC detector failed to initialize and will not run: %s",
+                    name,
+                    exc_info=True,
+                )
+            else:
+                logger.exception("Failed to initialize detector: %s", name)
+    return detectors
 
 
 def _extract_detector_configs(
@@ -114,6 +170,7 @@ def _extract_detector_configs(
             timeout_seconds = _resolve_timeout_seconds(det, default_timeout_seconds)
             merged: dict[str, Any] = {
                 **det.config,
+                "type": det.type,
                 "priority": det.priority,
                 "on_error": det.on_error,
                 "timeout_seconds": timeout_seconds,
@@ -207,6 +264,11 @@ def create_app(config_path: str) -> FastAPI:
 
     # 5. Initialize the safety pipeline
     registry = create_default_registry()
+
+    # v0.5.0: discover and register in-process plugin detectors (entry points).
+    from z_llm_safety_gateway.plugins.loader import load_plugins
+
+    load_plugins(registry)
 
     # After Pydantic validation, detectors is always a DetectorsConfig
     # (the model_validator converts legacy list format).

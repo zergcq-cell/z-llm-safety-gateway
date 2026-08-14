@@ -183,6 +183,28 @@ def _parse_duration(value: str) -> float:
     return float(value)
 
 
+#: Gateway-internal fields inside a gRPC detector's ``config`` block.
+#: These control the gateway's gRPC client and are NOT passed through to the
+#: sidecar via InitializeRequest.config (DESIGN.md Section 7.5.1).
+GRPC_GATEWAY_FIELDS = frozenset({"endpoint", "tls_enabled", "tls_ca_file"})
+
+
+def passthrough_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Return the detector ``config`` fields that are passed through to the plugin.
+
+    Removes gateway-internal gRPC fields (``endpoint``, ``tls_enabled``,
+    ``tls_ca_file``) so they are never forwarded to the sidecar
+    (DESIGN.md Section 7.5.1 configuration passthrough).
+
+    Args:
+        config: The raw ``config`` dict from a gRPC detector's YAML.
+
+    Returns:
+        A new dict with only passthrough (vendor-facing) fields.
+    """
+    return {k: v for k, v in config.items() if k not in GRPC_GATEWAY_FIELDS}
+
+
 class SecurityConfig(BaseModel):
     """Security-related configuration (v0.4.0).
 

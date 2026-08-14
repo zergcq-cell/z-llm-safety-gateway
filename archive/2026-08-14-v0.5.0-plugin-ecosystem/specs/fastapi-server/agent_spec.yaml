@@ -1,0 +1,46 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "fastapi-server-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "fastapi-server capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-FSA-501 / SC-FSA-501: 网关 SHALL 在创建默认 registry 后加载 entry point 插件并注册"
+    action: "pytest tests/ -k 'FSA' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-FSA-502 / SC-FSA-502: 插件与 gRPC 检测器 SHALL 与其他检测器一样被 pipeline 引擎调用"
+    action: "pytest tests/ -k 'FSA' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-FSA-503 / SC-FSA-503: 网关 SHALL 对每个 gRPC 检测器调用 shutdown()（远端 Shutdown + 关闭通道）"
+    action: "pytest tests/ -k 'FSA' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

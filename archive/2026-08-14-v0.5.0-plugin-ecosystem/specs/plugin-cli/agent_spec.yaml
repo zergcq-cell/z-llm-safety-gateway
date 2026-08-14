@@ -1,0 +1,52 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "plugin-cli-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "plugin-cli capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-CLI-001 / SC-CLI-001: CLI SHALL 输出全部可用检测器名称列表（内置 + entry points 发现的插件）"
+    action: "pytest tests/ -k 'CLI' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-CLI-002 / SC-CLI-002: CLI SHALL 输出检测器详情（name/category/description/version）"
+    action: "pytest tests/ -k 'CLI' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-CLI-003 / SC-CLI-003: CLI SHALL 运行检测并输出 DetectionResult（action/risk_level/confidence/message"
+    action: "pytest tests/ -k 'CLI' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "REQ-CLI-004 / SC-CLI-004: CLI SHALL 调用 HealthCheck 验证连接并输出 serving 状态"
+    action: "pytest tests/ -k 'CLI' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-6
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

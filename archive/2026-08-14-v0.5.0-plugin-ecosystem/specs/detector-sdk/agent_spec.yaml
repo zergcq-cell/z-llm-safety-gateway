@@ -1,0 +1,64 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "detector-sdk-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "detector-sdk capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-SDK-001 / SC-SDK-001: SDK 包 SHALL 包含 base.py（Detector 抽象基类）、context.py、result.py、modificatio"
+    action: "pytest tests/ -k 'SDK' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-SDK-002 / SC-SDK-002: SDK Detector 基类 SHALL 定义与网关一致的接口（initialize(config)/detect(content, co"
+    action: "pytest tests/ -k 'SDK' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-SDK-003 / SC-SDK-003: CLI SHALL 生成含 pyproject.toml（含 entry points 声明）、detector.py、tests/ 的可运"
+    action: "pytest tests/ -k 'SDK' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "REQ-SDK-004 / SC-SDK-004: CLI SHALL 校验检测器实现是否为合法 Detector 子类（接口完整）"
+    action: "pytest tests/ -k 'SDK' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "REQ-SDK-005 / SC-SDK-005: SDK SHALL 提供 make_context（构造测试 DetectionContext）与结果断言辅助函数"
+    action: "pytest tests/ -k 'SDK' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-6
+    description: "REQ-SDK-006 / SC-SDK-006: 网关 SHALL 记录警告日志提示 SDK 版本不匹配"
+    action: "pytest tests/ -k 'SDK' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-7
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-8
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

@@ -1,0 +1,46 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "detector-framework-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "detector-framework capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-DF-501 / SC-DF-501: DetectorRegistry SHALL 发现并注册全部 entry point 检测器类"
+    action: "pytest tests/ -k 'DF' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-DF-502 / SC-DF-502: 内置检测器 SHALL 全部注册，且 SHALL 尝试发现并注册 entry point 插件"
+    action: "pytest tests/ -k 'DF' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-DF-503 / SC-DF-503: SHALL 创建 GRPCDetector 实例并通过其 initialize() 完成侧车握手"
+    action: "pytest tests/ -k 'DF' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

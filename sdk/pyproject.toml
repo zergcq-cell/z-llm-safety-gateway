@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "z-llm-safety-gateway-sdk"
+version = "1.0.0"
+description = "Detector SDK for z LLM Safety Gateway — build third-party content safety detectors"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "z LLM Safety Gateway Contributors" },
+]
+dependencies = []
+
+[project.scripts]
+zlg-sdk = "z_llm_safety_gateway_sdk.cli:main"
+
+[project.entry-points."z_llm_safety_gateway.detectors"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/z_llm_safety_gateway_sdk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

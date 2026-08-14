@@ -1,366 +1,430 @@
 meta:
-  capability: "fastapi-server"
-  change_id: "2026-08-12-v0.3.0-streaming-audit"
-  created: "2026-08-12T10:00:00+08:00"
+  capability: fastapi-server
+  change_id: 2026-08-12-v0.3.0-streaming-audit
+  created: '2026-08-12T10:00:00+08:00'
   confidence: high
-
 requirements:
-  - id: REQ-001
-    description: "/v1/chat/completions with stream=true returns a StreamingResponse that transparently forwards provider SSE chunks"
-    scenarios:
-      - id: SC-001
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C16; design.md -> Decision 1; DESIGN.md -> Section 8.1"
-        given: "a running gateway instance with a provider that returns SSE streaming chunks, and a request with stream=true that passes input detection"
-        when: "the chat_completions handler processes the request"
-        then: "the handler SHALL return a StreamingResponse that forwards the provider SSE chunks to the client in order"
-        and:
-          - "the input pipeline SHALL still run before streaming starts (block returns 400)"
-          - "each data: {chunk} SSE event SHALL be forwarded transparently"
-          - "the stream SHALL end with data: [DONE]"
-          - "the X-Request-ID header SHALL be included in the streaming response"
-
-      - id: SC-002
-        confidence: high
-        evidence: "design.md -> Decision 1; DESIGN.md -> Section 8.1"
-        given: "a request with stream=true and a provider error mid-stream"
-        when: "the provider raises an error during streaming"
-        then: "the gateway SHALL send an SSE error event followed by data: [DONE] to close the stream"
-        and:
-          - "the error event SHALL be OpenAI-compatible"
-          - "the connection SHALL be closed cleanly"
-
-      - id: SC-003
-        confidence: medium
-        evidence: "design.md -> Decision 1; DESIGN.md -> Section 3.4 (input block)"
-        given: "a request with stream=true where the input pipeline returns block"
-        when: "the input pipeline completes with final_action block"
-        then: "the endpoint SHALL return HTTP 400 with a safety_block error instead of streaming"
-        and:
-          - "no SSE stream SHALL be started"
-          - "the error body SHALL follow the OpenAI-compatible format with safety extension"
-
-  - id: REQ-002
-    description: "Sliding-window detection runs during streaming on each window of accumulated tokens"
-    scenarios:
-      - id: SC-004
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C2; design.md -> Decision 2; DESIGN.md -> Section 8.2"
-        given: "a streaming response being forwarded and output detectors configured"
-        when: "the accumulated character buffer reaches window_size (200)"
-        then: "the gateway SHALL run the output detectors in parallel on the window content"
-        and:
-          - "the window SHALL slide forward by window_size - overlap characters"
-          - "the last overlap (50) characters SHALL be retained for the next window"
-          - "detection SHALL NOT block the forwarding of chunks that are not part of a triggered block"
-
-      - id: SC-005
-        confidence: high
-        evidence: "design.md -> Decision 3; DESIGN.md -> Section 8.2"
-        given: "a sliding-window detection returns action block"
-        when: "the window detection final_action is block"
-        then: "the gateway SHALL stop forwarding further tokens immediately"
-        and:
-          - "the gateway SHALL send a safety_block SSE event"
-          - "the gateway SHALL send data: [DONE] to close the stream"
-          - "further provider chunks SHALL NOT be forwarded"
-
-      - id: SC-006
-        confidence: high
-        evidence: "design.md -> Decision 3; DESIGN.md -> Section 8.2"
-        given: "a sliding-window detection returns action flag and send_flag_events is true"
-        when: "the window detection final_action is flag"
-        then: "the gateway SHALL continue forwarding chunks and emit a safety_flag SSE event"
-        and:
-          - "one safety_flag event SHALL be emitted per window"
-          - "multiple flagging detectors SHALL be aggregated into a single event"
-          - "the event SHALL include the highest risk_level and a comma-separated flagged_by list"
-
-      - id: SC-007
-        confidence: medium
-        evidence: "design.md -> Decision 3; DESIGN.md -> Section 8.2"
-        given: "a sliding-window detection returns action modify"
-        when: "the window detection final_action is modify"
-        then: "the gateway SHALL downgrade modify to flag (tokens already forwarded)"
-        and:
-          - "streaming SHALL continue as with a flag"
-          - "the audit log SHALL record action: modify with applied: false"
-
-  - id: REQ-003
-    description: "Streaming memory management enforces max_response_size with on_max_size block/truncate policy"
-    scenarios:
-      - id: SC-008
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C4; design.md -> Decision 4; DESIGN.md -> Section 8.5"
-        given: "a streaming response that accumulates beyond max_response_size (1MB) and on_max_size is block"
-        when: "the accumulated content exceeds max_response_size"
-        then: "the gateway SHALL stop streaming and send a safety_block SSE event"
-        and:
-          - "the safety_block event SHALL have blocked_by: streaming_limit"
-          - "the event SHALL have category: response_too_long"
-          - "the event SHALL have risk_level: medium and confidence: 1.0"
-          - "the gateway SHALL send data: [DONE] after the safety_block event"
-
-      - id: SC-009
-        confidence: high
-        evidence: "design.md -> Decision 4; DESIGN.md -> Section 8.5"
-        given: "a streaming response that accumulates beyond max_response_size and on_max_size is truncate"
-        when: "the accumulated content exceeds max_response_size"
-        then: "the gateway SHALL stop accumulating content but continue forwarding chunks"
-        and:
-          - "post-audit SHALL run on the truncated content if enabled"
-          - "the audit log SHALL record post_audit_truncated: true"
-
-  - id: REQ-004
-    description: "buffer mode buffers the full provider response, detects once, then replays chunks via SSE"
-    scenarios:
-      - id: SC-010
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C7; design.md -> Decision 7; DESIGN.md -> Section 8.2 (buffer mode)"
-        given: "a streaming request with streaming.mode set to buffer and a provider that returns SSE chunks"
-        when: "the gateway processes the streaming request in buffer mode"
-        then: "the gateway SHALL buffer the full provider response before sending any content to the client"
-        and:
-          - "the gateway SHALL run detection once on the full buffered response"
-          - "if safe, the gateway SHALL replay the original SSE chunks to the client followed by [DONE]"
-          - "if blocked, the gateway SHALL send a safety_block event + [DONE] without content chunks"
-
-      - id: SC-011
-        confidence: high
-        evidence: "design.md -> Decision 7; DESIGN.md -> Section 8.2"
-        given: "a buffer-mode streaming request that is detected as safe"
-        when: "post-audit would normally run"
-        then: "the gateway SHALL skip post-audit because the full response was already detected"
-        and:
-          - "the audit log SHALL record post_audit.executed: false, reason: buffer_mode"
-
-  - id: REQ-005
-    description: "Post-audit runs in the background after the stream completes and triggers recall on risk"
-    scenarios:
-      - id: SC-012
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C5; design.md -> Decision 5; DESIGN.md -> Section 8.3"
-        given: "a completed streaming response with post_audit enabled and output detectors configured"
-        when: "the stream has fully completed and [DONE] has been sent"
-        then: "the gateway SHALL run post-audit detection on the full accumulated response in the background"
-        and:
-          - "post-audit SHALL NOT block the client connection"
-          - "post-audit SHALL use all enabled output detectors"
-          - "post-audit modify results SHALL be downgraded to flag"
-
-      - id: SC-013
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C6; design.md -> Decision 6; DESIGN.md -> Section 8.4"
-        given: "a post-audit detection that finds a risk (final_action block) on an already-streamed response"
-        when: "post-audit completes with a block result"
-        then: "the gateway SHALL send a recall signal"
-        and:
-          - "if recall.method is sse, a safety_recall SSE event SHALL be sent (if connection still active)"
-          - "if recall.method is webhook or both, a POST request SHALL be sent to webhook_url"
-          - "the audit log SHALL record recalled: true and recall_method"
-          - "the recall event SHALL include request_id, risk_level, reason, and category"
-
-  - id: REQ-006
-    description: "Non-streaming async output detection returns response immediately and runs detection in background with webhook recall"
-    scenarios:
-      - id: SC-014
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C8; design.md -> Decision 8; DESIGN.md -> Section 3.5"
-        given: "a non-streaming request (stream=false) with output_detection.mode set to async"
-        when: "the provider returns a response"
-        then: "the endpoint SHALL return the LLM response to the client immediately"
-        and:
-          - "output detection SHALL run in the background"
-          - "if a risk is found, a webhook recall SHALL be sent to webhook_url"
-          - "the response SHALL NOT be blocked or modified in async mode"
-
-      - id: SC-015
-        confidence: high
-        evidence: "design.md -> Decision 8; DESIGN.md -> Section 3.5 (async audit logging)"
-        given: "a non-streaming async output detection"
-        when: "the response is sent and background detection runs"
-        then: "the gateway SHALL write two audit entries linked by request_id"
-        and:
-          - "the initial entry SHALL have async_detection: pending"
-          - "the completion entry SHALL have async_detection: completed with full detector results"
-          - "if a risk is found, the completion entry SHALL have recalled: true and recall_method: webhook"
-
-  - id: REQ-007
-    description: "Audit logging is integrated into the request flow for input and output pipelines"
-    scenarios:
-      - id: SC-016
-        confidence: high
-        evidence: "proposal.yaml -> what_changes C17; design.md -> Decision 9/12; DESIGN.md -> Section 12.1"
-        given: "a completed request that passed through the input and output pipelines with audit.enabled true"
-        when: "the request processing completes"
-        then: "the gateway SHALL write an input audit entry and an output audit entry"
-        and:
-          - "both entries SHALL share the same request_id"
-          - "the input entry SHALL have direction: input"
-          - "the output entry SHALL have direction: output"
-          - "each entry SHALL include the detector results, final_action, and final_risk_level"
-
-      - id: SC-017
-        confidence: medium
-        evidence: "design.md -> Decision 12; DESIGN.md -> Section 12.1"
-        given: "a request where audit.enabled is false"
-        when: "the request processing completes"
-        then: "the gateway SHALL NOT write any audit entries"
-        and:
-          - "no audit logging overhead SHALL be incurred"
-  - id: REQ-FSA-001
-    description: "create_app 按 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders 的链顺序注册安全中间件（外层先处理请求、后处理响应）"
-    scenarios:
-      - id: SC-FSA-001
-        confidence: high
-        evidence: "proposal C1/S1/S2/S4/S5; design Architecture 中间件链; DESIGN 11.1/11.3/11.4"
-        given: "一份已通过加载的安全配置，且 auth/rate_limit/request_size 均启用"
-        when: "调用 create_app(config_path)"
-        then: "app SHALL 注册全部安全中间件，其生效链顺序（外层→内层）为 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders"
-        and:
-          - "RequestIDMiddleware SHALL 为最外层（请求最先经过、响应最后写 X-Request-ID）"
-          - "SafetyHeadersMiddleware SHALL 为最内层（先处理响应写 X-Safety-Action）"
-          - "AuthMiddleware SHALL 位于 RateLimit 之前，确保所有业务端点先过认证"
-          - "RateLimitMiddleware SHALL 位于 Auth 之后、RequestSize 之前"
-  - id: REQ-FSA-002
-    description: "security.request_id.header/generate 配置接线到 RequestIDMiddleware，控制客户端请求 ID 的接收与生成策略"
-    scenarios:
-      - id: SC-FSA-002
-        confidence: high
-        evidence: "proposal C6; design Decision 9; DESIGN 11.7"
-        given: "security.request_id.header 配置为 'X-Request-ID'，generate 配置为 true"
-        when: "客户端携带合法 X-Request-ID 头请求网关"
-        then: "RequestIDMiddleware SHALL 使用客户端提供的值并注入响应头 X-Request-ID"
-        and:
-          - "客户端携带非法/超长（>128 字符）或含换行/控制字符的 X-Request-ID SHALL 被丢弃并生成 UUID v4"
-      - id: SC-FSA-003
-        confidence: high
-        evidence: "proposal C6; design Decision 9; DESIGN 11.7"
-        given: "security.request_id.generate 配置为 true 且客户端未携带 X-Request-ID"
-        when: "请求到达网关"
-        then: "RequestIDMiddleware SHALL 生成 UUID v4 并注入响应头 X-Request-ID"
-        and:
-          - "生成的 request_id SHALL 存入 request.state.request_id 供下游审计/追踪使用"
-  - id: REQ-FSA-003
-    description: "_extract_detector_configs 注入 timeout_seconds 与 CircuitBreaker 实例；新增 circuit_breaker/factory.py::build_circuit_breaker 解析 recovery_timeout"
-    scenarios:
-      - id: SC-FSA-004
-        confidence: high
-        evidence: "proposal C5; design Decision 13; DESIGN 11.5 / 5.8"
-        given: "某检测器配置含显式 timeout（如 '10s'），且 security.timeout.detector 全局为 '5s'"
-        when: "_extract_detector_configs 处理该检测器"
-        then: "该检测器的 config 字典 SHALL 注入 timeout_seconds=10（显式 timeout 优先，覆盖全局默认）"
-        and:
-          - "注入的 key SHALL 为 timeout_seconds（数值），供 engine 统一读取"
-      - id: SC-FSA-005
-        confidence: high
-        evidence: "proposal C5; design Decision 13; DESIGN 11.5"
-        given: "某检测器未配置 timeout，security.timeout.detector 全局为 '5s'"
-        when: "_extract_detector_configs 处理该检测器"
-        then: "该检测器的 config 字典 SHALL 注入 timeout_seconds=5（回退全局默认）"
-      - id: SC-FSA-006
-        confidence: high
-        evidence: "proposal C5; design Decision 13; DESIGN 5.8"
-        given: "某检测器配置了 circuit_breaker（enabled/failure_threshold/recovery_timeout/fallback_action）"
-        when: "_extract_detector_configs 处理该检测器"
-        then: "该检测器的 config 字典 SHALL 注入一个由 build_circuit_breaker 构建的 CircuitBreaker 实例"
-        and:
-          - "未配置 circuit_breaker 的检测器 SHALL 不注入 CircuitBreaker 实例"
-      - id: SC-FSA-007
-        confidence: high
-        evidence: "proposal C5; design Decision 13; DESIGN 5.8"
-        given: "circuit_breaker/factory.py::build_circuit_breaker 接收 CircuitBreakerConfig（recovery_timeout 为 '30s' 字符串）"
-        when: "调用 build_circuit_breaker(config)"
-        then: "该函数 SHALL 解析 recovery_timeout 字符串为秒并返回配置化的 CircuitBreaker 实例"
-        and:
-          - "failure_threshold/fallback_action SHALL 按配置传递到 CircuitBreaker"
-  - id: REQ-FSA-004
-    description: "认证集成：AuthMiddleware fail-closed，启用时无有效 Bearer token 请求返回 401（OpenAI 兼容错误体）"
-    scenarios:
-      - id: SC-FSA-008
-        confidence: high
-        evidence: "proposal S1; design Decision 1; DESIGN 11.1"
-        given: "security.auth.enabled 为 true 且 api_keys 配置了合法 key"
-        when: "请求携带 Authorization: Bearer <合法 key>"
-        then: "请求 SHALL 被放行进入后续中间件与路由"
-        and:
-          - "request.state.api_key_name SHALL 被注入为匹配的 key 名称"
-      - id: SC-FSA-009
-        confidence: high
-        evidence: "proposal S1; design Decision 1; DESIGN 11.1"
-        given: "security.auth.enabled 为 true"
-        when: "请求未携带或携带无效的 Bearer token"
-        then: "网关 SHALL 返回 HTTP 401 且错误体为 OpenAI 兼容格式（type: invalid_request_error）"
-      - id: SC-FSA-010
-        confidence: high
-        evidence: "proposal S1/S2; design Decision 1"
-        given: "security.auth.enabled 为 false（默认）"
-        when: "任意请求到达网关"
-        then: "AuthMiddleware SHALL 放行该请求，不进行 token 校验"
-  - id: REQ-FSA-005
-    description: "限流集成：RateLimitMiddleware token_bucket，超限返回 429 + Retry-After + OpenAI 兼容错误体"
-    scenarios:
-      - id: SC-FSA-011
-        confidence: high
-        evidence: "proposal S2; design Decision 2; DESIGN 11.3"
-        given: "security.rate_limit.enabled 为 true 且 rate/burst 已配置"
-        when: "同一 key（api_key 或 ip）在短时间内超过 burst 桶容量连续请求"
-        then: "网关 SHALL 返回 HTTP 429 并带 Retry-After 响应头"
-        and:
-          - "错误体 SHALL 为 OpenAI 兼容格式（type: rate_limit_error, code: rate_limit_exceeded）"
-          - "桶 SHALL 按 per（api_key|ip）维度隔离"
-          - "storage 仅支持 memory（MVP，Redis 留待 v1.1+）"
-      - id: SC-FSA-012
-        confidence: high
-        evidence: "proposal S2; design Decision 2; DESIGN 11.3"
-        given: "security.rate_limit.enabled 为 true 且请求未超限"
-        when: "请求到达网关"
-        then: "请求 SHALL 被放行进入路由处理"
-  - id: REQ-FSA-006
-    description: "请求大小限制集成：RequestSizeMiddleware 校验 Content-Length，超限返回 413（OpenAI 兼容错误体）"
-    scenarios:
-      - id: SC-FSA-013
-        confidence: high
-        evidence: "proposal S4; design Decision 4; DESIGN 11.4"
-        given: "security.max_request_size 配置为 10MB（默认）"
-        when: "请求 Content-Length 超过 max_request_size（或分块传输读取超限）"
-        then: "网关 SHALL 返回 HTTP 413 且错误体为 OpenAI 兼容格式"
-      - id: SC-FSA-014
-        confidence: high
-        evidence: "proposal S4; design Decision 4; DESIGN 11.4"
-        given: "security.max_request_size 配置为 10MB"
-        when: "请求 Content-Length 在限制内"
-        then: "请求 SHALL 被放行进入后续处理"
-  - id: REQ-FSA-007
-    description: "CORS 集成：security.cors.enabled/origins 配置接入 starlette CORSMiddleware（默认关闭）"
-    scenarios:
-      - id: SC-FSA-015
-        confidence: high
-        evidence: "proposal S5; design Decision 5; DESIGN 11.6"
-        given: "security.cors.enabled 为 true 且 origins 已配置"
-        when: "浏览器发起跨域预检（OPTIONS）请求"
-        then: "网关 SHALL 通过 CORSMiddleware 返回允许的 CORS 响应头"
-      - id: SC-FSA-016
-        confidence: high
-        evidence: "proposal S5; design Decision 5; DESIGN 11.6"
-        given: "security.cors.enabled 为 false（默认）"
-        when: "create_app 构建应用"
-        then: "app SHALL 不注册 CORSMiddleware，不添加 CORS 响应头"
-  - id: REQ-FSA-008
-    description: "TLS 与优雅停机集成：security.tls 原生终止接线；SIGTERM 触发优雅停机（stop_timeout 内完成 in-flight 请求）"
-    scenarios:
-      - id: SC-FSA-017
-        confidence: high
-        evidence: "proposal S3; design Decision 3; DESIGN 11.2"
-        given: "security.tls.enabled 为 true 且 cert_file/key_file 已配置"
-        when: "网关以 uvicorn.run(ssl_certfile=..., ssl_keyfile=...) 启动"
-        then: "网关 SHALL 通过原生 TLS 终止接受 HTTPS 请求"
-      - id: SC-FSA-018
-        confidence: high
-        evidence: "proposal S6; design Decision 6; DESIGN 13.4"
-        given: "server.stop_timeout 配置为 30s（默认）"
-        when: "进程收到 SIGTERM"
-        then: "网关 SHALL 停止接受新连接并等待 in-flight 请求完成（至多 stop_timeout）"
-        and:
-          - "超时或完成后 SHALL 冲刷审计日志并以退出码 0 退出"
-          - "server.stop_timeout SHALL 小于 Docker stop_grace_period（建议 stop_timeout+5s）"
+- id: REQ-001
+  description: /v1/chat/completions with stream=true returns a StreamingResponse that
+    transparently forwards provider SSE chunks
+  scenarios:
+  - id: SC-001
+    confidence: high
+    evidence: proposal.yaml -> what_changes C16; design.md -> Decision 1; DESIGN.md
+      -> Section 8.1
+    given: a running gateway instance with a provider that returns SSE streaming chunks,
+      and a request with stream=true that passes input detection
+    when: the chat_completions handler processes the request
+    then: the handler SHALL return a StreamingResponse that forwards the provider
+      SSE chunks to the client in order
+    and:
+    - the input pipeline SHALL still run before streaming starts (block returns 400)
+    - 'each data: {chunk} SSE event SHALL be forwarded transparently'
+    - 'the stream SHALL end with data: [DONE]'
+    - the X-Request-ID header SHALL be included in the streaming response
+  - id: SC-002
+    confidence: high
+    evidence: design.md -> Decision 1; DESIGN.md -> Section 8.1
+    given: a request with stream=true and a provider error mid-stream
+    when: the provider raises an error during streaming
+    then: 'the gateway SHALL send an SSE error event followed by data: [DONE] to close
+      the stream'
+    and:
+    - the error event SHALL be OpenAI-compatible
+    - the connection SHALL be closed cleanly
+  - id: SC-003
+    confidence: medium
+    evidence: design.md -> Decision 1; DESIGN.md -> Section 3.4 (input block)
+    given: a request with stream=true where the input pipeline returns block
+    when: the input pipeline completes with final_action block
+    then: the endpoint SHALL return HTTP 400 with a safety_block error instead of
+      streaming
+    and:
+    - no SSE stream SHALL be started
+    - the error body SHALL follow the OpenAI-compatible format with safety extension
+- id: REQ-002
+  description: Sliding-window detection runs during streaming on each window of accumulated
+    tokens
+  scenarios:
+  - id: SC-004
+    confidence: high
+    evidence: proposal.yaml -> what_changes C2; design.md -> Decision 2; DESIGN.md
+      -> Section 8.2
+    given: a streaming response being forwarded and output detectors configured
+    when: the accumulated character buffer reaches window_size (200)
+    then: the gateway SHALL run the output detectors in parallel on the window content
+    and:
+    - the window SHALL slide forward by window_size - overlap characters
+    - the last overlap (50) characters SHALL be retained for the next window
+    - detection SHALL NOT block the forwarding of chunks that are not part of a triggered
+      block
+  - id: SC-005
+    confidence: high
+    evidence: design.md -> Decision 3; DESIGN.md -> Section 8.2
+    given: a sliding-window detection returns action block
+    when: the window detection final_action is block
+    then: the gateway SHALL stop forwarding further tokens immediately
+    and:
+    - the gateway SHALL send a safety_block SSE event
+    - 'the gateway SHALL send data: [DONE] to close the stream'
+    - further provider chunks SHALL NOT be forwarded
+  - id: SC-006
+    confidence: high
+    evidence: design.md -> Decision 3; DESIGN.md -> Section 8.2
+    given: a sliding-window detection returns action flag and send_flag_events is
+      true
+    when: the window detection final_action is flag
+    then: the gateway SHALL continue forwarding chunks and emit a safety_flag SSE
+      event
+    and:
+    - one safety_flag event SHALL be emitted per window
+    - multiple flagging detectors SHALL be aggregated into a single event
+    - the event SHALL include the highest risk_level and a comma-separated flagged_by
+      list
+  - id: SC-007
+    confidence: medium
+    evidence: design.md -> Decision 3; DESIGN.md -> Section 8.2
+    given: a sliding-window detection returns action modify
+    when: the window detection final_action is modify
+    then: the gateway SHALL downgrade modify to flag (tokens already forwarded)
+    and:
+    - streaming SHALL continue as with a flag
+    - 'the audit log SHALL record action: modify with applied: false'
+- id: REQ-003
+  description: Streaming memory management enforces max_response_size with on_max_size
+    block/truncate policy
+  scenarios:
+  - id: SC-008
+    confidence: high
+    evidence: proposal.yaml -> what_changes C4; design.md -> Decision 4; DESIGN.md
+      -> Section 8.5
+    given: a streaming response that accumulates beyond max_response_size (1MB) and
+      on_max_size is block
+    when: the accumulated content exceeds max_response_size
+    then: the gateway SHALL stop streaming and send a safety_block SSE event
+    and:
+    - 'the safety_block event SHALL have blocked_by: streaming_limit'
+    - 'the event SHALL have category: response_too_long'
+    - 'the event SHALL have risk_level: medium and confidence: 1.0'
+    - 'the gateway SHALL send data: [DONE] after the safety_block event'
+  - id: SC-009
+    confidence: high
+    evidence: design.md -> Decision 4; DESIGN.md -> Section 8.5
+    given: a streaming response that accumulates beyond max_response_size and on_max_size
+      is truncate
+    when: the accumulated content exceeds max_response_size
+    then: the gateway SHALL stop accumulating content but continue forwarding chunks
+    and:
+    - post-audit SHALL run on the truncated content if enabled
+    - 'the audit log SHALL record post_audit_truncated: true'
+- id: REQ-004
+  description: buffer mode buffers the full provider response, detects once, then
+    replays chunks via SSE
+  scenarios:
+  - id: SC-010
+    confidence: high
+    evidence: proposal.yaml -> what_changes C7; design.md -> Decision 7; DESIGN.md
+      -> Section 8.2 (buffer mode)
+    given: a streaming request with streaming.mode set to buffer and a provider that
+      returns SSE chunks
+    when: the gateway processes the streaming request in buffer mode
+    then: the gateway SHALL buffer the full provider response before sending any content
+      to the client
+    and:
+    - the gateway SHALL run detection once on the full buffered response
+    - if safe, the gateway SHALL replay the original SSE chunks to the client followed
+      by [DONE]
+    - if blocked, the gateway SHALL send a safety_block event + [DONE] without content
+      chunks
+  - id: SC-011
+    confidence: high
+    evidence: design.md -> Decision 7; DESIGN.md -> Section 8.2
+    given: a buffer-mode streaming request that is detected as safe
+    when: post-audit would normally run
+    then: the gateway SHALL skip post-audit because the full response was already
+      detected
+    and:
+    - 'the audit log SHALL record post_audit.executed: false, reason: buffer_mode'
+- id: REQ-005
+  description: Post-audit runs in the background after the stream completes and triggers
+    recall on risk
+  scenarios:
+  - id: SC-012
+    confidence: high
+    evidence: proposal.yaml -> what_changes C5; design.md -> Decision 5; DESIGN.md
+      -> Section 8.3
+    given: a completed streaming response with post_audit enabled and output detectors
+      configured
+    when: the stream has fully completed and [DONE] has been sent
+    then: the gateway SHALL run post-audit detection on the full accumulated response
+      in the background
+    and:
+    - post-audit SHALL NOT block the client connection
+    - post-audit SHALL use all enabled output detectors
+    - post-audit modify results SHALL be downgraded to flag
+  - id: SC-013
+    confidence: high
+    evidence: proposal.yaml -> what_changes C6; design.md -> Decision 6; DESIGN.md
+      -> Section 8.4
+    given: a post-audit detection that finds a risk (final_action block) on an already-streamed
+      response
+    when: post-audit completes with a block result
+    then: the gateway SHALL send a recall signal
+    and:
+    - if recall.method is sse, a safety_recall SSE event SHALL be sent (if connection
+      still active)
+    - if recall.method is webhook or both, a POST request SHALL be sent to webhook_url
+    - 'the audit log SHALL record recalled: true and recall_method'
+    - the recall event SHALL include request_id, risk_level, reason, and category
+- id: REQ-006
+  description: Non-streaming async output detection returns response immediately and
+    runs detection in background with webhook recall
+  scenarios:
+  - id: SC-014
+    confidence: high
+    evidence: proposal.yaml -> what_changes C8; design.md -> Decision 8; DESIGN.md
+      -> Section 3.5
+    given: a non-streaming request (stream=false) with output_detection.mode set to
+      async
+    when: the provider returns a response
+    then: the endpoint SHALL return the LLM response to the client immediately
+    and:
+    - output detection SHALL run in the background
+    - if a risk is found, a webhook recall SHALL be sent to webhook_url
+    - the response SHALL NOT be blocked or modified in async mode
+  - id: SC-015
+    confidence: high
+    evidence: design.md -> Decision 8; DESIGN.md -> Section 3.5 (async audit logging)
+    given: a non-streaming async output detection
+    when: the response is sent and background detection runs
+    then: the gateway SHALL write two audit entries linked by request_id
+    and:
+    - 'the initial entry SHALL have async_detection: pending'
+    - 'the completion entry SHALL have async_detection: completed with full detector
+      results'
+    - 'if a risk is found, the completion entry SHALL have recalled: true and recall_method:
+      webhook'
+- id: REQ-007
+  description: Audit logging is integrated into the request flow for input and output
+    pipelines
+  scenarios:
+  - id: SC-016
+    confidence: high
+    evidence: proposal.yaml -> what_changes C17; design.md -> Decision 9/12; DESIGN.md
+      -> Section 12.1
+    given: a completed request that passed through the input and output pipelines
+      with audit.enabled true
+    when: the request processing completes
+    then: the gateway SHALL write an input audit entry and an output audit entry
+    and:
+    - both entries SHALL share the same request_id
+    - 'the input entry SHALL have direction: input'
+    - 'the output entry SHALL have direction: output'
+    - each entry SHALL include the detector results, final_action, and final_risk_level
+  - id: SC-017
+    confidence: medium
+    evidence: design.md -> Decision 12; DESIGN.md -> Section 12.1
+    given: a request where audit.enabled is false
+    when: the request processing completes
+    then: the gateway SHALL NOT write any audit entries
+    and:
+    - no audit logging overhead SHALL be incurred
+- id: REQ-FSA-001
+  description: create_app 按 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders 的链顺序注册安全中间件（外层先处理请求、后处理响应）
+  scenarios:
+  - id: SC-FSA-001
+    confidence: high
+    evidence: proposal C1/S1/S2/S4/S5; design Architecture 中间件链; DESIGN 11.1/11.3/11.4
+    given: 一份已通过加载的安全配置，且 auth/rate_limit/request_size 均启用
+    when: 调用 create_app(config_path)
+    then: app SHALL 注册全部安全中间件，其生效链顺序（外层→内层）为 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders
+    and:
+    - RequestIDMiddleware SHALL 为最外层（请求最先经过、响应最后写 X-Request-ID）
+    - SafetyHeadersMiddleware SHALL 为最内层（先处理响应写 X-Safety-Action）
+    - AuthMiddleware SHALL 位于 RateLimit 之前，确保所有业务端点先过认证
+    - RateLimitMiddleware SHALL 位于 Auth 之后、RequestSize 之前
+- id: REQ-FSA-002
+  description: security.request_id.header/generate 配置接线到 RequestIDMiddleware，控制客户端请求
+    ID 的接收与生成策略
+  scenarios:
+  - id: SC-FSA-002
+    confidence: high
+    evidence: proposal C6; design Decision 9; DESIGN 11.7
+    given: security.request_id.header 配置为 'X-Request-ID'，generate 配置为 true
+    when: 客户端携带合法 X-Request-ID 头请求网关
+    then: RequestIDMiddleware SHALL 使用客户端提供的值并注入响应头 X-Request-ID
+    and:
+    - 客户端携带非法/超长（>128 字符）或含换行/控制字符的 X-Request-ID SHALL 被丢弃并生成 UUID v4
+  - id: SC-FSA-003
+    confidence: high
+    evidence: proposal C6; design Decision 9; DESIGN 11.7
+    given: security.request_id.generate 配置为 true 且客户端未携带 X-Request-ID
+    when: 请求到达网关
+    then: RequestIDMiddleware SHALL 生成 UUID v4 并注入响应头 X-Request-ID
+    and:
+    - 生成的 request_id SHALL 存入 request.state.request_id 供下游审计/追踪使用
+- id: REQ-FSA-003
+  description: _extract_detector_configs 注入 timeout_seconds 与 CircuitBreaker 实例；新增
+    circuit_breaker/factory.py::build_circuit_breaker 解析 recovery_timeout
+  scenarios:
+  - id: SC-FSA-004
+    confidence: high
+    evidence: proposal C5; design Decision 13; DESIGN 11.5 / 5.8
+    given: 某检测器配置含显式 timeout（如 '10s'），且 security.timeout.detector 全局为 '5s'
+    when: _extract_detector_configs 处理该检测器
+    then: 该检测器的 config 字典 SHALL 注入 timeout_seconds=10（显式 timeout 优先，覆盖全局默认）
+    and:
+    - 注入的 key SHALL 为 timeout_seconds（数值），供 engine 统一读取
+  - id: SC-FSA-005
+    confidence: high
+    evidence: proposal C5; design Decision 13; DESIGN 11.5
+    given: 某检测器未配置 timeout，security.timeout.detector 全局为 '5s'
+    when: _extract_detector_configs 处理该检测器
+    then: 该检测器的 config 字典 SHALL 注入 timeout_seconds=5（回退全局默认）
+  - id: SC-FSA-006
+    confidence: high
+    evidence: proposal C5; design Decision 13; DESIGN 5.8
+    given: 某检测器配置了 circuit_breaker（enabled/failure_threshold/recovery_timeout/fallback_action）
+    when: _extract_detector_configs 处理该检测器
+    then: 该检测器的 config 字典 SHALL 注入一个由 build_circuit_breaker 构建的 CircuitBreaker 实例
+    and:
+    - 未配置 circuit_breaker 的检测器 SHALL 不注入 CircuitBreaker 实例
+  - id: SC-FSA-007
+    confidence: high
+    evidence: proposal C5; design Decision 13; DESIGN 5.8
+    given: circuit_breaker/factory.py::build_circuit_breaker 接收 CircuitBreakerConfig（recovery_timeout
+      为 '30s' 字符串）
+    when: 调用 build_circuit_breaker(config)
+    then: 该函数 SHALL 解析 recovery_timeout 字符串为秒并返回配置化的 CircuitBreaker 实例
+    and:
+    - failure_threshold/fallback_action SHALL 按配置传递到 CircuitBreaker
+- id: REQ-FSA-004
+  description: 认证集成：AuthMiddleware fail-closed，启用时无有效 Bearer token 请求返回 401（OpenAI
+    兼容错误体）
+  scenarios:
+  - id: SC-FSA-008
+    confidence: high
+    evidence: proposal S1; design Decision 1; DESIGN 11.1
+    given: security.auth.enabled 为 true 且 api_keys 配置了合法 key
+    when: '请求携带 Authorization: Bearer <合法 key>'
+    then: 请求 SHALL 被放行进入后续中间件与路由
+    and:
+    - request.state.api_key_name SHALL 被注入为匹配的 key 名称
+  - id: SC-FSA-009
+    confidence: high
+    evidence: proposal S1; design Decision 1; DESIGN 11.1
+    given: security.auth.enabled 为 true
+    when: 请求未携带或携带无效的 Bearer token
+    then: '网关 SHALL 返回 HTTP 401 且错误体为 OpenAI 兼容格式（type: invalid_request_error）'
+  - id: SC-FSA-010
+    confidence: high
+    evidence: proposal S1/S2; design Decision 1
+    given: security.auth.enabled 为 false（默认）
+    when: 任意请求到达网关
+    then: AuthMiddleware SHALL 放行该请求，不进行 token 校验
+- id: REQ-FSA-005
+  description: 限流集成：RateLimitMiddleware token_bucket，超限返回 429 + Retry-After + OpenAI
+    兼容错误体
+  scenarios:
+  - id: SC-FSA-011
+    confidence: high
+    evidence: proposal S2; design Decision 2; DESIGN 11.3
+    given: security.rate_limit.enabled 为 true 且 rate/burst 已配置
+    when: 同一 key（api_key 或 ip）在短时间内超过 burst 桶容量连续请求
+    then: 网关 SHALL 返回 HTTP 429 并带 Retry-After 响应头
+    and:
+    - '错误体 SHALL 为 OpenAI 兼容格式（type: rate_limit_error, code: rate_limit_exceeded）'
+    - 桶 SHALL 按 per（api_key|ip）维度隔离
+    - storage 仅支持 memory（MVP，Redis 留待 v1.1+）
+  - id: SC-FSA-012
+    confidence: high
+    evidence: proposal S2; design Decision 2; DESIGN 11.3
+    given: security.rate_limit.enabled 为 true 且请求未超限
+    when: 请求到达网关
+    then: 请求 SHALL 被放行进入路由处理
+- id: REQ-FSA-006
+  description: 请求大小限制集成：RequestSizeMiddleware 校验 Content-Length，超限返回 413（OpenAI 兼容错误体）
+  scenarios:
+  - id: SC-FSA-013
+    confidence: high
+    evidence: proposal S4; design Decision 4; DESIGN 11.4
+    given: security.max_request_size 配置为 10MB（默认）
+    when: 请求 Content-Length 超过 max_request_size（或分块传输读取超限）
+    then: 网关 SHALL 返回 HTTP 413 且错误体为 OpenAI 兼容格式
+  - id: SC-FSA-014
+    confidence: high
+    evidence: proposal S4; design Decision 4; DESIGN 11.4
+    given: security.max_request_size 配置为 10MB
+    when: 请求 Content-Length 在限制内
+    then: 请求 SHALL 被放行进入后续处理
+- id: REQ-FSA-007
+  description: CORS 集成：security.cors.enabled/origins 配置接入 starlette CORSMiddleware（默认关闭）
+  scenarios:
+  - id: SC-FSA-015
+    confidence: high
+    evidence: proposal S5; design Decision 5; DESIGN 11.6
+    given: security.cors.enabled 为 true 且 origins 已配置
+    when: 浏览器发起跨域预检（OPTIONS）请求
+    then: 网关 SHALL 通过 CORSMiddleware 返回允许的 CORS 响应头
+  - id: SC-FSA-016
+    confidence: high
+    evidence: proposal S5; design Decision 5; DESIGN 11.6
+    given: security.cors.enabled 为 false（默认）
+    when: create_app 构建应用
+    then: app SHALL 不注册 CORSMiddleware，不添加 CORS 响应头
+- id: REQ-FSA-008
+  description: TLS 与优雅停机集成：security.tls 原生终止接线；SIGTERM 触发优雅停机（stop_timeout 内完成 in-flight
+    请求）
+  scenarios:
+  - id: SC-FSA-017
+    confidence: high
+    evidence: proposal S3; design Decision 3; DESIGN 11.2
+    given: security.tls.enabled 为 true 且 cert_file/key_file 已配置
+    when: 网关以 uvicorn.run(ssl_certfile=..., ssl_keyfile=...) 启动
+    then: 网关 SHALL 通过原生 TLS 终止接受 HTTPS 请求
+  - id: SC-FSA-018
+    confidence: high
+    evidence: proposal S6; design Decision 6; DESIGN 13.4
+    given: server.stop_timeout 配置为 30s（默认）
+    when: 进程收到 SIGTERM
+    then: 网关 SHALL 停止接受新连接并等待 in-flight 请求完成（至多 stop_timeout）
+    and:
+    - 超时或完成后 SHALL 冲刷审计日志并以退出码 0 退出
+    - server.stop_timeout SHALL 小于 Docker stop_grace_period（建议 stop_timeout+5s）
+- id: REQ-FSA-501
+  description: create_app 初始化路径集成插件加载（entry points + gRPC sidecar）
+  scenarios:
+  - id: SC-FSA-501
+    confidence: high
+    evidence: proposal C1/C2; design Architecture
+    given: create_app(config_path) 被调用，环境含第三方插件与 type=grpc 检测器配置
+    when: 初始化检测器阶段
+    then: 网关 SHALL 在创建默认 registry 后加载 entry point 插件并注册
+    and:
+    - type=grpc 的检测器 SHALL 按配置创建 GRPCDetector 并 initialize
+    - 加载失败 SHALL 记录日志且不阻断其他检测器初始化
+    - app.state 检测器集合 SHALL 包含内置 + 插件 + gRPC 检测器
+- id: REQ-FSA-502
+  description: 插件/gRPC 检测器接入 pipeline 引擎与审计/指标链路
+  scenarios:
+  - id: SC-FSA-502
+    confidence: high
+    evidence: proposal C2; DESIGN 7.1
+    given: 请求到达网关，配置含插件检测器与 gRPC 检测器
+    when: input/output pipeline 运行
+    then: 插件与 gRPC 检测器 SHALL 与其他检测器一样被 pipeline 引擎调用
+    and:
+    - 检测结果 SHALL 进入聚合器（block/flag/modify/allow 语义一致）
+    - 检测结果 SHALL 写入审计日志（含 detector_name/category/risk_level）
+    - 指标埋点 SHALL 覆盖插件检测器（duration/results/errors）
+- id: REQ-FSA-503
+  description: app lifespan shutdown 时关闭 gRPC 通道（Shutdown 调用）
+  scenarios:
+  - id: SC-FSA-503
+    confidence: high
+    evidence: proposal C2; DESIGN 7.3.3
+    given: 网关运行中且存在已初始化的 gRPC 检测器
+    when: 网关收到 SIGTERM 触发 lifespan shutdown
+    then: 网关 SHALL 对每个 gRPC 检测器调用 shutdown()（远端 Shutdown + 关闭通道）
+    and:
+    - 单个 gRPC 检测器关闭失败 SHALL 记录日志且不阻断整体关闭

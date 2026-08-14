@@ -1,0 +1,48 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: fastapi-server
+# 类型：修改类（v0.5.0 增量：create_app 集成插件加载与 gRPC 初始化）
+
+meta:
+  capability: fastapi-server
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  created: "2026-08-14T10:30:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-FSA-501
+    description: "create_app 初始化路径集成插件加载（entry points + gRPC sidecar）"
+    scenarios:
+      - id: SC-FSA-501
+        confidence: high
+        evidence: "proposal C1/C2; design Architecture"
+        given: "create_app(config_path) 被调用，环境含第三方插件与 type=grpc 检测器配置"
+        when: "初始化检测器阶段"
+        then: "网关 SHALL 在创建默认 registry 后加载 entry point 插件并注册"
+        and:
+          - "type=grpc 的检测器 SHALL 按配置创建 GRPCDetector 并 initialize"
+          - "加载失败 SHALL 记录日志且不阻断其他检测器初始化"
+          - "app.state 检测器集合 SHALL 包含内置 + 插件 + gRPC 检测器"
+  - id: REQ-FSA-502
+    description: "插件/gRPC 检测器接入 pipeline 引擎与审计/指标链路"
+    scenarios:
+      - id: SC-FSA-502
+        confidence: high
+        evidence: "proposal C2; DESIGN 7.1"
+        given: "请求到达网关，配置含插件检测器与 gRPC 检测器"
+        when: "input/output pipeline 运行"
+        then: "插件与 gRPC 检测器 SHALL 与其他检测器一样被 pipeline 引擎调用"
+        and:
+          - "检测结果 SHALL 进入聚合器（block/flag/modify/allow 语义一致）"
+          - "检测结果 SHALL 写入审计日志（含 detector_name/category/risk_level）"
+          - "指标埋点 SHALL 覆盖插件检测器（duration/results/errors）"
+  - id: REQ-FSA-503
+    description: "app lifespan shutdown 时关闭 gRPC 通道（Shutdown 调用）"
+    scenarios:
+      - id: SC-FSA-503
+        confidence: high
+        evidence: "proposal C2; DESIGN 7.3.3"
+        given: "网关运行中且存在已初始化的 gRPC 检测器"
+        when: "网关收到 SIGTERM 触发 lifespan shutdown"
+        then: "网关 SHALL 对每个 gRPC 检测器调用 shutdown()（远端 Shutdown + 关闭通道）"
+        and:
+          - "单个 gRPC 检测器关闭失败 SHALL 记录日志且不阻断整体关闭"

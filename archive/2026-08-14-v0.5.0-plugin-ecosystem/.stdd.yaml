@@ -1,0 +1,125 @@
+# STDD Change State File
+# 变更: 2026-08-14-v0.5.0-plugin-ecosystem
+
+change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+title: "v0.5.0 - Plugin Ecosystem"
+created: "2026-08-14T10:00:00+08:00"
+
+# 阶段状态
+phase:
+  current: deliver
+  understand: completed
+  spec: completed
+  slice: completed
+  build: completed
+  verify: completed
+  deliver: completed
+
+# 模式与复杂度
+mode: thorough
+task_type: code
+complexity_score: 17
+score_confidence: confirmed
+
+# 关键性评估
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+
+# 锚定
+anchoring:
+  level: L2
+  reference_changes:
+    - "2026-08-12-v0.4.0-security-observability"
+  anchor_implementations: []
+# Gate 状态
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+
+# 状态
+status: archived
+
+# 产出物
+artifacts:
+  proposal_yaml: "proposal.yaml"
+  proposal_md: "proposal.md"
+  design_md: "design.md"
+  test_plan_md: "test-plan.md"
+  phase_context_md: null
+  slices_md: "slices.md"
+  tasks_md: "tasks.md"
+  test_report_md: "test-report.md"
+  design_adjustments_md: "design-adjustments.md"
+
+# 时间戳
+timestamps:
+  understand_completed: "2026-08-14T10:00:00+08:00"
+
+# 状态
+status: active
+
+# 长程模式
+long_range:
+  enabled: true
+  mode: "full_auto"
+  pre_auth_completed: true
+  pre_auth_timestamp: "2026-08-14T10:45:00+08:00"
+  max_iterations: 10
+  degradation_triggers:
+    - "连续自动修复 3 次失败"
+    - "测试通过率 < 95%"
+    - "安全相关问题"
+    - "预授权范围外的未预期情况"
+
+# Phase 4 切片状态
+phase4:
+  slices_completed:
+    "1":
+      status: "done"
+      tc_coverage: "3/3"
+      new_tests: 9
+      verified_at: "2026-08-14T11:00:00+08:00"
+    "2":
+      status: "done"
+      tc_coverage: "3/3"
+      new_tests: 7
+      verified_at: "2026-08-14T11:10:00+08:00"
+    "3":
+      status: "done"
+      tc_coverage: "2/2"
+      new_tests: 5
+      verified_at: "2026-08-14T11:20:00+08:00"
+    "4":
+      status: "done"
+      tc_coverage: "4/4"
+      new_tests: 4
+      verified_at: "2026-08-14T11:30:00+08:00"
+    "5":
+      status: "done"
+      tc_coverage: "8/8"
+      new_tests: 11
+      verified_at: "2026-08-14T12:00:00+08:00"
+    "6":
+      status: "done"
+      tc_coverage: "7/7"
+      new_tests: 14
+      verified_at: "2026-08-14T12:10:00+08:00"
+    "7":
+      status: "done"
+      tc_coverage: "3/3"
+      new_tests: 3
+      verified_at: "2026-08-14T12:20:00+08:00"
+
+# Phase 4 总计
+phase4_totals:
+  total_new_tests: 53
+  total_tc_covered: "30/30"
+  full_suite: "796 passed, 1 skipped"
+  ruff: "pass"
+  mypy: "pass"
+  coverage: "93%"

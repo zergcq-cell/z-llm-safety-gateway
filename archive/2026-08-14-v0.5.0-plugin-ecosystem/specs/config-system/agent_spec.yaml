@@ -1,0 +1,46 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "config-system-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "config-system capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-CFG-501 / SC-CFG-501: DetectorConfig SHALL 接受 type='grpc' 且保留 config 全部字段"
+    action: "pytest tests/ -k 'CFG' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-CFG-502 / SC-CFG-502: 校验 SHALL 报错：gRPC detector 'xxx' is missing required config: endpoint"
+    action: "pytest tests/ -k 'CFG' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-CFG-503 / SC-CFG-503: 网关 SHALL 记录 Info 日志：gRPC detector 'xxx' has no circuit_breaker configu"
+    action: "pytest tests/ -k 'CFG' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

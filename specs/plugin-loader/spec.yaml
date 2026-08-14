@@ -1,0 +1,47 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: plugin-loader
+
+meta:
+  capability: plugin-loader
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  created: "2026-08-14T10:30:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-PL-001
+    description: "通过 importlib.metadata 发现 z_llm_safety_gateway.detectors entry points 并注册到 DetectorRegistry"
+    scenarios:
+      - id: SC-PL-001
+        confidence: high
+        evidence: "proposal C1; DESIGN 7.2.2/7.6.1"
+        given: "环境安装了包含 entry point z_llm_safety_gateway.detectors 的第三方包（值格式 module:ClassName）"
+        when: "PluginLoader 执行 entry points 扫描"
+        then: "PluginLoader SHALL 通过 importlib.metadata.entry_points(group='z_llm_safety_gateway.detectors') 发现所有已注册插件"
+        and:
+          - "每个插件 SHALL 按 <module>:<ClassName> 解析并实例化为 Detector 子类"
+          - "解析成功的插件 SHALL 注册到 DetectorRegistry，可用 detector name 引用"
+          - "解析失败的插件 SHALL 记录警告日志并跳过，不阻断其他插件注册"
+  - id: REQ-PL-002
+    description: "未知检测器名报错信息增强（含可用列表与第三方提示）"
+    scenarios:
+      - id: SC-PL-002
+        confidence: high
+        evidence: "proposal SC-3; DESIGN 10.4 表 2004 行"
+        given: "配置引用了一个既非内置、又无 entry point、且 type 非 grpc 的检测器名 'xxx'"
+        when: "网关启动时校验检测器配置"
+        then: "网关 SHALL 报错：Unknown detector 'xxx'. Available: [内置+已发现插件列表]. For third-party detectors, ensure the package is installed or use type: grpc."
+        and:
+          - "错误信息 SHALL 包含全部可用检测器名称列表"
+          - "错误信息 SHALL 包含第三方接入提示（安装包或使用 type: grpc）"
+  - id: REQ-PL-003
+    description: "entry points 发现失败不影响内置检测器"
+    scenarios:
+      - id: SC-PL-003
+        confidence: high
+        evidence: "proposal C1; risk_areas plugin-loader"
+        given: "环境中存在损坏的 entry point 或 import 抛异常的插件包"
+        when: "create_default_registry 后执行插件加载"
+        then: "内置检测器 SHALL 全部正常注册，不受插件加载失败影响"
+        and:
+          - "插件加载失败 SHALL 记录结构化警告日志（含插件名与错误信息）"
+          - "加载流程 SHALL 继续处理剩余 entry points"

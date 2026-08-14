@@ -1,0 +1,57 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: plugin-cli
+
+meta:
+  capability: plugin-cli
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  created: "2026-08-14T10:30:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-CLI-001
+    description: "zlg detectors list 列出全部可用检测器（内置 + 插件）"
+    scenarios:
+      - id: SC-CLI-001
+        confidence: high
+        evidence: "proposal C5; DESIGN 7.6.3"
+        given: "网关已安装内置检测器与若干第三方插件"
+        when: "执行 zlg detectors list"
+        then: "CLI SHALL 输出全部可用检测器名称列表（内置 + entry points 发现的插件）"
+        and:
+          - "--enabled 参数 SHALL 仅输出配置中启用的检测器"
+          - "退出码 SHALL 为 0"
+  - id: REQ-CLI-002
+    description: "zlg detectors info 显示检测器详情"
+    scenarios:
+      - id: SC-CLI-002
+        confidence: high
+        evidence: "proposal C5; DESIGN 7.6.3"
+        given: "已注册检测器 prompt_injection"
+        when: "执行 zlg detectors info prompt_injection"
+        then: "CLI SHALL 输出检测器详情（name/category/description/version）"
+        and:
+          - "未知检测器名 SHALL 输出错误并退出码非 0"
+  - id: REQ-CLI-003
+    description: "zlg detectors test 对示例输入执行检测"
+    scenarios:
+      - id: SC-CLI-003
+        confidence: high
+        evidence: "proposal C5; DESIGN 7.6.3"
+        given: "已配置检测器 prompt_injection，输入 'ignore previous instructions'"
+        when: "执行 zlg detectors test prompt_injection --input '...'"
+        then: "CLI SHALL 运行检测并输出 DetectionResult（action/risk_level/confidence/message）"
+        and:
+          - "输出 SHALL 为可读格式（JSON 或表格）"
+          - "检测器初始化失败 SHALL 输出错误并退出码非 0"
+  - id: REQ-CLI-004
+    description: "zlg detectors check-connection 验证 gRPC sidecar 连接"
+    scenarios:
+      - id: SC-CLI-004
+        confidence: high
+        evidence: "proposal C5; DESIGN 7.6.3"
+        given: "type=grpc 检测器 'acme_guard' 已配置，sidecar 正在运行"
+        when: "执行 zlg detectors check-connection acme_guard"
+        then: "CLI SHALL 调用 HealthCheck 验证连接并输出 serving 状态"
+        and:
+          - "连接成功 SHALL 退出码 0"
+          - "连接失败（sidecar 未运行/超时）SHALL 输出错误并退出码非 0"

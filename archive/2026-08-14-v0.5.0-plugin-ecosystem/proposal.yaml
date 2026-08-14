@@ -1,0 +1,124 @@
+# proposal.yaml — Canonical 格式（AI 起草、AI 修改、AI 消费）
+
+meta:
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  title: "v0.5.0 - Plugin Ecosystem"
+  created: "2026-08-14T10:00:00+08:00"
+  status: confirmed
+
+why:
+  problem: >
+    第三方检测器目前只能以内置方式接入，需要修改网关代码才能集成新检测器。
+    这限制了生态扩展：开源检测器无法通过标准 Python 包分发接入，商业/闭源
+    检测器（非 Python 实现）无法以进程隔离方式部署。
+  motivation: >
+    DESIGN.md Section 7 规划了成熟的插件系统（in-process + gRPC sidecar + SDK）。
+    v0.5.0 落地该设计，使第三方与商业检测器可通过 SDK 开发、entry points 或
+    gRPC sidecar 接入，无需修改网关代码，实现开放的检测器生态。
+
+what_changes:
+  - id: C1
+    description: >
+      In-process 插件加载器：通过 importlib.metadata 发现
+      `z_llm_safety_gateway.detectors` entry points，将第三方 Python 检测器
+      注册到 DetectorRegistry；未知检测器名报错信息增强（含可用列表与提示）。
+    type: new
+  - id: C2
+    description: >
+      gRPC Sidecar 检测器：protobuf 合约（detector/v1：Initialize/Detect/
+      HealthCheck/Shutdown）、gRPC 客户端封装为 Detector、生命周期管理、
+      超时处理、TLS 支持、配置透传。
+    type: new
+  - id: C3
+    description: >
+      Detector SDK 独立包（sdk/ 目录，z_llm_safety_gateway_sdk）：Detector
+      基类、DetectionContext、DetectionResult、Modification、test_utils、
+      CLI 脚手架（zlg-sdk new/validate/test），独立语义化版本管理。
+    type: new
+  - id: C4
+    description: >
+      配置系统扩展：DetectorConfig.type 支持 "grpc"，gRPC 缺 endpoint 启动
+      报错，type=grpc 无 circuit_breaker 时提示 Info。
+    type: modified
+  - id: C5
+    description: >
+      Gateway 插件管理 CLI：zlg detectors list/info/test/check-connection。
+    type: new
+  - id: C6
+    description: >
+      文档与示例：docs/detector-development.md、docs/grpc-plugin-guide.md、
+      examples/plugins/python_detector/、examples/plugins/grpc_detector_python/。
+    type: new
+
+capabilities:
+  new:
+    - name: plugin-loader
+      description: "In-process 插件加载器：entry points 发现与注册"
+    - name: grpc-sidecar
+      description: "gRPC Sidecar 检测器客户端：protobuf 合约、生命周期、超时、TLS"
+    - name: detector-sdk
+      description: "Detector SDK 独立包：基类、数据结构、测试工具、CLI 脚手架"
+    - name: plugin-cli
+      description: "Gateway 插件管理 CLI：zlg detectors 子命令"
+  modified:
+    - name: config-system
+      description: "DetectorConfig.type=grpc 支持与校验（endpoint 必填、circuit_breaker 提示）"
+    - name: detector-framework
+      description: "DetectorRegistry 扩展 entry points 注册"
+    - name: fastapi-server
+      description: "create_app 集成插件加载与 gRPC 检测器初始化"
+
+constraints:
+  - "gRPC 为可选依赖组（[grpc]），核心包保持轻量"
+  - "SDK 包独立版本管理（>=1.0, <2.0 兼容范围）"
+  - "向后兼容：v0.1.0~v0.4.0 配置无需修改即可加载"
+  - "gRPC 网关内部字段（endpoint/tls_enabled/tls_ca_file）不透传给插件"
+
+stakeholders:
+  - "第三方检测器开发者（SDK 用户）"
+  - "商业检测器供应商（gRPC sidecar）"
+  - "网关运维者（插件管理与监控）"
+  - "网关核心开发者（内置检测器维护）"
+
+risk_areas:
+  - capability: grpc-sidecar
+    risk: "gRPC 生成代码复杂度与构建可重复性"
+    mitigation: "提交 .proto 源文件 + 生成 _pb2.py，构建时校验一致性"
+  - capability: plugin-loader
+    risk: "entry points 加载第三方代码的安全风险"
+    mitigation: "文档声明只安装可信包；加载失败不阻断启动（skip + log）"
+  - capability: config-system
+    risk: "配置透传含密钥（api_key/license_key）泄露到日志"
+    mitigation: "沿用审计脱敏：日志中 api_key/license_key redacted"
+  - capability: detector-sdk
+    risk: "SDK 与网关接口漂移导致兼容性破坏"
+    mitigation: "SDK 独立 semver，网关声明兼容范围，不匹配时警告"
+
+non_goals:
+  - "Go 语言 gRPC 示例（后续文档阶段补充）"
+  - "插件热加载与自动升级"
+  - "gRPC 流式检测（仅 unary）"
+  - "商业检测器计费/许可（DESIGN 明确 gateway 不参与）"
+  - "多 worker 下插件状态同步"
+
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+
+anchoring:
+  level: L2
+  reference_changes:
+    - "2026-08-12-v0.4.0-security-observability"
+  anchor_implementations: []
+
+success_criteria:
+  - "安装示例 in-process 插件包后，网关通过 entry points 自动发现并可在 config 启用，检测结果正确（block/flag/allow）"
+  - "gRPC sidecar 示例可启动，网关连接后检测结果正确映射"
+  - "未知检测器名报错含可用列表与第三方提示（DESIGN 10.4 表 2004 行）"
+  - "type: grpc 缺 endpoint 时启动报错（DESIGN 10.4 表 2009 行）"
+  - "SDK 包可独立 pip install，zlg-sdk new 生成可运行项目模板"
+  - "zlg detectors list/info/test/check-connection 正常工作"
+  - "全量测试通过（新增约 80+ 用例），覆盖率 >= 80%，ruff/mypy 全绿"

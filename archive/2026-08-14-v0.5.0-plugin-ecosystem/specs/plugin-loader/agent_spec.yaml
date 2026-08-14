@@ -1,0 +1,46 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "plugin-loader-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "plugin-loader capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-PL-001 / SC-PL-001: PluginLoader SHALL 通过 importlib.metadata.entry_points(group='z_llm_saf"
+    action: "pytest tests/ -k 'PL' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-PL-002 / SC-PL-002: 网关 SHALL 报错：Unknown detector 'xxx'. Available: [内置+已发现插件列表]. For third"
+    action: "pytest tests/ -k 'PL' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-PL-003 / SC-PL-003: 内置检测器 SHALL 全部正常注册，不受插件加载失败影响"
+    action: "pytest tests/ -k 'PL' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

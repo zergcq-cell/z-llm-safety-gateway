@@ -1,0 +1,64 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+
+meta:
+  task_id: "grpc-sidecar-verify"
+  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  task_type: code
+  system: "grpc-sidecar capability for v0.5.0"
+  preconditions:
+    - "Phase 4 BUILD 完成"
+    - "pytest/ruff/mypy 可用"
+
+steps:
+  - id: CP-1
+    description: "REQ-GRPC-001 / SC-GRPC-001: GRPCDetector SHALL 先调用 HealthCheck，确认 status='serving' 后调用 Initialize"
+    action: "pytest tests/ -k 'GRPC' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "REQ-GRPC-002 / SC-GRPC-002: GRPCDetector SHALL 构造 DetectRequest（content/direction/request_id/user_"
+    action: "pytest tests/ -k 'GRPC' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "REQ-GRPC-003 / SC-GRPC-003: shutdown() SHALL 调用远端 Shutdown 并关闭 gRPC 通道"
+    action: "pytest tests/ -k 'GRPC' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "REQ-GRPC-004 / SC-GRPC-004: GRPCDetector SHALL 在超时后中止调用并抛出超时异常"
+    action: "pytest tests/ -k 'GRPC' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "REQ-GRPC-005 / SC-GRPC-005: GRPCDetector SHALL 使用 grpc.secure_channel 并加载 CA 证书构建凭证"
+    action: "pytest tests/ -k 'GRPC' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-6
+    description: "REQ-GRPC-006 / SC-GRPC-006: SHALL 抛出带指引的错误：安装 grpcio 或 pip install z-llm-safety-gateway[grpc]"
+    action: "pytest tests/ -k 'GRPC' -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-7
+    description: "ruff lint 通过"
+    action: "ruff check src/ tests/"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-8
+    description: "mypy 类型检查通过"
+    action: "mypy src/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚相关 commit 或恢复被修改文件"

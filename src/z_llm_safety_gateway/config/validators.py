@@ -157,6 +157,10 @@ def _validate_thresholds(detector: DetectorConfig) -> None:
 def _validate_detector_name(detector: DetectorConfig) -> None:
     """Check that the detector name is a known built-in or has type=grpc.
 
+    v0.5.0: in-process plugin detectors discovered via entry points are also
+    accepted.  The error message lists built-in + discovered plugin names and
+    a hint for third-party detectors (DESIGN.md Section 10.4, row 2004).
+
     Args:
         detector: DetectorConfig instance.
 
@@ -170,11 +174,18 @@ def _validate_detector_name(detector: DetectorConfig) -> None:
     if detector.name in _BUILTIN_DETECTOR_NAMES:
         return
 
-    available = ", ".join(sorted(_BUILTIN_DETECTOR_NAMES))
+    # v0.5.0: accept detectors discovered from plugin entry points.
+    from z_llm_safety_gateway.plugins.loader import discover_plugin_names
+
+    plugin_names = discover_plugin_names()
+    if detector.name in plugin_names:
+        return
+
+    available = ", ".join(sorted(_BUILTIN_DETECTOR_NAMES | plugin_names))
     raise ConfigValidationError(
         f"Unknown detector '{detector.name}'. "
-        f"Available built-in detectors: [{available}]. "
-        f"For third-party detectors, use type: grpc."
+        f"Available: [{available}]. "
+        f"For third-party detectors, ensure the package is installed or use type: grpc."
     )
 
 
