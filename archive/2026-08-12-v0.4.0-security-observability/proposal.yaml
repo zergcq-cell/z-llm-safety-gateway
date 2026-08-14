@@ -1,0 +1,191 @@
+# proposal.yaml — Canonical 格式（AI 起草、AI 修改、AI 消费）
+# Change: 2026-08-12-v0.4.0-security-observability
+
+meta:
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  title: "v0.4.0 - Security & Observability"
+  created: "2026-08-12T14:00:00+08:00"
+  status: draft
+
+why:
+  problem: >
+    v0.1.0~v0.3.0 完成了框架、Pipeline 检测器和流式审计，但网关完全没有任何
+    安全防护（无认证/限流/TLS/请求大小限制/CORS/优雅停机），也无可观测性
+    （无 Prometheus 指标/OpenTelemetry 追踪）。同时，对前三个版本的功能 Review
+    发现了一批遗留缺陷：P0 级别的阈值命名空间冲突、PII 命名不一致、流式 SSE
+    分片漏检，以及 P1 级别的 per-detector 超时/熔断配置失效、审计字段失真、
+    同步超时未强制等。这些缺陷直接影响安全网关的检测正确性与合规可信度。
+  motivation: >
+    v0.4.0 需要补齐生产可用的两大支柱：Security（认证/限流/TLS/请求限制/
+    CORS/优雅停机）与 Observability（Prometheus 指标/OpenTelemetry 追踪），
+    同时系统性地修复前三个版本的遗留缺陷（P0/P1 优先），使网关达到可对外
+    提供服务的生产级质量。这是 v1.0.0 Production Ready 的关键前置阶段。
+
+what_changes:
+  # --- 新安全能力 ---
+  - id: S1
+    description: "新建 API Key 认证：Bearer token 校验，security.auth.api_keys 配置，未授权返回 401"
+    type: new
+  - id: S2
+    description: "新建限流：token_bucket 策略，security.rate_limit 配置（rate/burst/per api_key|ip/storage memory），超限返回 429 + Retry-After"
+    type: new
+  - id: S3
+    description: "新建 TLS 终止：security.tls.enabled 配置 cert_file/key_file，支持原生 TLS"
+    type: new
+  - id: S4
+    description: "新建请求大小限制：security.max_request_size（默认 10MB），超限返回 413"
+    type: new
+  - id: S5
+    description: "新建 CORS：security.cors.enabled/origins 配置，接入 CORSMiddleware"
+    type: new
+  - id: S6
+    description: "新建优雅停机：SIGTERM 处理，server.stop_timeout，完成 in-flight 请求后退出"
+    type: new
+  # --- 新可观测能力 ---
+  - id: O1
+    description: "新建 Prometheus 指标：gateway/detector/provider/recall 指标，/metrics 端点由 observability.metrics.enabled 控制"
+    type: new
+  - id: O2
+    description: "新建 OpenTelemetry 追踪：observability.tracing 配置（exporter/sample_rate），可选接入"
+    type: new
+  # --- 配置系统重构（支撑上述新能力 + 修正） ---
+  - id: C1
+    description: "重构 SecurityConfig：按 DESIGN 10.2 拆分为 AuthConfig/TLSConfig/RateLimitConfig/CORSConfig/RequestIDConfig，补 max_request_size、类型化 TimeoutConfig（upstream/detector，统一时长解析）"
+    type: modified
+  - id: C2
+    description: "重构 ObservabilityConfig：MetricsConfig/TracingConfig 子模型（endpoint/exporter/sample_rate），ServerConfig 补 workers/stop_timeout"
+    type: modified
+  - id: C3
+    description: "重构阈值命名空间：count 阈值（count_block_threshold/count_flag_threshold）与 confidence 阈值分离，SensitiveWordsDetector 移除内部 action 死代码，统一由 engine 决策"
+    type: modified
+  - id: C4
+    description: "修复 PII 命名不一致：PIIDetector.name 统一为 pii_redaction，与 registry/validator 对齐"
+    type: modified
+  - id: C5
+    description: "修复 per-detector timeout/circuit_breaker 未传递：_extract_detector_configs 注入 timeout_seconds 与 CircuitBreaker 实例（新增 CircuitBreakerConfig→CircuitBreaker 工厂）"
+    type: modified
+  - id: C6
+    description: "request_id 中间件读取 security.request_id.header/generate 配置，接入客户端请求 ID 策略"
+    type: modified
+  # --- 流式/审计修正（P0/P1） ---
+  - id: F1
+    description: "修复流式 SSE 分片漏检：按 \\n\\n 边界行缓冲重组，跨 chunk 拼接完整事件后再解析"
+    type: modified
+  - id: F2
+    description: "修复流式审计 final_action 错取输入侧：输出侧单独维护 output_action/output_risk_level"
+    type: modified
+  - id: F3
+    description: "修复流式审计 detectors/window_count 缺失：写入后审计 detector_results 并累加窗口计数"
+    type: modified
+  - id: F4
+    description: "修复后审计 request_id/语言未传播：PostAuditRunner 与 handler 透传 request_id 与输入侧 language"
+    type: modified
+  - id: F5
+    description: "修复 sync_timeout 未强制：同步输出检测加 asyncio.wait_for，补全局 security.timeout.detector 默认 5s"
+    type: modified
+  - id: F6
+    description: "修复审计字段与 DESIGN 12.1 不一致：total_duration_ms/user_id/detector duration/error 赋值，统一 post_audit schema，DetectorAuditRecord 增 applied 字段"
+    type: modified
+
+capabilities:
+  new:
+    - name: authentication
+      description: "API Key Bearer token 认证，401 未授权响应"
+    - name: rate-limiting
+      description: "token_bucket 限流，per api_key/ip，429 + Retry-After"
+    - name: tls
+      description: "原生 TLS 终止"
+    - name: request-size-limit
+      description: "max_request_size 请求体限制，413 响应"
+    - name: cors
+      description: "可选 CORS 支持"
+    - name: graceful-shutdown
+      description: "SIGTERM 优雅停机，in-flight 请求完成"
+    - name: prometheus-metrics
+      description: "gateway/detector/provider/recall 指标，/metrics 端点"
+    - name: opentelemetry-tracing
+      description: "可选 OTel 追踪，可配置 exporter/sampling"
+  modified:
+    - name: config-system
+      description: "SecurityConfig/ObservabilityConfig/ServerConfig 重构，阈值命名空间分离，修复 PII 命名、timeout/circuit_breaker 传递"
+    - name: fastapi-server
+      description: "认证/限流/TLS/CORS/请求限制/优雅停机集成，/metrics 端点，request_id 配置接线"
+    - name: sse-streaming
+      description: "修复 SSE 分片漏检、审计 final_action/detectors/window_count、后审计上下文传播"
+    - name: audit-logger
+      description: "补齐审计字段（duration/user_id/applied），统一 post_audit schema"
+
+constraints:
+  - "限流 storage 仅支持 memory（Redis 留待 v1.1+）"
+  - "TLS 默认关闭（生产建议反向代理），cert/key 文件为可选配置"
+  - "OpenTelemetry 为可选集成，默认关闭"
+  - "Prometheus 指标与 DESIGN 12.5 对齐"
+  - "backlog 修正遵循严格 TDD，P0 项优先"
+  - "保持对 v0.1.0~v0.3.0 配置的向后兼容（新字段默认值，旧配置可运行）"
+
+stakeholders:
+  - "网关使用者（应用程序开发者）——需要认证与限流保护"
+  - "安全运维团队——需要 TLS/CORS/请求限制/优雅停机"
+  - "可观测性团队——需要 Prometheus 指标与 OTel 追踪"
+  - "安全合规团队——需要修复审计字段保证合规可信度"
+
+risk_areas:
+  - capability: authentication
+    risk: "认证配置错误导致网关不可用或未授权访问"
+    mitigation: "默认关闭认证（显式启用），fail-closed 校验"
+  - capability: rate-limiting
+    risk: "限流误伤正常流量"
+    mitigation: "可配置 rate/burst，per api_key/ip 灵活维度"
+  - capability: tls
+    risk: "TLS 配置错误导致服务不可达"
+    mitigation: "默认关闭，提供示例配置与校验"
+  - capability: prometheus-metrics
+    risk: "/metrics 暴露敏感信息或影响性能"
+    mitigation: "由 metrics_enabled 开关控制，指标脱敏"
+  - capability: config-system
+    risk: "阈值命名空间分离破坏现有配置"
+    mitigation: "count 阈值 key 新增而非复用，提供迁移文档"
+  - capability: sse-streaming
+    risk: "SSE 分片重组引入流式延迟或协议错误"
+    mitigation: "行缓冲重组，严格测试 chunk 边界场景"
+
+non_goals:
+  - "Redis 分布式限流（v1.1+）"
+  - "Provider failover（v1.1+）"
+  - "gRPC sidecar 检测器（v0.5.0）"
+  - "多租户配置隔离（v1.2）"
+  - "热重载配置（不支持，需重启）"
+  - "B-13~B-20 中部分 P2 项（/ready 检测器健康、/health 响应体、truncate、recall 时序、streaming 配置结构、delta 解析、toxicity 冗余、validate 区分）按切片可行性分批处理，不强制全部纳入本次"
+
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+
+anchoring:
+  level: L3
+  reference_changes:
+    - "2026-08-12-v0.3.0-streaming-audit"
+    - "2026-08-11-v0.2.0-pipeline-detectors"
+    - "2026-08-11-v0.1.0-framework-skeleton"
+  anchor_implementations: []
+
+success_criteria:
+  - "API Key 认证启用时，无有效 Bearer token 的请求返回 401"
+  - "限流超限时返回 429 并带 Retry-After 头"
+  - "TLS 启用时通过 HTTPS 访问成功"
+  - "请求体超过 max_request_size 时返回 413"
+  - "CORS 启用时跨域请求通过预检"
+  - "SIGTERM 触发优雅停机，in-flight 请求完成，stop_timeout 内退出"
+  - "/metrics 端点按 metrics_enabled 开关返回 Prometheus 指标"
+  - "OTel 追踪按 tracing 配置采样并导出"
+  - "敏感词检测 count 阈值独立生效，不再被 engine 错误覆盖（B-01 回归测试通过）"
+  - "PII 检测器配置（redaction_mode/entity_types）生效（B-02 回归测试通过）"
+  - "per-detector timeout 与 circuit_breaker 生效（B-04 回归测试通过）"
+  - "流式 SSE 分片边界不漏检（B-03 回归测试通过）"
+  - "流式审计 final_action/detectors/window_count 正确（B-05/B-06 回归测试通过）"
+  - "sync_timeout 强制生效（B-08 回归测试通过）"
+  - "审计字段与 DESIGN 12.1 一致（B-09 回归测试通过）"
+  - "全量测试通过（v0.1.0+v0.2.0+v0.3.0 回归 + v0.4.0 新测试），ruff/mypy 无错误"

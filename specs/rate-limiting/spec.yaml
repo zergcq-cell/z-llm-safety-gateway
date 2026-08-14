@@ -1,0 +1,70 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: rate-limiting
+# Change: 2026-08-12-v0.4.0-security-observability
+
+meta:
+  capability: rate-limiting
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-RL-001
+    description: "TokenBucket 维护 per api_key/ip 桶，rate 每秒补充、burst 桶容量"
+    scenarios:
+      - id: SC-RL-001
+        confidence: high
+        evidence: "design Decision 2; proposal S2"
+        given: "security.rate_limit 配置 rate=10、burst=20、per=api_key，某 api_key 桶内仍有令牌"
+        when: "该 api_key 发起的请求到达"
+        then: "RateLimitMiddleware SHALL 放行该请求并消耗一个令牌"
+      - id: SC-RL-002
+        confidence: high
+        evidence: "design Decision 2; proposal S2"
+        given: "某 api_key 的桶令牌已耗尽（持续超速）"
+        when: "该 api_key 的后续请求到达"
+        then: "RateLimitMiddleware SHALL 拒绝该请求并返回 429"
+  - id: REQ-RL-002
+    description: "从 security.rate_limit 读取 rate/burst/per/storage 配置"
+    scenarios:
+      - id: SC-RL-003
+        confidence: high
+        evidence: "design Decision 2; proposal S2"
+        given: "security.rate_limit={rate:10, burst:20, per:api_key, storage:memory}"
+        when: "网关加载配置并初始化限流器"
+        then: "限流器 SHALL 使用 rate=10、burst=20、per=api_key、storage=memory"
+        and:
+          - "per SHALL 支持 'api_key' 与 'ip' 两个取值"
+          - "storage SHALL 支持 'memory'（MVP，Redis 留待 v1.1+）"
+  - id: REQ-RL-003
+    description: "超限返回 429 + Retry-After 头 + OpenAI 兼容错误体"
+    scenarios:
+      - id: SC-RL-004
+        confidence: high
+        evidence: "design Decision 2; proposal S2"
+        given: "请求被判定超限"
+        when: "RateLimitMiddleware 生成拒绝响应"
+        then: "响应 SHALL 返回 HTTP 429"
+        and:
+          - "响应 SHALL 携带 Retry-After 头（建议重试秒数）"
+          - "错误体 SHALL 为 OpenAI 兼容格式"
+  - id: REQ-RL-004
+    description: "storage=memory 实现线程/事件循环安全"
+    scenarios:
+      - id: SC-RL-005
+        confidence: high
+        evidence: "design Decision 2; proposal S2"
+        given: "多个请求并发命中同一 api_key 的桶"
+        when: "限流器并发读写令牌桶"
+        then: "令牌消耗 SHALL 为原子操作（asyncio.Lock 或等价机制）"
+        and:
+          - "并发下 SHALL NOT 出现令牌被超额消耗或出现负值"
+  - id: REQ-RL-005
+    description: "per=ip 时按客户端 IP 维度限流"
+    scenarios:
+      - id: SC-RL-006
+        confidence: high
+        evidence: "design Decision 2; proposal S2"
+        given: "security.rate_limit per=ip，某 IP 已超限"
+        when: "该 IP 的后续请求到达"
+        then: "RateLimitMiddleware SHALL 按 IP 维度判定超限并返回 429"

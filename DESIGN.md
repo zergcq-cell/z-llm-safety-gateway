@@ -650,6 +650,29 @@ This separation allows enterprises to tune detector sensitivity without modifyin
 
 **Validation rule**: `block_threshold` must be greater than `flag_threshold`. Config validation will reject invalid thresholds.
 
+#### 5.3.1 Threshold Namespace Separation (v0.4.0)
+
+Two distinct threshold semantics MUST NOT share the same config keys:
+
+- **Confidence thresholds** (`block_threshold` / `flag_threshold`): float in `[0.0, 1.0]`, consumed **only** by the `ThresholdDecisionEngine` to map a detector's `confidence` to an action. This is the single source of truth for action decision.
+- **Count thresholds** (`count_block_threshold` / `count_flag_threshold`): integer, consumed **only** by count-based detectors (e.g. `sensitive_words`) to convert a raw match count into a `confidence` score (`min(match_count / count_block_threshold, 1.0)`).
+
+Count-based detectors MUST **not** set `action` themselves; they emit structured evidence (e.g. `match_count`) and a normalized `confidence`, and let the engine decide the action via confidence thresholds. This removes dead action logic and prevents a count-int being misread as a confidence-float.
+
+```yaml
+detectors:
+  input:
+    - name: sensitive_words
+      enabled: true
+      config:
+        count_block_threshold: 3    # >= 3 matches -> confidence 1.0
+        count_flag_threshold: 1     # >= 1 matches -> confidence 0.5
+        confidence_block_threshold: 0.8   # engine block threshold (optional override)
+        confidence_flag_threshold: 0.5    # engine flag threshold (optional override)
+```
+
+A detector's config block may also override the engine-level confidence thresholds via optional `confidence_block_threshold` / `confidence_flag_threshold` keys; when absent, engine defaults apply. `_validate_thresholds` validates count thresholds and confidence thresholds independently.
+
 ### 5.4 Detector Priority
 
 Detectors have a configurable `priority` field that determines:

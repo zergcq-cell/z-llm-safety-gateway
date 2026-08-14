@@ -45,9 +45,9 @@ def test_gateway_config_valid_dict_validates_successfully() -> None:
             ]
         },
         "pipeline": {"mode": "sync", "detectors": []},
-        "security": {"timeout": {"upstream": 120}},
+        "security": {"timeout": {"upstream": "120s"}},
         "audit": {"enabled": False, "sanitize_logs": True},
-        "observability": {"metrics_enabled": False, "tracing_enabled": False},
+        "observability": {"metrics": {"enabled": False}, "tracing": {"enabled": False}},
     }
 
     config = GatewayConfig(**config_dict)
@@ -65,9 +65,9 @@ def test_gateway_config_valid_dict_validates_successfully() -> None:
     assert len(config.routing.rules) == 2
     assert config.routing.rules[0].pattern == "gpt-4*"
     assert config.pipeline.mode == "sync"
-    assert config.security.timeout["upstream"] == 120
+    assert config.security.timeout.upstream == "120s"
     assert config.audit.sanitize_logs is True
-    assert config.observability.metrics_enabled is False
+    assert config.observability.metrics.enabled is False
 
     # Verify defaults are applied when sections are omitted
     minimal_dict = {
@@ -79,9 +79,9 @@ def test_gateway_config_valid_dict_validates_successfully() -> None:
     }
     minimal_config = GatewayConfig(**minimal_dict)
     assert minimal_config.pipeline.mode == "sync"
-    assert minimal_config.security.timeout == {"upstream": 120}
+    assert minimal_config.security.timeout.upstream == "120s"
     assert minimal_config.audit.enabled is False
-    assert minimal_config.observability.tracing_enabled is False
+    assert minimal_config.observability.tracing.enabled is False
 
 
 # --------------------------------------------------------------------------- #

@@ -1,0 +1,79 @@
+meta:
+  task_id: "prometheus-metrics"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.10+ 环境可用"
+    - "prometheus-client 依赖已安装"
+    - "observability/metrics.py 模块存在，定义了指标注册表与计数器"
+    - "observability.metrics.enabled 配置项已接入配置系统"
+
+steps:
+  - id: CP-1
+    description: "验证 metrics.enabled=true 时 GET /metrics 返回 200 且 Prometheus 文本格式（SC-PROM-001）"
+    action: "运行 pytest 测试：加载 metrics.enabled=true 配置启动 app，用 TestClient 发起 GET /metrics，断言 status_code=200、Content-Type 为 text/plain; version=0.0.4，且响应体包含 safety_gateway_requests_total"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "GET /metrics"
+        expected: 200
+
+  - id: CP-2
+    description: "验证 metrics.enabled=false 时 /metrics 不可用（SC-PROM-002）"
+    action: "运行 pytest 测试：加载 metrics.enabled=false 配置启动 app，用 TestClient 发起 GET /metrics，断言返回 404 且未初始化指标注册表"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "GET /metrics"
+        expected: 404
+
+  - id: CP-3
+    description: "验证 Gateway 指标计数与标签（SC-PROM-003）"
+    action: "运行 pytest 测试：处理一个 action=block 的请求后，读取 /metrics 响应，断言 safety_gateway_requests_total 携带 direction/action/model 标签，且 blocks_total/flags_total 按对应标签递增，duration histogram 存在"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-4
+    description: "验证 Detector 指标计数（SC-PROM-004）"
+    action: "运行 pytest 测试：执行一次检测器（含一次异常场景），断言 safety_detector_duration_seconds/results_total/errors_total 带 detector_name 标签正确更新，circuit_breaker_state gauge 反映状态值"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-5
+    description: "验证 Provider 指标计数（SC-PROM-005）"
+    action: "运行 pytest 测试：mock provider 调用一次并注入一次错误，断言 safety_provider_requests_total/duration_seconds/errors_total 带 provider/model 标签正确更新"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-6
+    description: "验证 Recall 指标计数（SC-PROM-006）"
+    action: "运行 pytest 测试：触发一次后审计召回，断言 safety_recalls_total 携带 category/risk_level 标签递增且不包含敏感原文"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-7
+    description: "运行 prometheus-metrics 能力全量单元测试"
+    action: "运行: pytest tests/unit/observability/ -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-8
+    description: "运行 lint 与类型检查"
+    action: "运行: ruff check src/z_llm_safety_gateway/observability/ && mypy src/z_llm_safety_gateway/observability/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚 src/z_llm_safety_gateway/observability/metrics.py 相关改动"
+    - "移除 prometheus-metrics 新增的测试文件"
+    - "如需移除依赖：pip uninstall prometheus-client"

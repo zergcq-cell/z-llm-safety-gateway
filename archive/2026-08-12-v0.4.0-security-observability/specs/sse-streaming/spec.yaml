@@ -1,0 +1,152 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: sse-streaming（修正类 — 流式 SSE 分片重组与流式审计字段修正）
+# 覆盖 backlog B-03 / B-05 / B-06 / B-07 与 design Decision 14 / 15
+
+meta:
+  capability: sse-streaming
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-SSE-001
+    description: "SSE 分片行缓冲重组：SSEBuffer 按 \\n\\n 边界跨 chunk 拼接不完整事件，消除流式漏检（B-03）"
+    scenarios:
+      - id: SC-SSE-001
+        confidence: high
+        evidence: "backlog B-03; design Decision 14; DESIGN 8.2"
+        given: "provider 通过 stream_forward 的 aiter_text() 按网络分片 yield，单个 `data:{json}\\n\\n` SSE 事件被拆散到两个相邻 chunk"
+        when: "SSEBuffer 接收第一段不完整事件后接收第二段补齐 `\\n\\n` 边界"
+        then: "SSEBuffer SHALL 在 `\\n\\n` 边界处重组出完整的单个 SSE 事件，并交给 _extract_delta_text 解析出 delta 文本"
+        and:
+          - "重组后的事件内容 SHALL 与原始事件完全一致，不丢失、不重复任何字节"
+          - "该 delta 文本 SHALL 进入滑动窗口检测，不再因分片而判定为空窗口"
+      - id: SC-SSE-002
+        confidence: high
+        evidence: "backlog B-03; design Decision 14; DESIGN 8.2"
+        given: "单个 chunk 内包含多个以 `\\n\\n` 分隔的完整 SSE 事件"
+        when: "SSEBuffer 处理该 chunk"
+        then: "SSEBuffer SHALL 一次性产出全部完整事件，并按原始顺序逐条交付"
+        and:
+          - "事件之间的分界 SHALL 严格以 `\\n\\n` 为准，不以行数或固定长度猜测"
+      - id: SC-SSE-003
+        confidence: medium
+        evidence: "backlog B-03; design Decision 14; DESIGN 8.2"
+        given: "流接近结束，缓冲区内残留一段未以 `\\n\\n` 结尾的不完整事件"
+        when: "stream_forward 迭代完毕进入结束处理"
+        then: "SSEBuffer SHALL 在结束时 flush 残留内容并解析，避免末尾分片内容被静默丢弃导致漏检"
+        and:
+          - "若残留片段确为完整 JSON 负载，SHALL 仍被检测并透传"
+          - "若为协议终止标记（如 `[DONE]`），SHALL 透传且不引发解析异常"
+      - id: SC-SSE-004
+        confidence: high
+        evidence: "backlog B-03; design Decision 14; DESIGN 8.2"
+        given: "流中出现非 data 事件（如 `event: safety_block`、`data: [DONE]`）"
+        when: "这些事件被跨 chunk 拆分或与 data 事件混在同一个 chunk"
+        then: "SSEBuffer SHALL 按 `\\n\\n` 边界正确切分并原样透传非 data 事件，不改变其类型与负载"
+        and:
+          - "安全事件与终止标记 SHALL 不受缓冲重组影响，保持客户端可识别"
+  - id: REQ-SSE-002
+    description: "输出侧 output_action/output_risk_level 单独维护，流式审计使用输出侧真实结果而非输入侧（B-05）"
+    scenarios:
+      - id: SC-SSE-005
+        confidence: high
+        evidence: "backlog B-05; design Decision 15; DESIGN 12.1"
+        given: "StreamingHandler 在滑动窗口模式运行，逐个窗口执行输出侧检测"
+        when: "每个窗口产生 PipelineResult"
+        then: "handler SHALL 独立维护输出侧 output_action 与 output_risk_level（取自滑动窗口 final_action / overall_risk_level）"
+        and:
+          - "output_action 随每次检测结果按严重度升序聚合（allow < flag < modify < block）"
+          - "output_risk_level SHALL 取所有已检测窗口的最高风险等级"
+      - id: SC-SSE-006
+        confidence: high
+        evidence: "backlog B-05; design Decision 15; DESIGN 12.1"
+        given: "流式检测途中某个窗口 final_action == block"
+        when: "handler 发出 safety_block 事件并停止透传"
+        then: "输出侧 output_action SHALL 置为 block，output_risk_level 取该阻断窗口的风险等级，并记录触发 detector 与 category"
+        and:
+          - "最终审计条目 SHALL 记录 final_action=block 及对应 blocked_by / category / confidence / reason"
+      - id: SC-SSE-007
+        confidence: high
+        evidence: "backlog B-05; design Decision 15; DESIGN 12.1"
+        given: "同一请求的输入侧 request.state.safety_action 与输出侧检测结果可能不同"
+        when: "构建流式输出审计条目"
+        then: "流式输出审计 SHALL 使用输出侧 output_action / output_risk_level，而不再读取输入侧 request.state.safety_action"
+        and:
+          - "当输出侧被阻断而输入侧为 allow 时，审计 SHALL 记录 block 而非 allow"
+  - id: REQ-SSE-003
+    description: "后审计 detector_results 与 window_count 写入审计条目，消除 detectors 恒空与 window_count 恒 0（B-06）"
+    scenarios:
+      - id: SC-SSE-008
+        confidence: high
+        evidence: "backlog B-06; design Decision 15; DESIGN 12.1"
+        given: "PostAuditRunner.run() 对完整累积内容执行深检并产生 detector_results"
+        when: "该结果被写入流式输出审计条目"
+        then: "审计条目的 detectors 数组 SHALL 包含后置审计的完整检测器结果（name/action/confidence/risk_level）"
+        and:
+          - "detectors SHALL 不再恒为空数组"
+          - "post_audit 字典 SHALL 保留 effective_action / original_action / risk_level 等既有字段"
+      - id: SC-SSE-009
+        confidence: high
+        evidence: "backlog B-06; design Decision 15; DESIGN 8.2"
+        given: "handler 在 process_chunk 循环中逐窗口执行检测"
+        when: "每次消费并检测一个完整窗口"
+        then: "handler SHALL 累加窗口计数，并在审计时以实际值填充 window_count（不再恒为占位 0）"
+        and:
+          - "window_count SHALL 等于本次流式会话实际检测的窗口总数"
+          - "window_count 仅对流式（streaming=True）条目有效，非流式条目不受影响"
+  - id: REQ-SSE-004
+    description: "PostAuditRunner 与 handler 透传 request_id 与输入侧 language，复用语言上下文（B-07 / DESIGN 6.6）"
+    scenarios:
+      - id: SC-SSE-010
+        confidence: high
+        evidence: "backlog B-07; design Decision 15; DESIGN 6.6"
+        given: "后置审计被触发，当前请求持有非空 request_id"
+        when: "调用 PostAuditRunner.run(content, request_id=..., language=...)"
+        then: "PostAuditRunner SHALL 接收并在构建 DetectionContext 时透传 request_id，不再硬编码空字符串"
+        and:
+          - "后置审计生成的 DetectionContext.request_id SHALL 等于当前请求 request_id"
+      - id: SC-SSE-011
+        confidence: high
+        evidence: "backlog B-07; design Decision 15; DESIGN 6.6"
+        given: "输入侧已检测出 language（如 detect_language_for_messages 的返回）"
+        when: "handler 为滑动窗口与后置审计构建 DetectionContext"
+        then: "handler SHALL 接收输入侧 language 并写入 DetectionContext.language"
+        and:
+          - "滑动窗口与后置审计 SHALL 复用输入侧语言，不重新检测"
+      - id: SC-SSE-012
+        confidence: medium
+        evidence: "backlog B-07; design Decision 15; DESIGN 12.1"
+        given: "流式输出审计条目构建时存在输入侧 language"
+        when: "写入 AuditEntry"
+        then: "流式输出审计条目的 language SHALL 采用输入侧 language"
+        and:
+          - "当输入侧未检测出语言时，language SHALL 保持 None，不产生伪值"
+  - id: REQ-SSE-005
+    description: "修正不引入回归：透明透传、缓冲模式、错误路径与既有流式协议保持兼容"
+    scenarios:
+      - id: SC-SSE-013
+        confidence: high
+        evidence: "backlog B-03/B-05/B-06/B-07; design Decision 14/15; DESIGN 8.2"
+        given: "未配置输出检测器（has_detection=False）"
+        when: "发起流式请求"
+        then: "网关 SHALL 保持透明透传，逐 chunk 转发并在末尾发出 [DONE]"
+        and:
+          - "该路径 SHALL 不执行 SSEBuffer 重组、滑动窗口或后置审计，行为与修正前一致"
+      - id: SC-SSE-014
+        confidence: medium
+        evidence: "backlog B-06; design Decision 15; DESIGN 8.2"
+        given: "streaming_config.mode == buffer 且配置了输出检测器"
+        when: "缓冲模式完成全量检测并回放 buffered chunk"
+        then: "缓冲模式 SHALL 保持既有行为（全量检测后 block 或回放 + [DONE]），且其审计仍使用该模式的结果"
+        and:
+          - "window_count 与 SSEBuffer 重组 SHALL 仅作用于滑动窗口模式，不影响 buffer 模式"
+      - id: SC-SSE-015
+        confidence: medium
+        evidence: "backlog B-05/B-06; design Decision 15; DESIGN 12.1"
+        given: "provider 在流中抛出 ProviderError"
+        when: "滑动窗口模式捕获异常并发出 error 事件 + [DONE]"
+        then: "错误路径 SHALL 仍输出事件序列 error + [DONE]，并照常记录审计条目"
+        and:
+          - "错误路径审计的 final_action / final_risk_level SHALL 反映实际（allow/未被阻断时的输出侧状态），不因修正而写入虚假 block"
+          - "审计条目的 detector_results 与 window_count SHALL 以实际处理结果为准，缺失时保持空/None 而非伪造"

@@ -52,3 +52,24 @@ class DetectionContext(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     language: str | None = None
     message_index: int | None = None
+
+
+def find_result_by_action(
+    results: list[DetectionResult], actions: str | set[str]
+) -> DetectionResult | None:
+    """Find the first DetectionResult whose action matches.
+
+    Unlike ``results[0]``, this returns the detector that actually triggered
+    the given action, not just the first detector in the list (which may
+    have returned ``allow``).
+
+    Args:
+        results: List of detection results to search.
+        actions: A single action string (e.g. ``"block"``) or a set of
+            action strings (e.g. ``{"flag", "modify"}``) to match.
+
+    Returns:
+        The first matching DetectionResult, or None if no match.
+    """
+    action_set = {actions} if isinstance(actions, str) else set(actions)
+    return next((r for r in results if r.action in action_set), None)

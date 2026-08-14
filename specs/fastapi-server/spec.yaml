@@ -208,3 +208,159 @@ requirements:
         then: "the gateway SHALL NOT write any audit entries"
         and:
           - "no audit logging overhead SHALL be incurred"
+  - id: REQ-FSA-001
+    description: "create_app 按 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders 的链顺序注册安全中间件（外层先处理请求、后处理响应）"
+    scenarios:
+      - id: SC-FSA-001
+        confidence: high
+        evidence: "proposal C1/S1/S2/S4/S5; design Architecture 中间件链; DESIGN 11.1/11.3/11.4"
+        given: "一份已通过加载的安全配置，且 auth/rate_limit/request_size 均启用"
+        when: "调用 create_app(config_path)"
+        then: "app SHALL 注册全部安全中间件，其生效链顺序（外层→内层）为 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders"
+        and:
+          - "RequestIDMiddleware SHALL 为最外层（请求最先经过、响应最后写 X-Request-ID）"
+          - "SafetyHeadersMiddleware SHALL 为最内层（先处理响应写 X-Safety-Action）"
+          - "AuthMiddleware SHALL 位于 RateLimit 之前，确保所有业务端点先过认证"
+          - "RateLimitMiddleware SHALL 位于 Auth 之后、RequestSize 之前"
+  - id: REQ-FSA-002
+    description: "security.request_id.header/generate 配置接线到 RequestIDMiddleware，控制客户端请求 ID 的接收与生成策略"
+    scenarios:
+      - id: SC-FSA-002
+        confidence: high
+        evidence: "proposal C6; design Decision 9; DESIGN 11.7"
+        given: "security.request_id.header 配置为 'X-Request-ID'，generate 配置为 true"
+        when: "客户端携带合法 X-Request-ID 头请求网关"
+        then: "RequestIDMiddleware SHALL 使用客户端提供的值并注入响应头 X-Request-ID"
+        and:
+          - "客户端携带非法/超长（>128 字符）或含换行/控制字符的 X-Request-ID SHALL 被丢弃并生成 UUID v4"
+      - id: SC-FSA-003
+        confidence: high
+        evidence: "proposal C6; design Decision 9; DESIGN 11.7"
+        given: "security.request_id.generate 配置为 true 且客户端未携带 X-Request-ID"
+        when: "请求到达网关"
+        then: "RequestIDMiddleware SHALL 生成 UUID v4 并注入响应头 X-Request-ID"
+        and:
+          - "生成的 request_id SHALL 存入 request.state.request_id 供下游审计/追踪使用"
+  - id: REQ-FSA-003
+    description: "_extract_detector_configs 注入 timeout_seconds 与 CircuitBreaker 实例；新增 circuit_breaker/factory.py::build_circuit_breaker 解析 recovery_timeout"
+    scenarios:
+      - id: SC-FSA-004
+        confidence: high
+        evidence: "proposal C5; design Decision 13; DESIGN 11.5 / 5.8"
+        given: "某检测器配置含显式 timeout（如 '10s'），且 security.timeout.detector 全局为 '5s'"
+        when: "_extract_detector_configs 处理该检测器"
+        then: "该检测器的 config 字典 SHALL 注入 timeout_seconds=10（显式 timeout 优先，覆盖全局默认）"
+        and:
+          - "注入的 key SHALL 为 timeout_seconds（数值），供 engine 统一读取"
+      - id: SC-FSA-005
+        confidence: high
+        evidence: "proposal C5; design Decision 13; DESIGN 11.5"
+        given: "某检测器未配置 timeout，security.timeout.detector 全局为 '5s'"
+        when: "_extract_detector_configs 处理该检测器"
+        then: "该检测器的 config 字典 SHALL 注入 timeout_seconds=5（回退全局默认）"
+      - id: SC-FSA-006
+        confidence: high
+        evidence: "proposal C5; design Decision 13; DESIGN 5.8"
+        given: "某检测器配置了 circuit_breaker（enabled/failure_threshold/recovery_timeout/fallback_action）"
+        when: "_extract_detector_configs 处理该检测器"
+        then: "该检测器的 config 字典 SHALL 注入一个由 build_circuit_breaker 构建的 CircuitBreaker 实例"
+        and:
+          - "未配置 circuit_breaker 的检测器 SHALL 不注入 CircuitBreaker 实例"
+      - id: SC-FSA-007
+        confidence: high
+        evidence: "proposal C5; design Decision 13; DESIGN 5.8"
+        given: "circuit_breaker/factory.py::build_circuit_breaker 接收 CircuitBreakerConfig（recovery_timeout 为 '30s' 字符串）"
+        when: "调用 build_circuit_breaker(config)"
+        then: "该函数 SHALL 解析 recovery_timeout 字符串为秒并返回配置化的 CircuitBreaker 实例"
+        and:
+          - "failure_threshold/fallback_action SHALL 按配置传递到 CircuitBreaker"
+  - id: REQ-FSA-004
+    description: "认证集成：AuthMiddleware fail-closed，启用时无有效 Bearer token 请求返回 401（OpenAI 兼容错误体）"
+    scenarios:
+      - id: SC-FSA-008
+        confidence: high
+        evidence: "proposal S1; design Decision 1; DESIGN 11.1"
+        given: "security.auth.enabled 为 true 且 api_keys 配置了合法 key"
+        when: "请求携带 Authorization: Bearer <合法 key>"
+        then: "请求 SHALL 被放行进入后续中间件与路由"
+        and:
+          - "request.state.api_key_name SHALL 被注入为匹配的 key 名称"
+      - id: SC-FSA-009
+        confidence: high
+        evidence: "proposal S1; design Decision 1; DESIGN 11.1"
+        given: "security.auth.enabled 为 true"
+        when: "请求未携带或携带无效的 Bearer token"
+        then: "网关 SHALL 返回 HTTP 401 且错误体为 OpenAI 兼容格式（type: invalid_request_error）"
+      - id: SC-FSA-010
+        confidence: high
+        evidence: "proposal S1/S2; design Decision 1"
+        given: "security.auth.enabled 为 false（默认）"
+        when: "任意请求到达网关"
+        then: "AuthMiddleware SHALL 放行该请求，不进行 token 校验"
+  - id: REQ-FSA-005
+    description: "限流集成：RateLimitMiddleware token_bucket，超限返回 429 + Retry-After + OpenAI 兼容错误体"
+    scenarios:
+      - id: SC-FSA-011
+        confidence: high
+        evidence: "proposal S2; design Decision 2; DESIGN 11.3"
+        given: "security.rate_limit.enabled 为 true 且 rate/burst 已配置"
+        when: "同一 key（api_key 或 ip）在短时间内超过 burst 桶容量连续请求"
+        then: "网关 SHALL 返回 HTTP 429 并带 Retry-After 响应头"
+        and:
+          - "错误体 SHALL 为 OpenAI 兼容格式（type: rate_limit_error, code: rate_limit_exceeded）"
+          - "桶 SHALL 按 per（api_key|ip）维度隔离"
+          - "storage 仅支持 memory（MVP，Redis 留待 v1.1+）"
+      - id: SC-FSA-012
+        confidence: high
+        evidence: "proposal S2; design Decision 2; DESIGN 11.3"
+        given: "security.rate_limit.enabled 为 true 且请求未超限"
+        when: "请求到达网关"
+        then: "请求 SHALL 被放行进入路由处理"
+  - id: REQ-FSA-006
+    description: "请求大小限制集成：RequestSizeMiddleware 校验 Content-Length，超限返回 413（OpenAI 兼容错误体）"
+    scenarios:
+      - id: SC-FSA-013
+        confidence: high
+        evidence: "proposal S4; design Decision 4; DESIGN 11.4"
+        given: "security.max_request_size 配置为 10MB（默认）"
+        when: "请求 Content-Length 超过 max_request_size（或分块传输读取超限）"
+        then: "网关 SHALL 返回 HTTP 413 且错误体为 OpenAI 兼容格式"
+      - id: SC-FSA-014
+        confidence: high
+        evidence: "proposal S4; design Decision 4; DESIGN 11.4"
+        given: "security.max_request_size 配置为 10MB"
+        when: "请求 Content-Length 在限制内"
+        then: "请求 SHALL 被放行进入后续处理"
+  - id: REQ-FSA-007
+    description: "CORS 集成：security.cors.enabled/origins 配置接入 starlette CORSMiddleware（默认关闭）"
+    scenarios:
+      - id: SC-FSA-015
+        confidence: high
+        evidence: "proposal S5; design Decision 5; DESIGN 11.6"
+        given: "security.cors.enabled 为 true 且 origins 已配置"
+        when: "浏览器发起跨域预检（OPTIONS）请求"
+        then: "网关 SHALL 通过 CORSMiddleware 返回允许的 CORS 响应头"
+      - id: SC-FSA-016
+        confidence: high
+        evidence: "proposal S5; design Decision 5; DESIGN 11.6"
+        given: "security.cors.enabled 为 false（默认）"
+        when: "create_app 构建应用"
+        then: "app SHALL 不注册 CORSMiddleware，不添加 CORS 响应头"
+  - id: REQ-FSA-008
+    description: "TLS 与优雅停机集成：security.tls 原生终止接线；SIGTERM 触发优雅停机（stop_timeout 内完成 in-flight 请求）"
+    scenarios:
+      - id: SC-FSA-017
+        confidence: high
+        evidence: "proposal S3; design Decision 3; DESIGN 11.2"
+        given: "security.tls.enabled 为 true 且 cert_file/key_file 已配置"
+        when: "网关以 uvicorn.run(ssl_certfile=..., ssl_keyfile=...) 启动"
+        then: "网关 SHALL 通过原生 TLS 终止接受 HTTPS 请求"
+      - id: SC-FSA-018
+        confidence: high
+        evidence: "proposal S6; design Decision 6; DESIGN 13.4"
+        given: "server.stop_timeout 配置为 30s（默认）"
+        when: "进程收到 SIGTERM"
+        then: "网关 SHALL 停止接受新连接并等待 in-flight 请求完成（至多 stop_timeout）"
+        and:
+          - "超时或完成后 SHALL 冲刷审计日志并以退出码 0 退出"
+          - "server.stop_timeout SHALL 小于 Docker stop_grace_period（建议 stop_timeout+5s）"

@@ -282,3 +282,135 @@ requirements:
           - "JSONL 文件通道 SHALL 不追加任何记录"
           - "stdout 通道 SHALL 不输出任何审计记录"
           - "请求处理流程本身 SHALL 不受影响，仍正常完成检测与转发"
+  - id: REQ-AUDIT-001
+    description: "补齐审计条目 total_duration_ms 赋值（消除恒 0 赋值点）"
+    scenarios:
+      - id: SC-AUDIT-001
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 total_duration_ms"
+        given: "一次非流式 chat 请求，启用审计，走输入 pipeline 并转发 provider"
+        when: "构建 input 审计条目时"
+        then: "input 条目的 total_duration_ms SHALL 为从请求进入时刻到输入 pipeline 完成（block 响应发出或请求转发 provider）之间的实测耗时（ms），且 SHALL 恒大于等于 0"
+        and:
+          - "该值 SHALL 反映真实计时，而非占位 0（消除 B-09 所述全项目无赋值点问题）"
+      - id: SC-AUDIT-002
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 total_duration_ms"
+        given: "一次非流式 chat 请求，输出 pipeline 完成并返回响应"
+        when: "构建 output 审计条目时"
+        then: "output 条目的 total_duration_ms SHALL 为从 LLM 响应收到到输出响应发送给客户端（block/修改/未修改响应）之间的实测耗时（ms）"
+        and:
+          - "该值 SHALL 排除 LLM provider 延迟"
+      - id: SC-AUDIT-003
+        confidence: high
+        evidence: "backlog B-09; design Decision 15"
+        given: "审计条目被序列化为 JSONL"
+        when: "输出 audit.log 中的 total_duration_ms 字段"
+        then: "total_duration_ms SHALL 已被正确赋值（不再恒为 0）"
+  - id: REQ-AUDIT-002
+    description: "从请求提取 user_id 填入审计条目"
+    scenarios:
+      - id: SC-AUDIT-004
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 user_id"
+        given: "chat 请求体包含顶层 'user' 字段（如 'user_001'）"
+        when: "构建该请求的 input 与 output 审计条目时"
+        then: "条目的 user_id SHALL 等于请求体 'user' 字段的值（'user_001'）"
+      - id: SC-AUDIT-005
+        confidence: high
+        evidence: "backlog B-09; design Decision 15"
+        given: "chat 请求体未包含顶层 'user' 字段"
+        when: "构建该请求的 input 与 output 审计条目时"
+        then: "条目的 user_id SHALL 为 null（可选字段，缺省不伪造）"
+  - id: REQ-AUDIT-003
+    description: "DetectorAuditRecord 填充 duration_ms / error（不再用默认占位）"
+    scenarios:
+      - id: SC-AUDIT-006
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 detectors.duration_ms"
+        given: "一个检测器成功执行并返回 DetectionResult（含实测 duration_ms）"
+        when: "routes/chat.py 的 _build_audit_entry 将该结果写入 detectors 数组"
+        then: "对应 DetectorAuditRecord 的 duration_ms SHALL 取该 DetectionResult 的 duration_ms"
+        and:
+          - "该值 SHALL 反映真实单检测器耗时，而非默认 0.0"
+      - id: SC-AUDIT-007
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 detectors.error"
+        given: "一个检测器执行异常并返回带 error 信息的 DetectionResult"
+        when: "routes/chat.py 的 _build_audit_entry 将该结果写入 detectors 数组"
+        then: "对应 DetectorAuditRecord 的 error SHALL 取该 DetectionResult 的 error 信息（非 null）"
+        and:
+          - "检测器执行成功时 error SHALL 为 null"
+  - id: REQ-AUDIT-004
+    description: "统一 post_audit 字典 schema 与 DESIGN 12.1 一致（result/category/risk_level）"
+    scenarios:
+      - id: SC-AUDIT-008
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 post_audit"
+        given: "流式滑动窗口模式，post-audit 已执行并返回 outcome"
+        when: "构建 output 审计条目的 post_audit 字典时"
+        then: "post_audit SHALL 为 {'executed': true, 'result': <outcome.effective_action>, 'category': <outcome.category>, 'risk_level': <outcome.risk_level>}"
+        and:
+          - "result 键 SHALL 取 outcome.effective_action 的值"
+          - "category 键 SHALL 取 outcome.category 的值（可为空字符串）"
+          - "risk_level 键 SHALL 取 outcome.risk_level 的值"
+      - id: SC-AUDIT-009
+        confidence: high
+        evidence: "backlog B-09; design Decision 15"
+        given: "流式 post-audit 执行后构建 post_audit 字典"
+        when: "检查 post_audit 字典的键名"
+        then: "post_audit 字典 SHALL NOT 再使用 effective_action / original_action 作为键名（统一为 result）"
+      - id: SC-AUDIT-010
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 12.1 post_audit"
+        given: "流式 buffer 模式，或 streaming 配置 post_audit=false（post-audit 被跳过）"
+        when: "构建 output 审计条目的 post_audit 字典时"
+        then: "post_audit SHALL 为 {'executed': false}（不含 result/category/risk_level）"
+  - id: REQ-AUDIT-005
+    description: "DetectorAuditRecord 增加可选 applied 字段，流式 modify 降级置 false"
+    scenarios:
+      - id: SC-AUDIT-011
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 8.4 流式 modify 降级"
+        given: "audit/models.py 的 DetectorAuditRecord 模型"
+        when: "定义审计记录字段时"
+        then: "DetectorAuditRecord SHALL 新增可选字段 applied（bool，默认缺省/None），向后兼容既有序列化"
+      - id: SC-AUDIT-012
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 8.4 流式 modify 降级"
+        given: "流式 post-audit 中某检测器返回 action='modify'（响应已流式发出，无法应用）"
+        when: "构建该检测器的 DetectorAuditRecord 时"
+        then: "该记录 SHALL 记录 action='flag'（modify 降级）且 applied=false"
+        and:
+          - "该降级事实 SHALL 在审计日志中如实记录（applied:false）"
+      - id: SC-AUDIT-013
+        confidence: high
+        evidence: "backlog B-09; design Decision 15; DESIGN 8.4"
+        given: "输入侧或非流式同步输出检测的 modify 已成功写回请求/响应"
+        when: "构建对应 DetectorAuditRecord 时"
+        then: "该记录 SHALL 记录 action='modify' 且 applied=true（或省略 applied 表示已应用）"
+  - id: REQ-AUDIT-006
+    description: "非流式同步输出检测加 asyncio.wait_for 强制 sync_timeout"
+    scenarios:
+      - id: SC-AUDIT-014
+        confidence: high
+        evidence: "backlog B-08; design Decision 15; DESIGN 3.5 sync_timeout"
+        given: "非流式（stream=false）同步输出检测，输出检测器已配置且 engine 可用"
+        when: "调用 engine.run(output_detectors, [context], configs) 做同步输出检测"
+        then: "该调用 SHALL 被 asyncio.wait_for(..., timeout=sync_timeout) 包裹，sync_timeout 为 pipeline 级超时"
+        and:
+          - "sync_timeout 超时后 SHALL 停止等待未完成的检测器"
+      - id: SC-AUDIT-015
+        confidence: high
+        evidence: "backlog B-08; design Decision 15; DESIGN 3.5 sync_timeout 行为"
+        given: "asyncio.wait_for 因 sync_timeout 触发 asyncio.TimeoutError"
+        when: "处理输出检测超时"
+        then: "对未完成检测器 SHALL 按各检测器 on_error 策略处理（fail_open 跳过该结果；fail_closed 视为 block）"
+        and:
+          - "已完成的检测器结果 SHALL 正常聚合，最终 action 由聚合结果决定"
+      - id: SC-AUDIT-016
+        confidence: high
+        evidence: "backlog B-08; design Decision 15; DESIGN 3.5 sync_timeout 默认 5s"
+        given: "sync_timeout 未在配置中显式设置"
+        when: "计算同步输出检测的 pipeline 级超时"
+        then: "sync_timeout SHALL 使用默认值（DESIGN 3.5 定义 sync_timeout: 5s）"

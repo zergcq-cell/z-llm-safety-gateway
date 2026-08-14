@@ -26,10 +26,183 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ServerConfig(BaseModel):
-    """HTTP server configuration."""
+    """HTTP server configuration.
+
+    v0.4.0 additions:
+    - ``workers``: number of uvicorn worker processes (default 1).
+    - ``stop_timeout``: graceful shutdown timeout (default '30s').
+    """
 
     host: str = "0.0.0.0"
     port: int = 8080
+    workers: int = 1
+    stop_timeout: str = "30s"
+
+
+class ApiKeyConfig(BaseModel):
+    """A single API key credential for gateway authentication."""
+
+    key: str
+    name: str = ""
+
+
+class AuthConfig(BaseModel):
+    """API Key bearer token authentication configuration (v0.4.0).
+
+    Defaults to disabled. When enabled, requests without a valid Bearer token
+    (matching one of ``api_keys``) are rejected with 401.
+    """
+
+    enabled: bool = False
+    api_keys: list[ApiKeyConfig] = Field(default_factory=list)
+
+
+class TLSConfig(BaseModel):
+    """Native TLS termination configuration (v0.4.0).
+
+    Defaults to disabled. When enabled, uvicorn is started with the given
+    cert/key files for HTTPS termination.
+    """
+
+    enabled: bool = False
+    cert_file: str = ""
+    key_file: str = ""
+
+
+class RateLimitConfig(BaseModel):
+    """Token bucket rate limiting configuration (v0.4.0).
+
+    - ``rate``: tokens replenished per second.
+    - ``burst``: bucket capacity (allows bursts).
+    - ``per``: bucket dimension ("api_key" or "ip").
+    - ``storage``: "memory" (MVP); Redis deferred to v1.1+.
+    """
+
+    enabled: bool = False
+    strategy: str = "token_bucket"
+    rate: int = 100
+    burst: int = 200
+    per: str = "api_key"  # "api_key" | "ip"
+    storage: str = "memory"  # "memory" (MVP) | "redis" (v1.1+)
+
+    @field_validator("strategy")
+    @classmethod
+    def _validate_strategy(cls, v: str) -> str:
+        if v != "token_bucket":
+            raise ValueError(
+                f"rate_limit.strategy must be 'token_bucket', got '{v}'"
+            )
+        return v
+
+    @field_validator("per")
+    @classmethod
+    def _validate_per(cls, v: str) -> str:
+        if v not in ("api_key", "ip"):
+            raise ValueError(
+                f"rate_limit.per must be 'api_key' or 'ip', got '{v}'"
+            )
+        return v
+
+    @field_validator("storage")
+    @classmethod
+    def _validate_storage(cls, v: str) -> str:
+        if v != "memory":
+            raise ValueError(
+                f"rate_limit.storage must be 'memory' in MVP, got '{v}'"
+            )
+        return v
+
+
+class CORSConfig(BaseModel):
+    """CORS configuration (v0.4.0)."""
+
+    enabled: bool = False
+    origins: list[str] = Field(default_factory=list)
+
+
+class RequestIDConfig(BaseModel):
+    """Request ID propagation configuration (v0.4.0).
+
+    - ``header``: header name used for client-provided request IDs.
+    - ``generate``: whether to accept client-provided IDs (True) or always
+      generate a UUID (False).
+    """
+
+    header: str = "X-Request-ID"
+    generate: bool = True
+
+
+class TimeoutConfig(BaseModel):
+    """Typed timeout configuration (v0.4.0).
+
+    Durations are expressed as strings ('120s', '5s') in config and parsed
+    to float seconds. ``upstream`` is the LLM provider timeout; ``detector``
+    is the default per-detector timeout. Legacy integer values (e.g. ``120``)
+    are accepted and treated as seconds for backward compatibility.
+    """
+
+    upstream: str = "120s"
+    detector: str = "5s"
+
+    @field_validator("upstream", "detector", mode="before")
+    @classmethod
+    def _coerce_int_to_duration(cls, v: Any) -> Any:
+        """Coerce legacy integer seconds to a duration string."""
+        if isinstance(v, int):
+            return f"{v}s"
+        return v
+
+    @property
+    def upstream_seconds(self) -> float:
+        """Parse upstream duration string to float seconds."""
+        return _parse_duration(self.upstream)
+
+    @property
+    def detector_seconds(self) -> float:
+        """Parse detector duration string to float seconds."""
+        return _parse_duration(self.detector)
+
+
+def _parse_duration(value: str) -> float:
+    """Parse a duration string like '120s' or '500ms' into float seconds.
+
+    Args:
+        value: Duration string; supports 's' (seconds) and 'ms' (milliseconds).
+
+    Returns:
+        Duration in seconds as a float.
+
+    Raises:
+        ValueError: If the string is not a valid duration.
+    """
+    value = value.strip()
+    if value.endswith("ms"):
+        return float(value[:-2]) / 1000.0
+    if value.endswith("s"):
+        return float(value[:-1])
+    return float(value)
+
+
+class SecurityConfig(BaseModel):
+    """Security-related configuration (v0.4.0).
+
+    v0.4.0 refactors the flat ``timeout`` dict into typed sub-models:
+    - ``auth``: API key authentication.
+    - ``tls``: native TLS termination.
+    - ``rate_limit``: token bucket rate limiting.
+    - ``cors``: CORS support.
+    - ``request_id``: request ID propagation policy.
+    - ``max_request_size``: request body size limit.
+    - ``timeout``: typed upstream/detector timeouts.
+    """
+
+    auth: AuthConfig = AuthConfig()
+    tls: TLSConfig = TLSConfig()
+    rate_limit: RateLimitConfig = RateLimitConfig()
+    cors: CORSConfig = CORSConfig()
+    request_id: RequestIDConfig = RequestIDConfig()
+    max_request_size: str = "10MB"
+    timeout: TimeoutConfig = TimeoutConfig()
 
 
 class ProviderConfig(BaseModel):
@@ -330,12 +503,6 @@ class PipelineConfig(BaseModel):
         return data
 
 
-class SecurityConfig(BaseModel):
-    """Security-related configuration."""
-
-    timeout: dict[str, int] = {"upstream": 120}
-
-
 class FileConfig(BaseModel):
     """JSONL audit log file output configuration (v0.3.0)."""
 
@@ -387,11 +554,46 @@ class LoggingConfig(BaseModel):
         return v
 
 
-class ObservabilityConfig(BaseModel):
-    """Observability configuration (metrics and tracing)."""
+class MetricsConfig(BaseModel):
+    """Prometheus metrics configuration (v0.4.0)."""
 
-    metrics_enabled: bool = False
-    tracing_enabled: bool = False
+    enabled: bool = False
+    endpoint: str = "/metrics"
+
+
+class TracingConfig(BaseModel):
+    """OpenTelemetry tracing configuration (v0.4.0).
+
+    Optional integration, disabled by default. ``exporter`` selects the
+    trace exporter ("otlp"); ``sample_rate`` controls the sampling ratio.
+    """
+
+    enabled: bool = False
+    exporter: str = "otlp"  # "otlp" | "jaeger" | "zipkin"
+    endpoint: str = ""
+    sample_rate: float = 0.1
+
+    @field_validator("exporter")
+    @classmethod
+    def _validate_exporter(cls, v: str) -> str:
+        if v not in ("otlp", "jaeger", "zipkin"):
+            raise ValueError(
+                f"tracing.exporter must be one of "
+                f"'otlp', 'jaeger', 'zipkin', got '{v}'"
+            )
+        return v
+
+
+class ObservabilityConfig(BaseModel):
+    """Observability configuration (metrics and tracing).
+
+    v0.4.0 refactors the flat boolean fields into nested sub-models:
+    - ``metrics``: MetricsConfig (enabled/endpoint).
+    - ``tracing``: TracingConfig (enabled/exporter/endpoint/sample_rate).
+    """
+
+    metrics: MetricsConfig = MetricsConfig()
+    tracing: TracingConfig = TracingConfig()
 
 
 class GatewayConfig(BaseModel):

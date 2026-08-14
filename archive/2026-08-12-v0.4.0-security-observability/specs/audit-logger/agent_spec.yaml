@@ -1,0 +1,175 @@
+# agent_spec.yaml - Agent 验证规格（Canonical YAML）
+# Capability: audit-logger
+# Change: 2026-08-12-v0.4.0-security-observability
+# 类型：修正类（backlog B-08 / B-09，design Decision 15）
+
+meta:
+  task_id: "audit-logger"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ 环境已安装"
+    - "项目依赖已安装（FastAPI, httpx, Pydantic v2, pytest, pytest-asyncio）"
+    - "src/z_llm_safety_gateway/audit/models.py 已定义 AuditEntry / DetectorAuditRecord"
+    - "src/z_llm_safety_gateway/audit/logger.py 已实现 AuditLogger"
+    - "src/z_llm_safety_gateway/routes/chat.py 已实现 _build_audit_entry 与同步输出检测路径"
+    - "config 已提供 sync_timeout（pipeline 级输出检测超时）与全局 security.timeout.detector（默认 5s）"
+
+steps:
+  - id: CP-1
+    description: "验证 input 审计条目 total_duration_ms 被真实赋值（SC-AUDIT-001/003）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_input_total_duration_ms_assigned -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-2
+    description: "验证 output 审计条目 total_duration_ms 被真实赋值且排除 provider 延迟（SC-AUDIT-002）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_output_total_duration_ms_assigned -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-3
+    description: "验证请求体含 user 字段时 user_id 被提取（SC-AUDIT-004）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_user_id_extracted_from_body -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-4
+    description: "验证请求体无 user 字段时 user_id 为 null（SC-AUDIT-005）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_user_id_none_when_absent -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-5
+    description: "验证 DetectorAuditRecord 填充 duration_ms（SC-AUDIT-006）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_detector_duration_ms_populated -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-6
+    description: "验证 DetectorAuditRecord 填充 error（SC-AUDIT-007）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_detector_error_populated -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-7
+    description: "验证 post_audit 字典使用 result/category/risk_level schema（SC-AUDIT-008）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_post_audit_schema_aligned -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-8
+    description: "验证 post_audit 字典不再使用 effective_action/original_action 键名（SC-AUDIT-009）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_post_audit_no_legacy_keys -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-9
+    description: "验证 post-audit 跳过/buffer 模式 post_audit={'executed': false}（SC-AUDIT-010）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_post_audit_executed_false -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-10
+    description: "验证 DetectorAuditRecord 含可选 applied 字段且向后兼容（SC-AUDIT-011）"
+    action: "pytest tests/unit/audit/test_models.py::test_detector_record_applied_field -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-11
+    description: "验证流式 post-audit modify 降级为 flag 且 applied=false（SC-AUDIT-012）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_streaming_modify_downgraded_not_applied -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-12
+    description: "验证已应用的 modify 记录 applied=true（SC-AUDIT-013）"
+    action: "pytest tests/unit/routes/test_audit_entry.py::test_applied_modify_recorded -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-13
+    description: "验证同步输出检测被 asyncio.wait_for(sync_timeout) 包裹（SC-AUDIT-014）"
+    action: "pytest tests/unit/routes/test_chat_sync_timeout.py::test_sync_output_detection_wrapped_wait_for -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-14
+    description: "验证 sync_timeout 超时后未完成检测器按 on_error 处理（SC-AUDIT-015）"
+    action: "pytest tests/unit/routes/test_chat_sync_timeout.py::test_sync_timeout_on_error_handling -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-15
+    description: "验证 sync_timeout 未配置时使用默认 5s（SC-AUDIT-016）"
+    action: "pytest tests/unit/routes/test_chat_sync_timeout.py::test_sync_timeout_default -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-16
+    description: "运行 ruff lint 检查 audit 与路由模块"
+    action: "ruff check src/z_llm_safety_gateway/audit src/z_llm_safety_gateway/routes/chat.py tests/unit/audit tests/unit/routes"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-17
+    description: "运行 mypy 类型检查 audit 与路由模块"
+    action: "mypy src/z_llm_safety_gateway/audit src/z_llm_safety_gateway/routes/chat.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "还原 audit/models.py 中 AuditEntry / DetectorAuditRecord 的字段改动（applied 字段等）"
+    - "移除 routes/chat.py 中 _build_audit_entry 对 total_duration_ms / user_id / duration_ms / error 的赋值逻辑"
+    - "恢复 post_audit 字典原 schema（如必要）"
+    - "移除同步输出检测的 asyncio.wait_for 包裹"
+    - "删除新增/修改的测试文件"

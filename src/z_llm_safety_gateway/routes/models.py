@@ -54,7 +54,7 @@ async def list_models(request: Request) -> Response:
     if provider_config.api_version:
         params = {"api-version": provider_config.api_version}
 
-    timeout = float(config.security.timeout.get("upstream", 120))
+    timeout = config.security.timeout.upstream_seconds
 
     # Make GET request to the provider
     try:

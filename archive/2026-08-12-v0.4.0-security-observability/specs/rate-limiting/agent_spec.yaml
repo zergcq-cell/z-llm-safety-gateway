@@ -1,0 +1,91 @@
+# agent_spec.yaml - Agent 验证规格（Canonical YAML）
+# Capability: rate-limiting
+# Change: 2026-08-12-v0.4.0-security-observability
+
+meta:
+  task_id: "rate-limiting"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ 环境已安装"
+    - "项目依赖已安装（FastAPI, httpx, Pydantic v2, pytest, pytest-asyncio）"
+    - "config/models.py 已含 RateLimitConfig（security.rate_limit rate/burst/per/storage）"
+    - "src/z_llm_safety_gateway/ratelimit/ 模块已实现 TokenBucket 与 RateLimitMiddleware"
+    - "app factory 已按 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders 顺序注册中间件"
+
+steps:
+  - id: CP-1
+    description: "验证桶内有余量时请求放行并消耗令牌（SC-RL-001）"
+    action: "pytest tests/unit/ratelimit/test_ratelimit.py::test_within_burst_allowed -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-2
+    description: "验证令牌耗尽后请求返回 429（SC-RL-002）"
+    action: "pytest tests/unit/ratelimit/test_ratelimit.py::test_bucket_exhausted_rejected -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-3
+    description: "验证从 security.rate_limit 解析 rate/burst/per/storage（SC-RL-003）"
+    action: "pytest tests/unit/ratelimit/test_ratelimit.py::test_config_parsing -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-4
+    description: "验证 429 响应携带 Retry-After 头与 OpenAI 兼容错误体（SC-RL-004）"
+    action: "pytest tests/unit/ratelimit/test_ratelimit.py::test_429_retry_after -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-5
+    description: "验证并发令牌消耗为原子操作、不超耗（SC-RL-005）"
+    action: "pytest tests/unit/ratelimit/test_ratelimit.py::test_concurrent_safety -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-6
+    description: "验证 per=ip 时按客户端 IP 维度限流（SC-RL-006）"
+    action: "pytest tests/unit/ratelimit/test_ratelimit.py::test_per_ip_limiting -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "PASSED"
+
+  - id: CP-7
+    description: "运行 ruff lint 检查限流模块"
+    action: "ruff check src/z_llm_safety_gateway/ratelimit/ tests/unit/ratelimit/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-8
+    description: "运行 mypy 类型检查限流模块"
+    action: "mypy src/z_llm_safety_gateway/ratelimit/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "删除 src/z_llm_safety_gateway/ratelimit/ 目录"
+    - "删除 tests/unit/ratelimit/ 目录"
+    - "从 app factory 中移除 RateLimitMiddleware 注册"
+    - "恢复 config/models.py 中 RateLimitConfig 相关改动（如必要）"

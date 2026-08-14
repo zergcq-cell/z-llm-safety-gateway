@@ -1,0 +1,65 @@
+# agent_spec.yaml — Agent 验证规格
+# Capability: config-system
+
+meta:
+  task_id: config-system
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway 配置系统重构（SecurityConfig/ObservabilityConfig/ServerConfig/阈值命名空间/PII 命名）"
+  preconditions:
+    - "现有 v0.3.0 测试全部通过"
+    - "config/models.py 与 config/validators.py 可读写"
+
+steps:
+  - id: CP-1
+    description: "SecurityConfig 类型化子模型存在且可解析新配置"
+    action: "pytest tests/unit/config/test_v4_security.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "TimeConfig 解析 '120s'/'5s' 字符串时长"
+    action: "pytest tests/unit/config/test_v4_security.py -k duration"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "ServerConfig 补 workers/stop_timeout"
+    action: "pytest tests/unit/config/test_v4_server.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "ObservabilityConfig 嵌套子模型解析"
+    action: "pytest tests/unit/config/test_v4_observability.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "阈值命名空间分离：count 阈值独立校验"
+    action: "pytest tests/unit/config/test_v4_thresholds.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-6
+    description: "PII 命名统一为 pii_redaction"
+    action: "pytest tests/unit/config/test_v4_pii_name.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-7
+    description: "旧配置向后兼容加载"
+    action: "pytest tests/unit/config/test_v3_audit.py tests/unit/config/test_v3_streaming.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-8
+    description: "ruff lint 与 mypy 类型检查通过"
+    action: "ruff check src/z_llm_safety_gateway/config && mypy src/z_llm_safety_gateway/config"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "恢复 config/models.py 与 config/validators.py 到 v0.3.0 状态"

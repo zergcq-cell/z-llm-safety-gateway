@@ -113,22 +113,44 @@ def _validate_detectors_v2(config: GatewayConfig) -> None:
 
 
 def _validate_thresholds(detector: DetectorConfig) -> None:
-    """Verify block_threshold > flag_threshold when both are present in config.
+    """Verify confidence and count thresholds independently (v0.4.0).
+
+    Threshold namespace separation (DESIGN 5.3.1):
+    - Confidence thresholds: ``block_threshold`` / ``flag_threshold`` (float).
+    - Count thresholds: ``count_block_threshold`` / ``count_flag_threshold`` (int).
+
+    Each pair is validated independently: block must be strictly greater than
+    flag within its own namespace. This prevents a count-int from being
+    misinterpreted as a confidence-float at runtime.
 
     Args:
         detector: DetectorConfig instance.
 
     Raises:
-        ConfigValidationError: If block_threshold <= flag_threshold.
+        ConfigValidationError: If either threshold pair is invalid.
     """
     cfg = detector.config
+
+    # Confidence thresholds: block_threshold > flag_threshold
     block = cfg.get("block_threshold")
     flag = cfg.get("flag_threshold")
-
     if block is not None and flag is not None and block <= flag:
         raise ConfigValidationError(
             f"Detector '{detector.name}': block_threshold ({block}) "
             f"must be strictly greater than flag_threshold ({flag})"
+        )
+
+    # Count thresholds: count_block_threshold > count_flag_threshold
+    count_block = cfg.get("count_block_threshold")
+    count_flag = cfg.get("count_flag_threshold")
+    if (
+        count_block is not None
+        and count_flag is not None
+        and count_block <= count_flag
+    ):
+        raise ConfigValidationError(
+            f"Detector '{detector.name}': count_block_threshold ({count_block}) "
+            f"must be strictly greater than count_flag_threshold ({count_flag})"
         )
 
 

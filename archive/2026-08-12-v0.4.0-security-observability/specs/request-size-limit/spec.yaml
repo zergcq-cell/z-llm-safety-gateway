@@ -1,0 +1,45 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: request-size-limit
+
+meta:
+  capability: request-size-limit
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-RSL-001
+    description: "security.max_request_size 默认 10MB，Content-Length 超限返回 413 + OpenAI 兼容错误体"
+    scenarios:
+      - id: SC-RSL-001
+        confidence: high
+        evidence: "proposal S4; design Decision 4; DESIGN 11.4"
+        given: "未显式配置 security.max_request_size（使用默认 10MB）"
+        when: "RequestSizeMiddleware 收到 Content-Length 大于 10MB 的请求"
+        then: "该请求 SHALL 被拒绝并返回 HTTP 413"
+        and:
+          - "错误响应体 SHALL 为 OpenAI 兼容错误（error.type / error.message）"
+          - "未被拒的超限请求体 SHALL 不会进入后续路由处理"
+  - id: REQ-RSL-002
+    description: "分块传输（无 Content-Length）时在读取 body 阶段限制，超限返回 413"
+    scenarios:
+      - id: SC-RSL-002
+        confidence: high
+        evidence: "proposal S4; design Decision 4（备选 A 排除理由）; DESIGN 11.4"
+        given: "security.max_request_size 设为 10MB，且请求为分块传输（Transfer-Encoding: chunked，无 Content-Length）"
+        when: "RequestSizeMiddleware 读取 body 的过程中累计字节数超过 max_request_size"
+        then: "请求 SHALL 被中断并返回 HTTP 413"
+        and:
+          - "响应体 SHALL 为 OpenAI 兼容错误"
+          - "超限后 SHALL NOT 继续读取完整请求体以避免内存耗尽"
+  - id: REQ-RSL-003
+    description: "请求体大小在限制内的请求正常放行"
+    scenarios:
+      - id: SC-RSL-003
+        confidence: high
+        evidence: "proposal S4; design Decision 4; DESIGN 11.4"
+        given: "一份请求体大小不超过 security.max_request_size 的合法请求"
+        when: "RequestSizeMiddleware 校验该请求"
+        then: "该请求 SHALL 被放行并进入后续路由处理"
+        and:
+          - "响应 SHALL 正常返回，不出现 413 错误"

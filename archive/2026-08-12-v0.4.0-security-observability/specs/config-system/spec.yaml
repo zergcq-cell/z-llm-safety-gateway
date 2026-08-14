@@ -1,0 +1,66 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: config-system
+
+meta:
+  capability: config-system
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T15:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-CFG-001
+    description: "SecurityConfig 拆分为类型化子模型（Auth/TLS/RateLimit/CORS/RequestID/Timeout），补 max_request_size，统一时长解析"
+    scenarios:
+      - id: SC-CFG-001
+        confidence: high
+        evidence: "proposal C1; design Decision 9"
+        given: "一份包含 security.auth.enabled/api_keys、security.tls、security.rate_limit、security.cors、security.request_id、security.max_request_size 的配置"
+        when: "GatewayConfig 加载该配置"
+        then: "该配置 SHALL 被解析为类型化的 AuthConfig/TLSConfig/RateLimitConfig/CORSConfig/RequestIDConfig 实例"
+        and:
+          - "security.timeout SHALL 解析 '120s'/'5s' 字符串形式的 upstream 与 detector 超时"
+          - "全部新字段 SHALL 有默认值，旧 v0.1.0~v0.3.0 配置无需修改即可加载"
+  - id: REQ-CFG-002
+    description: "ServerConfig 补 workers 与 stop_timeout"
+    scenarios:
+      - id: SC-CFG-002
+        confidence: high
+        evidence: "proposal C2; design Decision 9"
+        given: "server 配置含 workers 与 stop_timeout（如 30s）"
+        when: "GatewayConfig 加载该配置"
+        then: "server.workers 与 server.stop_timeout SHALL 被解析，默认 workers=1、stop_timeout='30s'"
+  - id: REQ-CFG-003
+    description: "ObservabilityConfig 重构为嵌套 MetricsConfig/TracingConfig"
+    scenarios:
+      - id: SC-CFG-003
+        confidence: high
+        evidence: "proposal C2; design Decision 10"
+        given: "observability 配置含 metrics.enabled/endpoint 与 tracing.enabled/exporter/endpoint/sample_rate"
+        when: "GatewayConfig 加载该配置"
+        then: "observability SHALL 解析为 MetricsConfig/TracingConfig 子模型"
+        and:
+          - "tracing.exporter SHALL 支持 'otlp'，sample_rate 默认 0.1"
+          - "metrics.endpoint 默认 '/metrics'"
+  - id: REQ-CFG-004
+    description: "阈值命名空间分离：count 与 confidence 阈值使用不同 key"
+    scenarios:
+      - id: SC-CFG-004
+        confidence: high
+        evidence: "proposal C3; design Decision 11; DESIGN 5.3.1"
+        given: "sensitive_words 检测器 config 含 count_block_threshold=3、count_flag_threshold=1"
+        when: "配置校验运行"
+        then: "配置校验 SHALL 独立校验 count 阈值（count_block > count_flag）与 confidence 阈值"
+        and:
+          - "count 阈值 SHALL 与 confidence 阈值（block_threshold/flag_threshold）互不混淆"
+          - "旧的 block_threshold/flag_threshold 若仍用于 confidence 语义 SHALL 保持可用"
+  - id: REQ-CFG-005
+    description: "PII 检测器命名统一为 pii_redaction"
+    scenarios:
+      - id: SC-CFG-005
+        confidence: high
+        evidence: "proposal C4; design Decision 12"
+        given: "配置引用名为 pii_redaction 的检测器"
+        when: "PIIDetector.name 与注册表/校验器比对"
+        then: "PIIDetector.name SHALL 等于 'pii_redaction'"
+        and:
+          - "engine 按 detector.name 查找配置 SHALL 命中 pii_redaction 的配置"

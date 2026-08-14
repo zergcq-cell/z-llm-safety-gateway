@@ -1,42 +1,24 @@
-# STDD
-.stdd/
-.stdd.yaml
-
-# Tests
-tests/
-
-# Git
-.git/
-.gitignore
-
-# Python
-__pycache__/
+__pycache__
 *.pyc
 *.pyo
-*.pyd
-.Python
+.git
+.gitignore
+tests/
+.stdd/
+changes/
+archive/
+*.md
+!README.md
+.trae/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+.coverage
 *.egg-info/
 dist/
 build/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
-
-# Docs
-*.md
-!README.md
-DESIGN.md
-AGENTS.md
-STDD.md
-
-# Misc
-.DS_Store
-*.log
+.tox/
+.venv/
+venv/
+env/

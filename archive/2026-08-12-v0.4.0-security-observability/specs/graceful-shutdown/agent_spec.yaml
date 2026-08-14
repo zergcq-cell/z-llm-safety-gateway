@@ -1,0 +1,51 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+# Capability: graceful-shutdown
+
+meta:
+  task_id: "graceful-shutdown"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is available"
+    - "Project dependencies (FastAPI, uvicorn, pydantic, httpx, structlog) are installed"
+    - "config-system capability is implemented（server.stop_timeout 可解析，默认 30s）"
+    - "网关可通过 uvicorn 启动，且 __main__.py 已注册 SIGTERM handler"
+    - "一份可解析的测试配置文件存在，用于测试"
+
+steps:
+  - id: CP-1
+    description: "验证 SIGTERM 触发优雅停机，in-flight 请求完成（SC-GS-001）"
+    action: "运行 pytest：启动网关，发起一个延迟响应的 in-flight 请求，向进程发送 SIGTERM，断言请求最终收到完整响应且进程以退出码 0 结束"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "验证 stop_timeout 超时后强制退出（SC-GS-002）"
+    action: "运行 pytest：配置较小的 server.stop_timeout，启动一个超过该时长的 in-flight 请求，发送 SIGTERM，断言进程在 stop_timeout 到期后被强制退出"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "验证优雅停机时冲刷审计日志并释放资源（SC-GS-003）"
+    action: "运行 pytest：使请求产生审计日志后发送 SIGTERM，断言停机前审计日志已 flush，检测器/提供方资源关闭逻辑被调用"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "运行 graceful-shutdown capability 完整测试套件"
+    action: "运行: pytest tests/ -k 'shutdown or graceful' -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "运行 lint 与类型检查"
+    action: "运行: ruff check src/z_llm_safety_gateway/__main__.py && mypy src/z_llm_safety_gateway/__main__.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "还原 __main__.py 中 SIGTERM handler 与 stop_timeout 相关逻辑"
+    - "移除为 graceful-shutdown capability 添加的测试文件"

@@ -1,0 +1,121 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+# Capability: sse-streaming（修正类 — SSE 分片重组 + 流式审计字段修正）
+# 覆盖 backlog B-03 / B-05 / B-06 / B-07；design Decision 14 / 15
+
+meta:
+  task_id: "sse-streaming"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is available"
+    - "Project dependencies (FastAPI, pydantic, httpx, structlog) are installed"
+    - "v0.1.0~v0.3.0 已有流式基础可用：streaming/handler.py、sliding_window.py、sse.py、memory.py、post_audit/audit.py、providers/base.py、routes/chat.py"
+    - "pytest + pytest-asyncio 可用，用于 RED→GREEN→REFACTOR 测试"
+    - "一份可解析的测试配置存在（streaming_config 可解析 window_size/overlap/post_audit/recall）"
+
+steps:
+  - id: CP-1
+    description: "SSEBuffer 跨 chunk 重组拆分事件（SC-SSE-001）"
+    action: "运行 pytest：构造一个被拆分到两个 chunk 的 `data:{json}\\n\\n` 事件，断言 SSEBuffer 重组后产出完整事件且 delta 文本完整进入检测，不再判为空窗口"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "SSEBuffer 单 chunk 多事件按 \\n\\n 切分（SC-SSE-002）"
+    action: "运行 pytest：构造单个含多个 `\\n\\n` 分隔事件的 chunk，断言按原始顺序产出全部完整事件，分界严格以 `\\n\\n` 为准"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-3
+    description: "SSEBuffer 末尾残留 flush 不丢内容（SC-SSE-003）"
+    action: "运行 pytest：以未以 `\\n\\n` 结尾的残留片段结束流，断言残留内容被 flush 解析且不静默丢弃；`[DONE]` 片段透传且不抛异常"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "非 data 事件（safety_block / [DONE]）透传不受影响（SC-SSE-004）"
+    action: "运行 pytest：构造含 safety_block 与 [DONE] 的流，断言其被原样透传，类型与负载不变"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "handler 单独维护输出侧 output_action/output_risk_level（SC-SSE-005）"
+    action: "运行 pytest：滑动窗口模式喂入多个窗口结果，断言 handler 维护的输出侧 action 按严重度聚合、risk level 取最高值"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-6
+    description: "流中被阻断时审计记录 block 及触发 detector/category（SC-SSE-006）"
+    action: "运行 pytest：构造中间窗口 final_action=block 的流，断言输出侧状态为 block、审计条目 final_action=block 且含 blocked_by/category/confidence/reason"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-7
+    description: "流式输出审计使用输出侧而非输入侧 request.state.safety_action（SC-SSE-007）"
+    action: "运行 pytest：令输入侧 safety_action=allow 而输出侧被阻断，断言流式输出审计记录 block 而非 allow"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-8
+    description: "后审计 detector_results 写入审计条目（SC-SSE-008）"
+    action: "运行 pytest：断言流式输出审计条目的 detectors 数组包含后置审计完整结果，不再恒为空"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-9
+    description: "process_chunk 累加 window_count 并以实际值写入审计（SC-SSE-009）"
+    action: "运行 pytest：处理 N 个完整窗口后，断言审计条目 window_count == N，且非流式条目不受影响"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-10
+    description: "PostAuditRunner 透传 request_id 与 language（SC-SSE-010 / SC-SSE-011）"
+    action: "运行 pytest：携带非空 request_id 与输入侧 language 触发后置审计，断言 PostAuditRunner 构建的 DetectionContext.request_id == request_id 且 language == 输入侧 language"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-11
+    description: "流式输出审计 language 采用输入侧语言（SC-SSE-012）"
+    action: "运行 pytest：断言流式输出审计条目 language 等于输入侧 language；输入侧未检测时保持 None"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-12
+    description: "无输出检测器时透明透传不回归（SC-SSE-013）"
+    action: "运行 pytest：断言 has_detection=False 时逐 chunk 透传并以 [DONE] 结束，不执行缓冲/滑窗/后置审计"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-13
+    description: "buffer 模式行为与审计不回归（SC-SSE-014）"
+    action: "运行 pytest：断言 buffer 模式保持全量检测后 block/回放 + [DONE]，其审计仍用该模式结果，window_count/SSEBuffer 不作用于 buffer 模式"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-14
+    description: "ProviderError 错误路径不回归（SC-SSE-015）"
+    action: "运行 pytest：模拟 provider 抛出 ProviderError，断言事件序列为 error + [DONE] 且审计照常记录，final_action 反映实际、不伪造 block"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-15
+    description: "运行 sse-streaming 完整测试套件"
+    action: "运行: pytest tests/ -k 'streaming or sse or post_audit' -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-16
+    description: "运行 lint 与类型检查"
+    action: "运行: ruff check src/z_llm_safety_gateway/streaming src/z_llm_safety_gateway/post_audit src/z_llm_safety_gateway/routes/chat.py && mypy src/z_llm_safety_gateway/streaming src/z_llm_safety_gateway/post_audit src/z_llm_safety_gateway/routes/chat.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回滚 streaming/sse.py 中 SSEBuffer 的新增/修改"
+    - "回滚 streaming/handler.py 中 output_action/output_risk_level 维护、window_count 累加、language 透传逻辑"
+    - "回滚 post_audit/audit.py 中 PostAuditRunner.run 的 request_id/language 参数透传"
+    - "回滚 routes/chat.py 中流式输出审计对输出侧结果、detector_results、window_count 的接线"
+    - "移除为 sse-streaming 修正新增/修改的测试"

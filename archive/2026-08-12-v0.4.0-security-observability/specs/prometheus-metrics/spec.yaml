@@ -1,0 +1,83 @@
+# spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
+# Capability: prometheus-metrics
+# 依据：design Decision 7；DESIGN 12.5；proposal O1
+
+meta:
+  capability: prometheus-metrics
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-PROM-001
+    description: "/metrics 端点由 observability.metrics.enabled 控制，开启时返回 Prometheus 文本格式"
+    scenarios:
+      - id: SC-PROM-001
+        confidence: high
+        evidence: "design Decision 7; DESIGN 12.5; proposal O1"
+        given: "observability.metrics.enabled=true，网关已启动并注册了 /metrics 路由"
+        when: "客户端以 GET 请求 /metrics"
+        then: "网关 SHALL 返回 HTTP 200，响应体为 prometheus_client.generate_latest() 生成的 Prometheus 文本格式指标"
+        and:
+          - "响应 Content-Type SHALL 为 'text/plain; version=0.0.4; charset=utf-8'"
+          - "响应 SHALL 包含本 capability 定义的全部已注册指标系列"
+      - id: SC-PROM-002
+        confidence: high
+        evidence: "design Decision 7; proposal O1"
+        given: "observability.metrics.enabled=false"
+        when: "客户端以 GET 请求 /metrics"
+        then: "网关 SHALL NOT 暴露 Prometheus 指标（返回 404）"
+        and:
+          - "未启用时 SHALL NOT 初始化指标注册表，避免指标采集开销"
+          - "该开关 SHALL 默认关闭，需显式启用"
+  - id: REQ-PROM-002
+    description: "暴露 Gateway 指标（请求/时长/阻断/标记/活跃连接）"
+    scenarios:
+      - id: SC-PROM-003
+        confidence: high
+        evidence: "design Decision 7; DESIGN 12.5 Gateway Metrics"
+        given: "metrics.enabled=true，网关已注册 gateway 指标"
+        when: "网关处理一个经过检测的请求（方向为 input/output，得到 action=block）"
+        then: "网关 SHALL 递增 safety_gateway_requests_total，并携带 direction/action/model 标签"
+        and:
+          - "网关 SHALL 记录 safety_gateway_request_duration_seconds 直方图（标签 direction/model）"
+          - "阻断请求 SHALL 递增 safety_gateway_blocks_total（标签 direction/category/detector_name）"
+          - "标记请求 SHALL 递增 safety_gateway_flags_total（标签 direction/category/detector_name）"
+          - "safety_gateway_active_connections 与 safety_gateway_streaming_active 为 gauge，SHALL 反映当前连接数"
+  - id: REQ-PROM-003
+    description: "暴露 Detector 指标（耗时/结果/错误/熔断状态）"
+    scenarios:
+      - id: SC-PROM-004
+        confidence: high
+        evidence: "design Decision 7; DESIGN 12.5 Detector Metrics"
+        given: "metrics.enabled=true，pipeline 运行 prompt_injection 等检测器"
+        when: "检测器完成一次执行（结果为 block，随后又发生一次异常）"
+        then: "网关 SHALL 记录 safety_detector_duration_seconds 直方图（标签 detector_name/direction）"
+        and:
+          - "检测结果 SHALL 递增 safety_detector_results_total（标签 detector_name/action）"
+          - "检测异常 SHALL 递增 safety_detector_errors_total（标签 detector_name/error_type）"
+          - "safety_detector_circuit_breaker_state gauge（标签 detector_name）SHALL 反映熔断器状态（0=closed,1=open,2=half-open）"
+  - id: REQ-PROM-004
+    description: "暴露 Provider 指标（请求/耗时/错误）"
+    scenarios:
+      - id: SC-PROM-005
+        confidence: high
+        evidence: "design Decision 7; DESIGN 12.5 Provider Metrics"
+        given: "metrics.enabled=true，provider 路由到 openai 模型 gpt-4"
+        when: "网关调用上游 provider 一次并发生一次错误"
+        then: "网关 SHALL 递增 safety_provider_requests_total（标签 provider/model）"
+        and:
+          - "网关 SHALL 记录 safety_provider_duration_seconds 直方图（标签 provider/model）"
+          - "provider 错误 SHALL 递增 safety_provider_errors_total（标签 provider/error_type）"
+  - id: REQ-PROM-005
+    description: "暴露 Recall 指标（后审计召回计数）"
+    scenarios:
+      - id: SC-PROM-006
+        confidence: high
+        evidence: "design Decision 7; DESIGN 12.5 Recall Metrics; proposal O1"
+        given: "metrics.enabled=true，一次后审计触发召回（category=pii，risk_level=high）"
+        when: "PostAuditRunner 完成一次召回记录"
+        then: "网关 SHALL 递增 safety_recalls_total（标签 category/risk_level）"
+        and:
+          - "指标 SHALL 仅记录召回次数，不包含敏感原文内容"
+          - "该计数 SHALL 与 audit logger 的召回记录语义一致（DESIGN 12.5）"

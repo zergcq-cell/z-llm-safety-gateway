@@ -26,6 +26,10 @@ class DetectorAuditRecord(BaseModel):
     risk_level: Literal["low", "medium", "high", "critical"]
     duration_ms: float = 0.0
     error: str | None = None
+    # Whether a modify action was actually applied to the request/response.
+    # None = not applicable (non-modify actions); True = modify applied;
+    # False = modify could not be applied (e.g. streaming post-audit downgrade).
+    applied: bool | None = None
 
 
 class AuditEntry(BaseModel):

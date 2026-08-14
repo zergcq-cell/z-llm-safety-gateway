@@ -11,7 +11,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from z_llm_safety_gateway.observability import metrics as observability_metrics
 from z_llm_safety_gateway.routes.health import router, set_ready
+
+METRICS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 
 @pytest.fixture
@@ -37,6 +40,13 @@ def reset_ready_state() -> None:
     """
     yield
     set_ready(False)
+
+
+@pytest.fixture(autouse=True)
+def reset_metrics_state() -> None:
+    """Disable metric collection after each test to avoid pollution."""
+    yield
+    observability_metrics.set_enabled(False)
 
 
 # ---------------------------------------------------------------------------
@@ -106,41 +116,44 @@ def test_ready_when_not_ready_returns_503(client: TestClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# TC-HEALTH-004: GET /metrics -> 200, Content-Type: text/plain; charset=utf-8
+# TC-HEALTH-004: GET /metrics (enabled) -> 200, Prometheus text content type
 # ---------------------------------------------------------------------------
 
 
 def test_metrics_returns_text_plain(client: TestClient) -> None:
-    """TC-HEALTH-004: Metrics endpoint returns text/plain content type.
+    """TC-HEALTH-004: Metrics endpoint returns Prometheus text content type.
 
-    GIVEN the FastAPI server is running
+    GIVEN observability.metrics.enabled=true
     WHEN the client sends GET /metrics
     THEN the server returns HTTP 200
-    AND the Content-Type is text/plain; charset=utf-8
+    AND the Content-Type is text/plain; version=0.0.4; charset=utf-8
     """
+    observability_metrics.set_enabled(True)
+
     response = client.get("/metrics")
 
     assert response.status_code == 200
-    assert response.headers["content-type"] == "text/plain; charset=utf-8"
+    assert response.headers["content-type"] == METRICS_CONTENT_TYPE
 
 
 # ---------------------------------------------------------------------------
-# TC-HEALTH-005: GET /metrics -> placeholder body (Phase 1)
+# TC-HEALTH-005: GET /metrics (enabled) -> body contains metric families
 # ---------------------------------------------------------------------------
 
 
-def test_metrics_returns_placeholder_body(client: TestClient) -> None:
-    """TC-HEALTH-005: Metrics endpoint returns placeholder body in Phase 1.
+def test_metrics_returns_prometheus_families(client: TestClient) -> None:
+    """TC-HEALTH-005: Metrics endpoint exposes registered Prometheus families.
 
-    GIVEN the FastAPI server is running (Phase 1)
+    GIVEN observability.metrics.enabled=true and gateway metrics registered
     WHEN the client sends GET /metrics
-    THEN the response body is "# z LLM Safety Gateway metrics placeholder\\n"
-    AND Phase 1 does NOT implement actual Prometheus metrics collection
+    THEN the response body contains the registered metric families.
     """
+    observability_metrics.set_enabled(True)
+
     response = client.get("/metrics")
 
     assert response.status_code == 200
-    assert response.text == "# z LLM Safety Gateway metrics placeholder\n"
+    assert "safety_gateway_requests_total" in response.text
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +170,7 @@ def test_health_endpoints_without_auth_do_not_return_401(client: TestClient) -> 
     THEN the server does NOT return 401 Unauthorized for any endpoint
     AND /health returns HTTP 200
     AND /ready returns HTTP 200 or 503 (depending on readiness state)
-    AND /metrics returns HTTP 200
+    AND /metrics returns HTTP 404 (metrics disabled by default)
     """
     # Ensure no Authorization header is sent
     headers_without_auth: dict[str, str] = {}
@@ -174,4 +187,5 @@ def test_health_endpoints_without_auth_do_not_return_401(client: TestClient) -> 
     # Specific status codes
     assert health_response.status_code == 200
     assert ready_response.status_code in (200, 503)
-    assert metrics_response.status_code == 200
+    # Metrics are disabled by default -> 404, not 401.
+    assert metrics_response.status_code == 404

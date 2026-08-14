@@ -111,6 +111,10 @@ def test_ready_response_contains_request_id(client: TestClient) -> None:
 def test_metrics_response_contains_request_id(client: TestClient) -> None:
     """TC-HEALTH-009: /metrics response contains X-Request-ID in UUID v4 format.
 
+    v0.4.0: /metrics is controlled by observability.metrics.enabled (default off).
+    When disabled, /metrics returns 404, but X-Request-ID is still injected by
+    the RequestID middleware (outermost in the chain).
+
     GIVEN the FastAPI server is running with RequestID middleware registered
     WHEN the client sends GET /metrics without X-Request-ID header
     THEN the response contains X-Request-ID header
@@ -118,7 +122,8 @@ def test_metrics_response_contains_request_id(client: TestClient) -> None:
     """
     response = client.get("/metrics")
 
-    assert response.status_code == 200
+    # metrics disabled by default → 404, but middleware still injects request ID
+    assert response.status_code == 404
     assert "X-Request-ID" in response.headers
 
     request_id = response.headers["X-Request-ID"]

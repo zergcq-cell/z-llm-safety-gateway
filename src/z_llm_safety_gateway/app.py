@@ -12,15 +12,17 @@ Importing this module does NOT start a server or create an app instance —
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 import structlog
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 
 from z_llm_safety_gateway.audit.logger import AuditLogger
+from z_llm_safety_gateway.circuit_breaker.factory import build_circuit_breaker
 from z_llm_safety_gateway.config.loader import load_config
-from z_llm_safety_gateway.config.models import DetectorsConfig
+from z_llm_safety_gateway.config.models import DetectorsConfig, _parse_duration
 from z_llm_safety_gateway.detectors import create_default_registry
 from z_llm_safety_gateway.exceptions import (
     ConfigError,
@@ -28,8 +30,13 @@ from z_llm_safety_gateway.exceptions import (
     OpenAIErrorDetail,
     SafetyBlockError,
 )
+from z_llm_safety_gateway.middleware.auth import AuthMiddleware
+from z_llm_safety_gateway.middleware.rate_limit import RateLimitMiddleware
 from z_llm_safety_gateway.middleware.request_id import RequestIDMiddleware
+from z_llm_safety_gateway.middleware.request_size import RequestSizeMiddleware
 from z_llm_safety_gateway.middleware.safety_headers import SafetyHeadersMiddleware
+from z_llm_safety_gateway.observability import metrics as observability_metrics
+from z_llm_safety_gateway.observability import tracing as observability_tracing
 from z_llm_safety_gateway.pipeline import FlagEscalationRule, PipelineEngine
 from z_llm_safety_gateway.post_audit.audit import PostAuditRunner
 from z_llm_safety_gateway.providers.base import ProviderError
@@ -41,6 +48,28 @@ from z_llm_safety_gateway.routes.health import set_ready
 from z_llm_safety_gateway.routes.models import router as models_router
 
 logger = structlog.get_logger()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application lifecycle: startup and graceful shutdown.
+
+    On shutdown, flushes audit logs and releases resources.  This replaces
+    custom SIGTERM/SIGINT handlers that conflicted with uvicorn's own signal
+    management (v0.4.0 fix).  uvicorn triggers lifespan shutdown when it
+    receives SIGTERM/SIGINT, so audit flushing is guaranteed to run.
+    """
+    # Startup: nothing special (detectors initialized synchronously in create_app).
+    yield
+    # Shutdown: flush audit logs and release resources.
+    audit_logger = getattr(app.state, "audit_logger", None)
+    if audit_logger is not None:
+        try:
+            audit_logger.flush()
+            audit_logger.close()
+        except Exception:  # pragma: no cover - defensive, shutdown must not hang
+            logger.warning("audit_shutdown_flush_failed", exc_info=True)
+    logger.info("graceful_shutdown_complete")
 
 
 async def _init_detectors(
@@ -60,25 +89,50 @@ async def _init_detectors(
 
 def _extract_detector_configs(
     detectors_list: Any,
+    *,
+    default_timeout_seconds: float,
 ) -> dict[str, dict[str, Any]]:
     """Extract detector configs from a DetectorsConfig input/output list.
 
+    v0.4.0 (B-04): injects ``timeout_seconds`` (resolved from the detector's
+    explicit ``timeout`` or the global ``security.timeout.detector`` default)
+    and a configured ``CircuitBreaker`` instance into each detector config,
+    so per-detector timeouts and circuit breakers actually take effect.
+
     Args:
         detectors_list: A list of DetectorConfig objects.
+        default_timeout_seconds: Global default detector timeout in seconds.
 
     Returns:
         A dict mapping detector name to its merged config dict
-        (detector-specific config + priority + on_error).
+        (detector-specific config + priority + on_error + timeout_seconds
+        + optional CircuitBreaker instance).
     """
     configs: dict[str, dict[str, Any]] = {}
     for det in detectors_list:
         if det.enabled:
-            configs[det.name] = {
+            timeout_seconds = _resolve_timeout_seconds(det, default_timeout_seconds)
+            merged: dict[str, Any] = {
                 **det.config,
                 "priority": det.priority,
                 "on_error": det.on_error,
+                "timeout_seconds": timeout_seconds,
             }
+            if det.circuit_breaker is not None and det.circuit_breaker.enabled:
+                merged["circuit_breaker"] = build_circuit_breaker(det.circuit_breaker)
+            configs[det.name] = merged
     return configs
+
+
+def _resolve_timeout_seconds(det: Any, default_timeout_seconds: float) -> float:
+    """Resolve a detector's timeout to seconds.
+
+    An explicit per-detector ``timeout`` (e.g. ``"10s"``) overrides the global
+    default ``security.timeout.detector``.
+    """
+    if det.timeout is not None and det.timeout:
+        return _parse_duration(det.timeout)
+    return default_timeout_seconds
 
 
 def create_app(config_path: str) -> FastAPI:
@@ -110,17 +164,41 @@ def create_app(config_path: str) -> FastAPI:
     # 1. Load configuration
     config = load_config(config_path)
 
+    # 1b. Initialize observability (Prometheus metrics + optional OTel tracing).
+    observability_metrics.set_enabled(config.observability.metrics.enabled)
+
     # 2. Create FastAPI instance
     app = FastAPI(
         title="z LLM Safety Gateway",
         description="Open-source, modular LLM content safety gateway",
+        lifespan=lifespan,
     )
 
+    # 2b. Initialize optional OpenTelemetry tracing (best effort, off by default).
+    observability_tracing.setup_tracing(config.observability.tracing, app=app)
+
     # 3. Register middleware (order matters in Starlette!)
-    #    SafetyHeaders added first → inner (processes response first)
-    #    RequestID   added second  → outer (processes request first, response last)
+    #    add_middleware() adds to the *outer* end, so we register inner-first.
+    #    Final request chain (outer->inner):
+    #    RequestID -> Auth -> RateLimit -> RequestSize -> SafetyHeaders
     app.add_middleware(SafetyHeadersMiddleware)
-    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(RequestSizeMiddleware, max_request_size=config.security.max_request_size)
+    app.add_middleware(RateLimitMiddleware, config=config.security.rate_limit)
+    app.add_middleware(AuthMiddleware, config=config.security.auth)
+    app.add_middleware(
+        RequestIDMiddleware,
+        header_name=config.security.request_id.header,
+        generate=config.security.request_id.generate,
+    )
+
+    # 3b. CORS (optional, default off).
+    from z_llm_safety_gateway.middleware.cors import build_cors_middleware_kwargs
+
+    cors_kwargs = build_cors_middleware_kwargs(config.security.cors)
+    if cors_kwargs:
+        from starlette.middleware.cors import CORSMiddleware
+
+        app.add_middleware(CORSMiddleware, **cors_kwargs)
 
     # 4. Create ModelRouter and store in app.state
     router = ModelRouter(config)
@@ -135,8 +213,14 @@ def create_app(config_path: str) -> FastAPI:
     detectors_cfg = config.pipeline.detectors
     assert isinstance(detectors_cfg, DetectorsConfig)
 
-    input_configs = _extract_detector_configs(detectors_cfg.input)
-    output_configs = _extract_detector_configs(detectors_cfg.output)
+    input_configs = _extract_detector_configs(
+        detectors_cfg.input,
+        default_timeout_seconds=config.security.timeout.detector_seconds,
+    )
+    output_configs = _extract_detector_configs(
+        detectors_cfg.output,
+        default_timeout_seconds=config.security.timeout.detector_seconds,
+    )
 
     # Initialize detectors eagerly (asyncio.run works because create_app
     # is called outside of a running event loop).

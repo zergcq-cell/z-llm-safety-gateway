@@ -1,0 +1,126 @@
+# STDD Change State File
+# 变更: 2026-08-12-v0.4.0-security-observability
+
+change_id: "2026-08-12-v0.4.0-security-observability"
+title: "v0.4.0 - Security & Observability"
+created: "2026-08-12T14:00:00+08:00"
+
+# 阶段状态
+phase:
+  current: deliver
+  understand: completed
+  spec: completed
+  slice: completed
+  build: completed
+  verify: completed
+  deliver: completed
+
+# 模式与复杂度
+mode: thorough
+task_type: code
+complexity_score: 17
+score_confidence: confirmed
+
+# 关键性评估
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+
+# 锚定
+anchoring:
+  level: L2
+  reference_changes:
+    - "2026-08-12-v0.3.0-streaming-audit"
+    - "2026-08-11-v0.2.0-pipeline-detectors"
+  anchor_implementations: []
+
+# Gate 状态
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+
+# 长程模式
+long_range:
+  enabled: true
+  mode: "full_auto"
+  pre_auth_completed: true
+  pre_auth_timestamp: "2026-08-12T15:30:00+08:00"
+  max_iterations: 10
+  degradation_triggers:
+    - "连续自动修复 3 次失败"
+    - "测试通过率 < 95%"
+    - "安全相关问题"
+    - "预授权范围外的未预期情况"
+
+# 产出物
+artifacts:
+  proposal_yaml: "proposal.yaml"
+  proposal_md: "proposal.md"
+  design_md: "design.md"
+  test_plan_md: "test-plan.md"
+  phase_context_md: null
+  slices_md: "slices.md"
+  tasks_md: "tasks.md"
+  test_report_md: "test-report.md"
+  design_adjustments_md: "design-adjustments.md"
+
+# 时间戳
+timestamps:
+  understand_completed: "2026-08-12T14:00:00+08:00"
+  spec_completed: "2026-08-12T14:30:00+08:00"
+  slice_completed: "2026-08-12T15:00:00+08:00"
+  build_completed: "2026-08-12T18:40:00+08:00"
+
+# 状态
+status: archived
+
+# Phase 4 切片状态
+phase4:
+  slices_completed:
+    "1":
+      status: "done"
+      tc_coverage: "5/5"
+      new_tests: 11
+      verified_at: "2026-08-12T16:00:00+08:00"
+    "2":
+      status: "done"
+      tc_coverage: "13/13"
+      new_tests: 13
+      verified_at: "2026-08-12T16:30:00+08:00"
+    "3":
+      status: "done"
+      tc_coverage: "15/15"
+      new_tests: 20
+      verified_at: "2026-08-12T16:30:00+08:00"
+    "4":
+      status: "done"
+      tc_coverage: "11/11"
+      new_tests: 16
+      verified_at: "2026-08-12T16:30:00+08:00"
+    "5":
+      status: "done"
+      tc_coverage: "14/18"
+      new_tests: 14
+      verified_at: "2026-08-12T18:20:00+08:00"
+    "6":
+      status: "done"
+      tc_coverage: "15/15"
+      new_tests: 22
+      verified_at: "2026-08-12T18:40:00+08:00"
+    "7":
+      status: "done"
+      tc_coverage: "16/16"
+      new_tests: 16
+      verified_at: "2026-08-12T18:40:00+08:00"
+
+# Phase 4 总计
+phase4_totals:
+  total_new_tests: 121
+  total_tc_covered: "89/90"
+  full_suite: "744 passed, 1 skipped"
+  ruff: "pass"
+  mypy: "pass"

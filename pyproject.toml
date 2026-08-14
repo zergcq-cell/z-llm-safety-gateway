@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "z-llm-safety-gateway"
-version = "0.1.0"
+version = "0.4.0"
 description = "Open-source, modular LLM content safety gateway"
 readme = "README.md"
 license = "Apache-2.0"
@@ -19,6 +19,9 @@ dependencies = [
     "structlog>=24.1.0",
     "pyyaml>=6.0",
     "uvicorn[standard]>=0.30.0",
+    "pyahocorasick>=2.0.0",
+    "langdetect>=1.0.9",
+    "prometheus-client>=0.20.0",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +38,11 @@ dev = [
 ml = [
     "transformers>=4.30.0",
     "torch>=2.0.0",
+]
+otel = [
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
 ]
 
 [project.scripts]
@@ -81,4 +89,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "torch.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "opentelemetry.*"
 ignore_missing_imports = true

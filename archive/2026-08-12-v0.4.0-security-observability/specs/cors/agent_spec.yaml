@@ -1,0 +1,63 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+# Capability: cors
+
+meta:
+  task_id: "cors"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is available"
+    - "Project dependencies (FastAPI, starlette, uvicorn, pydantic, httpx, structlog) are installed"
+    - "config-system capability is implemented（security.cors.enabled/origins 可解析）"
+    - "create_app 工厂已实现，支持根据配置接入中间件"
+    - "一份可解析的测试配置文件存在，用于测试"
+
+steps:
+  - id: CP-1
+    description: "验证 CORS 默认关闭时不注册 CORSMiddleware（SC-CORS-001）"
+    action: "运行 pytest：以 security.cors 未启用（或 enabled: false）的配置调用 create_app，断言应用未注册 CORSMiddleware，且跨域预检响应不含 Access-Control-Allow-Origin"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-2
+    description: "验证启用 CORS 后允许配置的 origin 通过预检（SC-CORS-002）"
+    action: "运行 pytest：配置 security.cors.enabled=true 且 origins=['https://app.example.com']，发送 Origin: https://app.example.com 的 OPTIONS 预检请求，断言响应含 Access-Control-Allow-Origin 且允许 methods/headers"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "http://127.0.0.1:8080/v1/chat/completions"
+        expected: 200
+  - id: CP-3
+    description: "验证非配置 origin 不获得 CORS 放行头（SC-CORS-002）"
+    action: "运行 pytest：发送 Origin: https://evil.example.com 的预检请求，断言响应不含针对该 origin 的 Access-Control-Allow-Origin 放行"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "验证启用 CORS 不影响同源业务请求与安全中间件链（SC-CORS-003）"
+    action: "运行 pytest：向启用 CORS 的网关发送同源 POST /v1/chat/completions，断言业务正常处理；同时验证认证/限流/请求大小中间件仍按序生效"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "http://127.0.0.1:8080/v1/chat/completions"
+        expected: 200
+  - id: CP-5
+    description: "运行 cors capability 完整测试套件"
+    action: "运行: pytest tests/ -k 'cors' -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-6
+    description: "运行 lint 与类型检查"
+    action: "运行: ruff check src/z_llm_safety_gateway/app.py && mypy src/z_llm_safety_gateway/app.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "还原 create_app 中 CORSMiddleware 的接入逻辑"
+    - "移除为 cors capability 添加的测试文件"

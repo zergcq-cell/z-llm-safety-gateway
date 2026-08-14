@@ -1,0 +1,46 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: tls
+
+meta:
+  capability: tls
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-TLS-001
+    description: "TLS 默认关闭，未配置 security.tls.enabled 时以 HTTP 启动"
+    scenarios:
+      - id: SC-TLS-001
+        confidence: high
+        evidence: "proposal S3; design Decision 3; DESIGN 11.2"
+        given: "一份未设置 security.tls.enabled（或显式 enabled: false）的配置"
+        when: "网关通过 __main__.py 启动（uvicorn.run）"
+        then: "uvicorn 启动参数 SHALL 不包含 ssl_certfile/ssl_keyfile，网关以明文 HTTP 对外提供"
+        and:
+          - "缺少 security.tls 配置时 SHALL 不产生任何 TLS 相关启动错误"
+          - "网关 HTTP 端点 SHALL 在配置的 host:port 上正常响应"
+  - id: REQ-TLS-002
+    description: "启用 TLS 时，将 security.tls.cert_file/key_file 传递给 uvicorn.run 以支持 HTTPS"
+    scenarios:
+      - id: SC-TLS-002
+        confidence: high
+        evidence: "proposal S3; design Decision 3; DESIGN 11.2"
+        given: "配置 security.tls.enabled=true 且提供有效的 cert_file 与 key_file 路径"
+        when: "网关通过 __main__.py 启动（uvicorn.run）"
+        then: "uvicorn.run SHALL 接收 ssl_certfile=<cert_file> 与 ssl_keyfile=<key_file>"
+        and:
+          - "网关 SHALL 通过 HTTPS 对外提供服务，使用所配置证书完成 TLS 握手"
+          - "通过 https://<host>:<port> 的请求 SHALL 被成功受理并正常处理"
+  - id: REQ-TLS-003
+    description: "启用 TLS 且证书/私钥文件缺失或不可读时拒绝启动并给出明确错误"
+    scenarios:
+      - id: SC-TLS-003
+        confidence: medium
+        evidence: "proposal S3; design Decision 3 + Risks/Trade-offs; DESIGN 11.2"
+        given: "配置 security.tls.enabled=true，但 cert_file 或 key_file 指向不存在的文件"
+        when: "网关通过 __main__.py 启动（uvicorn.run）"
+        then: "启动过程 SHALL 失败并抛出明确错误，网关 SHALL NOT 以未加密 HTTP 静默降级运行"
+        and:
+          - "错误信息 SHALL 指明缺失的证书/私钥文件路径"
+          - "未提供示例配置与启动校验时，操作员 SHALL 能在日志中定位 TLS 配置问题"

@@ -33,7 +33,7 @@ class ModelRouter:
         }
         self._provider_instances: dict[str, BaseProvider] = {}
 
-        timeout = float(config.security.timeout.get("upstream", 120))
+        timeout = config.security.timeout.upstream_seconds
 
         for name, provider_config in self._providers.items():
             provider_cls = _PROVIDER_TYPES.get(provider_config.type)

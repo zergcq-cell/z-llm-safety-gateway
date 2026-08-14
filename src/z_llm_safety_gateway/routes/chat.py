@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
@@ -37,6 +38,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from z_llm_safety_gateway.audit.logger import AuditLogger, compute_content_hash
 from z_llm_safety_gateway.audit.models import AuditEntry, DetectorAuditRecord
+from z_llm_safety_gateway.config.models import _parse_duration
 from z_llm_safety_gateway.content.extractor import extract_content
 from z_llm_safety_gateway.content.writeback import apply_modifications
 from z_llm_safety_gateway.exceptions import (
@@ -45,7 +47,8 @@ from z_llm_safety_gateway.exceptions import (
     SafetyBlockError,
 )
 from z_llm_safety_gateway.language import detect_language, detect_language_for_messages
-from z_llm_safety_gateway.models import DetectionContext
+from z_llm_safety_gateway.models import DetectionContext, DetectionResult, find_result_by_action
+from z_llm_safety_gateway.pipeline.engine import PipelineResult
 from z_llm_safety_gateway.post_audit.audit import PostAuditRunner
 from z_llm_safety_gateway.providers.base import ProviderError
 from z_llm_safety_gateway.providers.router import ModelRouter
@@ -97,10 +100,7 @@ def _error_response(
 
 def _find_block_result(results: list[Any]) -> Any | None:
     """Find the first DetectionResult with action == 'block'."""
-    for r in results:
-        if r.action == "block":
-            return r
-    return None
+    return find_result_by_action(results, "block")
 
 
 def _higher_risk(a: str | None, b: str | None) -> str | None:
@@ -124,6 +124,9 @@ def _build_audit_entry(
     streaming: bool = False,
     language: str | None = None,
     pipeline_duration_ms: float = 0.0,
+    total_duration_ms: float = 0.0,
+    user_id: str | None = None,
+    applied_modify: bool | None = None,
     **extra: Any,
 ) -> AuditEntry:
     """Build an AuditEntry from pipeline results.
@@ -140,22 +143,43 @@ def _build_audit_entry(
         streaming: Whether this is a streaming response.
         language: Detected language code.
         pipeline_duration_ms: Pipeline execution time in ms.
+        total_duration_ms: Total wall-clock duration (request entry to audit
+            write) in ms — excludes provider latency for output entries.
+        user_id: User ID extracted from the request body 'user' field.
+        applied_modify: Whether a modify action was actually applied.
+            True = modify applied (input/sync-output); False = modify
+            downgraded to flag (streaming post-audit); None = not applicable.
         **extra: Additional AuditEntry fields (window_count, post_audit, etc.).
     """
     detectors: list[DetectorAuditRecord] = []
     for r in (detector_results or []):
+        action = r.action
+        applied: bool | None = None
+
+        if r.action == "modify":
+            if applied_modify is True:
+                applied = True
+            elif applied_modify is False:
+                # Streaming post-audit: modify cannot be applied → downgrade.
+                action = "flag"
+                applied = False
+
         detectors.append(
             DetectorAuditRecord(
                 name=r.detector_name,
-                action=r.action,
+                action=action,
                 confidence=r.confidence,
                 risk_level=r.risk_level,
+                duration_ms=r.duration_ms,
+                error=r.error,
+                applied=applied,
             )
         )
 
     return AuditEntry(
         request_id=request_id,
         direction=direction,
+        user_id=user_id,
         model=model,
         provider=provider_name,
         content_hash=compute_content_hash(content) if content else None,
@@ -165,8 +189,77 @@ def _build_audit_entry(
         final_action=final_action,
         final_risk_level=final_risk_level,
         pipeline_duration_ms=pipeline_duration_ms,
+        total_duration_ms=total_duration_ms,
         streaming=streaming,
         **extra,
+    )
+
+
+def _get_sync_timeout(request: Request) -> float:
+    """Resolve the pipeline-level sync_timeout for output detection (B-08).
+
+    Reads ``output_detection_config.sync_timeout`` (default '5s' per DESIGN 3.5).
+    """
+    output_detection_cfg = getattr(request.app.state, "output_detection_config", None)
+    if output_detection_cfg is not None:
+        return _parse_duration(output_detection_cfg.sync_timeout)
+    return 5.0
+
+
+def _handle_sync_timeout(
+    output_detectors: list[Any],
+    output_detector_configs: dict[str, dict[str, Any]],
+) -> PipelineResult:
+    """Create error results for all detectors when sync_timeout fires (B-08).
+
+    Each detector is treated per its ``on_error`` strategy:
+    - ``fail_open`` → action="allow" (skip the detector)
+    - ``fail_closed`` → action="block"
+    """
+    error_results: list[DetectionResult] = []
+    for det in output_detectors:
+        det_name = det.name
+        det_cfg = output_detector_configs.get(det_name, {})
+        on_error: str = det_cfg.get("on_error", "fail_open")
+
+        if on_error == "fail_closed":
+            error_results.append(
+                DetectionResult(
+                    detector_name=det_name,
+                    category="error",
+                    action="block",
+                    confidence=1.0,
+                    risk_level="high",
+                    message=(
+                        f"Detector '{det_name}' timed out (fail_closed): "
+                        "Pipeline sync_timeout exceeded"
+                    ),
+                    error="Pipeline sync_timeout exceeded",
+                )
+            )
+        else:
+            error_results.append(
+                DetectionResult(
+                    detector_name=det_name,
+                    category="error",
+                    action="allow",
+                    confidence=0.0,
+                    risk_level="low",
+                    message=(
+                        f"Detector '{det_name}' timed out (fail_open): "
+                        "Pipeline sync_timeout exceeded"
+                    ),
+                    error="Pipeline sync_timeout exceeded",
+                )
+            )
+
+    final_action = "block" if any(r.action == "block" for r in error_results) else "allow"
+    risk_level = "high" if final_action == "block" else "low"
+
+    return PipelineResult(
+        final_action=final_action,
+        overall_risk_level=risk_level,
+        detector_results=error_results,
     )
 
 
@@ -180,6 +273,8 @@ def _build_streaming_response(
     engine: Any,
     audit_logger: AuditLogger | None,
     audit_enabled: bool,
+    input_language: str | None = None,
+    user_id: str | None = None,
 ) -> StreamingResponse:
     """Build a StreamingResponse for a ``stream=true`` chat completion request.
 
@@ -212,6 +307,8 @@ def _build_streaming_response(
     )
 
     async def _generate() -> AsyncIterator[str]:
+        stream_start = time.monotonic()
+
         # --- No output detectors: transparent passthrough (backward compat) ---
         if not has_detection:
             try:
@@ -251,7 +348,7 @@ def _build_streaming_response(
             )
 
             if result.final_action == "block":
-                blk = result.detector_results[0] if result.detector_results else None
+                blk = find_result_by_action(result.detector_results, "block")
                 yield format_safety_block(
                     request_id=request_id,
                     blocked_by=blk.detector_name if blk else "unknown",
@@ -279,10 +376,10 @@ def _build_streaming_response(
                         final_risk_level=result.overall_risk_level,
                         detector_results=result.detector_results,
                         streaming=True,
-                        post_audit={
-                            "executed": False,
-                            "reason": "buffer_mode",
-                        },
+                        pipeline_duration_ms=result.pipeline_duration_ms,
+                        total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
+                        user_id=user_id,
+                        post_audit={"executed": False},
                     )
                 )
             return
@@ -302,6 +399,7 @@ def _build_streaming_response(
                 streaming_config.max_response_size if streaming_config else "1MB"
             ),
             on_max_size=streaming_config.on_max_size if streaming_config else "block",
+            language=input_language,
         )
 
         try:
@@ -324,18 +422,28 @@ def _build_streaming_response(
                         model=model,
                         provider_name=provider_name,
                         content=handler.accumulated_content,
-                        final_action="allow",
-                        final_risk_level="low",
+                        final_action=handler.output_action,
+                        final_risk_level=handler.output_risk_level,
+                        detector_results=handler.detector_results or None,
                         streaming=True,
+                        window_count=handler.window_count,
+                        language=input_language,
+                        total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
+                        user_id=user_id,
+                        post_audit={"executed": False},
                     )
                 )
             return
 
         if not handler.blocked:
+            # Flush residual SSE buffer content at stream end (B-03/SC-SSE-003).
+            async for event in handler.drain():
+                yield event
             handler.finish()
             yield SSE_DONE
 
         # --- Post-audit (SC-012, SC-013) ---
+        post_audit_outcome: Any = None
         post_audit_info: dict[str, Any] | None = None
         recalled = False
         recall_method: str | None = None
@@ -346,23 +454,27 @@ def _build_streaming_response(
             and output_detectors
             and post_audit_runner
         ):
-            outcome = await post_audit_runner.run(handler.accumulated_content)
+            post_audit_outcome = await post_audit_runner.run(
+                handler.accumulated_content,
+                request_id=request_id,
+                language=input_language,
+            )
             post_audit_info = {
                 "executed": True,
-                "effective_action": outcome.effective_action,
-                "original_action": outcome.original_action,
-                "risk_level": outcome.risk_level,
+                "result": post_audit_outcome.effective_action,
+                "category": post_audit_outcome.category or "",
+                "risk_level": post_audit_outcome.risk_level,
             }
 
-            if outcome.recall_needed:
+            if post_audit_outcome.recall_needed:
                 recalled = True
                 recall_method = streaming_config.recall.method
                 if streaming_config.recall.method in ("sse", "both"):
                     yield format_safety_recall(
                         request_id=request_id,
-                        risk_level=outcome.risk_level,
-                        reason=outcome.reason or "",
-                        category=outcome.category or "",
+                        risk_level=post_audit_outcome.risk_level,
+                        reason=post_audit_outcome.reason or "",
+                        category=post_audit_outcome.category or "",
                     )
                 if (
                     streaming_config.recall.method in ("webhook", "both")
@@ -370,13 +482,26 @@ def _build_streaming_response(
                 ):
                     await streaming_webhook.send(
                         request_id=request_id,
-                        risk_level=outcome.risk_level,
-                        reason=outcome.reason or "",
-                        category=outcome.category or "",
+                        risk_level=post_audit_outcome.risk_level,
+                        reason=post_audit_outcome.reason or "",
+                        category=post_audit_outcome.category or "",
                     )
 
         # --- Audit logging for streaming ---
+        # Use output-side results (B-05) and post-audit detector_results (B-06).
         if audit_enabled and audit_logger:
+            audit_detector_results: list[Any] | None = None
+            applied_modify: bool | None = None
+            if post_audit_outcome is not None:
+                audit_detector_results = post_audit_outcome.detector_results or None
+                # Streaming post-audit: modify cannot be applied → downgrade.
+                applied_modify = False
+            else:
+                audit_detector_results = handler.detector_results or None
+
+            # When post-audit is skipped, post_audit should be {'executed': False}.
+            effective_post_audit = post_audit_info or {"executed": False}
+
             audit_logger.record(
                 _build_audit_entry(
                     request_id=request_id,
@@ -384,15 +509,16 @@ def _build_streaming_response(
                     model=model,
                     provider_name=provider_name,
                     content=handler.accumulated_content,
-                    final_action=getattr(
-                        request.state, "safety_action", "allow"
-                    ),
-                    final_risk_level=getattr(
-                        request.state, "safety_risk_level", "low"
-                    )
-                    or "low",
+                    final_action=handler.output_action,
+                    final_risk_level=handler.output_risk_level,
+                    detector_results=audit_detector_results,
                     streaming=True,
-                    post_audit=post_audit_info,
+                    window_count=handler.window_count,
+                    language=input_language,
+                    total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
+                    user_id=user_id,
+                    applied_modify=applied_modify,
+                    post_audit=effective_post_audit,
                     recalled=recalled if recalled else None,
                     recall_method=recall_method,
                 )
@@ -434,6 +560,12 @@ async def chat_completions(request: Request) -> Response:
             error_type="invalid_request_error",
             code="invalid_json",
         )
+
+    # Track total request duration from entry to audit write (B-09a).
+    request_start = time.monotonic()
+    # Extract user_id from request body 'user' field (B-09b).
+    user_id_raw = body.get("user")
+    user_id: str | None = str(user_id_raw) if user_id_raw else None
 
     # 2. Extract model field
     model = body.get("model")
@@ -532,6 +664,15 @@ async def chat_completions(request: Request) -> Response:
         input_content = (
             " ".join(ec.text for ec in input_extracted) if input_extracted else ""
         )
+        # Determine if input modify was applied (B-09e).
+        input_applied_modify: bool | None = None
+        if (
+            input_pipeline_result is not None
+            and input_pipeline_result.final_action == "modify"
+            and input_pipeline_result.modifications
+        ):
+            input_applied_modify = True
+
         audit_logger.record(
             _build_audit_entry(
                 request_id=request_id or "",
@@ -548,6 +689,14 @@ async def chat_completions(request: Request) -> Response:
                     else None
                 ),
                 language=input_language,
+                pipeline_duration_ms=(
+                    input_pipeline_result.pipeline_duration_ms
+                    if input_pipeline_result
+                    else 0.0
+                ),
+                total_duration_ms=(time.monotonic() - request_start) * 1000.0,
+                user_id=user_id,
+                applied_modify=input_applied_modify,
             )
         )
 
@@ -563,10 +712,14 @@ async def chat_completions(request: Request) -> Response:
             engine,
             audit_logger,
             audit_enabled,
+            input_language=input_language,
+            user_id=user_id,
         )
 
     # 7. Forward request to provider (non-streaming)
     provider_response = await provider.forward_request(body, forward_headers)
+    # Track output duration from provider response to response sent (B-09a).
+    provider_response_time = time.monotonic()
 
     # 8. Output safety pipeline
     output_detectors: list[Any] = getattr(request.app.state, "output_detectors", [])
@@ -600,6 +753,8 @@ async def chat_completions(request: Request) -> Response:
         _output_configs = output_detector_configs
         _audit_logger = audit_logger
         _audit_enabled = audit_enabled
+        _user_id = user_id
+        _provider_response_time = provider_response_time
 
         async def _async_output_detection() -> None:
             """Background output detection with webhook recall."""
@@ -647,6 +802,12 @@ async def chat_completions(request: Request) -> Response:
                                     final_risk_level=bg_result.overall_risk_level,
                                     detector_results=bg_result.detector_results,
                                     language=olang,
+                                    pipeline_duration_ms=bg_result.pipeline_duration_ms,
+                                    total_duration_ms=(
+                                        time.monotonic() - _provider_response_time
+                                    )
+                                    * 1000.0,
+                                    user_id=_user_id,
                                     async_detection="completed",
                                     recalled=bg_result.final_action == "block",
                                     recall_method=(
@@ -672,6 +833,9 @@ async def chat_completions(request: Request) -> Response:
                     content="",
                     final_action="allow",
                     final_risk_level="low",
+                    total_duration_ms=(time.monotonic() - provider_response_time)
+                    * 1000.0,
+                    user_id=user_id,
                     async_detection="pending",
                 )
             )
@@ -707,9 +871,25 @@ async def chat_completions(request: Request) -> Response:
                         metadata={"content": output_text},
                     )
 
-                    result = await engine.run(
-                        output_detectors, [output_context], output_detector_configs
-                    )
+                    # B-08: wrap pipeline run in asyncio.wait_for(sync_timeout).
+                    sync_timeout_seconds = _get_sync_timeout(request)
+                    try:
+                        result = await asyncio.wait_for(
+                            engine.run(
+                                output_detectors,
+                                [output_context],
+                                output_detector_configs,
+                            ),
+                            timeout=sync_timeout_seconds,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "sync_output_detection_timeout",
+                            sync_timeout_seconds=sync_timeout_seconds,
+                        )
+                        result = _handle_sync_timeout(
+                            output_detectors, output_detector_configs
+                        )
                     output_pipeline_result = result
 
                     # Update request.state — keep highest of input/output
@@ -758,6 +938,15 @@ async def chat_completions(request: Request) -> Response:
 
     # 9. Output audit logging (sync mode, SC-016)
     if audit_enabled and audit_logger:
+        # Determine if output modify was applied (B-09e).
+        output_applied_modify: bool | None = None
+        if (
+            output_pipeline_result is not None
+            and output_pipeline_result.final_action == "modify"
+            and output_pipeline_result.modifications
+        ):
+            output_applied_modify = True
+
         audit_logger.record(
             _build_audit_entry(
                 request_id=request_id or "",
@@ -773,6 +962,14 @@ async def chat_completions(request: Request) -> Response:
                     if output_pipeline_result
                     else None
                 ),
+                pipeline_duration_ms=(
+                    output_pipeline_result.pipeline_duration_ms
+                    if output_pipeline_result
+                    else 0.0
+                ),
+                total_duration_ms=(time.monotonic() - provider_response_time) * 1000.0,
+                user_id=user_id,
+                applied_modify=output_applied_modify,
             )
         )
 

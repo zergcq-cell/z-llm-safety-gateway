@@ -1,0 +1,44 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: cors
+
+meta:
+  capability: cors
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-CORS-001
+    description: "CORS 默认关闭，未配置 security.cors.enabled 时不接入 CORSMiddleware"
+    scenarios:
+      - id: SC-CORS-001
+        confidence: high
+        evidence: "proposal S5; design Decision 5; DESIGN 11.6"
+        given: "配置未设置 security.cors.enabled（或显式 enabled: false）"
+        when: "create_app 构建 FastAPI 应用"
+        then: "应用 SHALL 不注册 CORSMiddleware，CORS 相关响应头不返回"
+        and:
+          - "跨域浏览器请求 SHALL 按无 CORS 处理（浏览器端拦截预检/响应）"
+  - id: REQ-CORS-002
+    description: "启用 CORS 时接入 starlette CORSMiddleware 并按 origins 放行跨域请求"
+    scenarios:
+      - id: SC-CORS-002
+        confidence: high
+        evidence: "proposal S5; design Decision 5; DESIGN 11.6"
+        given: "配置 security.cors.enabled=true 且 security.cors.origins 含 'https://app.example.com'"
+        when: "create_app 构建 FastAPI 应用，且来自 app.example.com 的请求发起 CORS 预检（OPTIONS）"
+        then: "应用 SHALL 接入 CORSMiddleware 并允许该 origin，返回相应 CORS 响应头（Access-Control-Allow-Origin 等）"
+        and:
+          - "预检请求 SHALL 返回 200 并允许配置的 methods/headers"
+          - "配置的 origins 之外不被允许的跨域请求 SHALL 不获得 CORS 放行头"
+  - id: REQ-CORS-003
+    description: "CORS 配置接入不影响网关正常业务路由与安全中间件链"
+    scenarios:
+      - id: SC-CORS-003
+        confidence: medium
+        evidence: "proposal S5; design Decision 5 + Architecture 中间件链; DESIGN 11.6"
+        given: "启用 CORS 且网关运行正常"
+        when: "向网关发起同源业务请求（如 POST /v1/chat/completions）"
+        then: "业务请求 SHALL 正常处理，不受 CORS 中间件影响"
+        and:
+          - "认证/限流/请求大小等安全中间件 SHALL 依旧按序生效，不因 CORS 而绕过"

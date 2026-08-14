@@ -1,0 +1,45 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: graceful-shutdown
+
+meta:
+  capability: graceful-shutdown
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-GS-001
+    description: "SIGTERM 触发优雅停机：停止接受新连接，等待 in-flight 请求完成后再退出"
+    scenarios:
+      - id: SC-GS-001
+        confidence: high
+        evidence: "proposal S6; design Decision 6; DESIGN 13.4 / 决策 37"
+        given: "网关正在运行且有 in-flight 请求尚未完成"
+        when: "收到 SIGTERM 信号"
+        then: "网关 SHALL 停止接受新连接，并等待所有 in-flight 请求完成（最多 stop_timeout）"
+        and:
+          - "in-flight 请求 SHALL 被正常处理并返回完整响应"
+          - "优雅停机完成后 SHALL 以退出码 0 退出"
+  - id: REQ-GS-002
+    description: "server.stop_timeout 默认 30s，超时未完成的请求强制退出"
+    scenarios:
+      - id: SC-GS-002
+        confidence: high
+        evidence: "proposal S6; design Decision 6; DESIGN 13.4 / 决策 37"
+        given: "server.stop_timeout 未配置（使用默认 30s）或显式设为某值，且有 in-flight 请求超过该时长仍未完成"
+        when: "收到 SIGTERM 信号后等待超过 stop_timeout"
+        then: "网关 SHALL 在 stop_timeout 到期后强制退出，不再无限等待"
+        and:
+          - "超时强退行为 SHALL 与 server.stop_timeout 配置一致"
+  - id: REQ-GS-003
+    description: "优雅停机时冲刷审计日志并释放资源（对齐 DESIGN 13.4 序列）"
+    scenarios:
+      - id: SC-GS-003
+        confidence: medium
+        evidence: "proposal S6; design Decision 6; DESIGN 13.4 / 决策 37"
+        given: "网关收到 SIGTERM 且已等待 in-flight 请求完成"
+        when: "执行优雅停机收尾阶段"
+        then: "网关 SHALL 冲刷审计日志，保证已生成条目持久化"
+        and:
+          - "检测器/提供方等资源 SHALL 被正常释放（如关闭连接）"
+          - "文档 SHALL 明确 server.stop_timeout 应小于 Docker stop_grace_period（建议 +5s）"

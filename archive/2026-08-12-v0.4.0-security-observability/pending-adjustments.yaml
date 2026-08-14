@@ -1,0 +1,25 @@
+# pending-adjustments.yaml — Canonical 待处理设计偏离记录
+# Change: 2026-08-12-v0.4.0-security-observability
+
+adjustments:
+  - id: ADJ-001
+    status: accepted
+    category: design_deviation
+    source_phase: build
+    slice: "1"
+    original_design: >
+      proposal C1/C2 声明 SecurityConfig 拆分为类型化子模型、ObservabilityConfig
+      重构为嵌套子模型、ServerConfig 补 workers/stop_timeout。
+    actual_change: >
+      配置结构破坏性变更：security.timeout 由 dict[int,int] 改为 TimeoutConfig
+      （字符串时长 + upstream_seconds property，兼容旧 int 值）；observability
+      由扁平布尔改为嵌套 MetricsConfig/TracingConfig；ServerConfig 新增字段。
+    reason: >
+      现有 v0.1.0 测试 test_models.py 及多个集成测试使用旧结构
+      （security.timeout 为 int、observability.metrics_enabled 扁平布尔），
+      与 DESIGN 10.2 文档不符。为对齐 DESIGN 与支持 v0.4.0 新安全能力，
+      必须更新配置模型及其引用（router.py/models.py）。
+    impact: >
+      更新 tests/unit/config/test_models.py；router.py 与 routes/models.py
+      改用 security.timeout.upstream_seconds。旧 int 配置自动兼容。
+    evidence: "tests/unit/config/test_v4_security.py 全绿；全量单元测试 606 passed"

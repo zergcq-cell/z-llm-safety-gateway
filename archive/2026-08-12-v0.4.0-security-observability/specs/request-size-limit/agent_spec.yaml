@@ -1,0 +1,61 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+# Capability: request-size-limit
+
+meta:
+  task_id: "request-size-limit"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is available"
+    - "Project dependencies (FastAPI, uvicorn, pydantic, httpx, structlog) are installed"
+    - "config-system capability is implemented（security.max_request_size 可解析，默认 10MB）"
+    - "RequestSizeMiddleware 已实现并注册在认证中间件链中"
+    - "一份可解析的测试配置文件存在，用于测试"
+
+steps:
+  - id: CP-1
+    description: "验证 Content-Length 超限返回 413（SC-RSL-001）"
+    action: "运行 pytest：向配置了默认 max_request_size 的网关发送 Content-Length > 10MB 的 POST 请求，断言响应 413 且错误体为 OpenAI 兼容格式"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "http://127.0.0.1:8080/v1/chat/completions"
+        expected: 413
+  - id: CP-2
+    description: "验证分块传输读取 body 超限返回 413（SC-RSL-002）"
+    action: "运行 pytest：发送 Transfer-Encoding: chunked 且累计超过 max_request_size 的请求，断言响应 413 且错误体为 OpenAI 兼容格式"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "http://127.0.0.1:8080/v1/chat/completions"
+        expected: 413
+  - id: CP-3
+    description: "验证未超限请求正常放行（SC-RSL-003）"
+    action: "运行 pytest：发送大小在 max_request_size 内的合法请求，断言正常进入路由处理并返回成功响应（非 413）"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "http://127.0.0.1:8080/v1/chat/completions"
+        expected: 200
+  - id: CP-4
+    description: "运行 request-size-limit capability 完整测试套件"
+    action: "运行: pytest tests/ -k 'request_size or request_size_limit' -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "运行 lint 与类型检查"
+    action: "运行: ruff check src/z_llm_safety_gateway/middleware/ && mypy src/z_llm_safety_gateway/middleware/"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "还原 RequestSizeMiddleware 相关实现（middleware/request_size.py 或等价文件）"
+    - "还原中间件链注册顺序（如误改认证/限流顺序需一并还原）"
+    - "移除为 request-size-limit capability 添加的测试文件"

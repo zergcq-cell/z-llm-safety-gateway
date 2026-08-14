@@ -1,0 +1,77 @@
+# spec.yaml — 行为规格（Canonical YAML）
+# Capability: authentication
+# Change: 2026-08-12-v0.4.0-security-observability
+
+meta:
+  capability: authentication
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  created: "2026-08-12T16:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-AUTH-001
+    description: "AuthMiddleware 从 security.auth.api_keys（key/name 列表）校验 Bearer token"
+    scenarios:
+      - id: SC-AUTH-001
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "security.auth.enabled=true 且 api_keys=[{key:'sk-a', name:'app-a'}]"
+        when: "请求携带 Authorization: Bearer sk-a 访问业务端点"
+        then: "AuthMiddleware SHALL 校验 Bearer token 匹配任一配置 key 并放行请求到路由"
+        and:
+          - "请求 SHALL 被注入 request.state.api_key_name='app-a'"
+      - id: SC-AUTH-002
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "security.auth.enabled=true 且 api_keys=[{key:'sk-a', name:'app-a'}]"
+        when: "请求携带 Authorization: Bearer sk-unknown（不在 api_keys 中）"
+        then: "AuthMiddleware SHALL 拒绝该请求并返回 401"
+  - id: REQ-AUTH-002
+    description: "认证默认关闭，显式启用为 fail-closed"
+    scenarios:
+      - id: SC-AUTH-003
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "security.auth.enabled 未设置或为 false（默认关闭）"
+        when: "请求未携带任何 Authorization 头访问端点"
+        then: "AuthMiddleware SHALL 放行请求（认证关闭时不校验 token）"
+      - id: SC-AUTH-004
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "security.auth.enabled=true（显式启用）"
+        when: "请求未携带 Authorization 头访问端点"
+        then: "AuthMiddleware SHALL 拒绝该请求并返回 401（fail-closed：无凭据默认拒绝）"
+  - id: REQ-AUTH-003
+    description: "未授权响应返回 401 OpenAI 兼容错误体"
+    scenarios:
+      - id: SC-AUTH-005
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "认证启用且请求的 token 无效或缺失"
+        when: "AuthMiddleware 判定未授权"
+        then: "响应 SHALL 返回 HTTP 401 且错误体为 OpenAI 兼容格式"
+        and:
+          - "错误体 SHALL 包含 error 对象（含 type 与 message 字段）"
+          - "响应 SHALL NOT 泄露任何配置的 api_key 值"
+  - id: REQ-AUTH-004
+    description: "放行时注入 request.state.api_key_name"
+    scenarios:
+      - id: SC-AUTH-006
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "认证启用且 Bearer token 匹配 api_keys 中 name='app-a' 的 key"
+        when: "请求进入后续路由/审计处理"
+        then: "request.state.api_key_name SHALL 等于 'app-a'"
+        and:
+          - "后续中间件与审计日志 SHALL 可读取 request.state.api_key_name"
+  - id: REQ-AUTH-005
+    description: "中间件顺序：RequestID 之后、路由之前，保护所有业务端点"
+    scenarios:
+      - id: SC-AUTH-007
+        confidence: high
+        evidence: "design Decision 1; proposal S1"
+        given: "认证启用且请求到达网关"
+        when: "请求经过中间件链"
+        then: "AuthMiddleware SHALL 在 RequestIDMiddleware 之后、路由分发之前执行"
+        and:
+          - "所有业务端点（chat/streaming 等）SHALL 均被认证保护"

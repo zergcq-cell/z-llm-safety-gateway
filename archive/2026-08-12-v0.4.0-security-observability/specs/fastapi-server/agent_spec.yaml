@@ -1,0 +1,98 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+# Capability: fastapi-server
+
+meta:
+  task_id: fastapi-server-v0.4.0
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway FastAPI 应用工厂（create_app）与安全中间件集成"
+  preconditions:
+    - "config-system capability 已完成，SecurityConfig 类型化子模型（Auth/TLS/RateLimit/CORS/RequestID/Timeout）+ ServerConfig.stop_timeout 可用"
+    - "security.request_id.header/generate 配置已存在于配置模型中"
+    - "circuit_breaker/factory.py 尚未存在（本次新建 build_circuit_breaker）"
+    - "middleware/auth.py、middleware/rate_limit.py、middleware/request_size.py、middleware/cors 可引用，安全中间件实现就绪"
+
+steps:
+  - id: CP-1
+    description: "create_app 按 RequestID→Auth→RateLimit→RequestSize→SafetyHeaders 链顺序注册中间件"
+    action: "运行 pytest 中间件链顺序测试（固定注册顺序并断言 app.user_middleware 生效链顺序）"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-2
+    description: "RequestIDMiddleware 为最外层（响应最后写 X-Request-ID），SafetyHeaders 为最内层（先处理响应）"
+    action: "发送带/不带 X-Request-ID 的请求，断言响应头与 request.state.request_id"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-3
+    description: "security.request_id.header/generate 配置接线：合法头使用、非法头丢弃并生成 UUID v4、缺省时生成 UUID v4"
+    action: "运行 request_id 配置接线单元测试（合法/非法/缺省三种输入）"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-4
+    description: "_extract_detector_configs 注入 timeout_seconds（显式覆盖全局回退）"
+    action: "运行单元测试：显式 timeout 检测器得 timeout_seconds=10；未配置得全局 5s；key 为 timeout_seconds"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-5
+    description: "新增 circuit_breaker/factory.py::build_circuit_breaker，解析 recovery_timeout 并返回 CircuitBreaker 实例"
+    action: "运行 factory 单元测试：recovery_timeout='30s' → 30 秒；failure_threshold/fallback_action 正确传递；_extract_detector_configs 注入实例"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-6
+    description: "认证集成：启用时合法 token 放行注入 api_key_name，无效 token 返回 401 OpenAI 兼容错误体，禁用时放行"
+    action: "运行 auth 集成测试（pytest）覆盖合法/无效/禁用三场景"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-7
+    description: "限流集成：超限返回 429 + Retry-After + OpenAI 兼容错误体；未超限放行；per 维度隔离；storage memory"
+    action: "运行 rate_limit 集成测试（pytest）覆盖超限/放行/维度隔离"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-8
+    description: "请求大小限制：Content-Length 超限返回 413；限制内放行"
+    action: "运行 request_size 集成测试（pytest）覆盖超限/放行"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-9
+    description: "CORS 集成：启用时预检返回允许头；禁用时不注册 CORSMiddleware"
+    action: "运行 cors 集成测试（pytest）覆盖启用/禁用"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-10
+    description: "优雅停机与 TLS 集成：SIGTERM 后完成 in-flight 请求并在 stop_timeout 内退出码 0；TLS 启用时 HTTPS 可访问"
+    action: "运行 graceful-shutdown 集成测试（发送 SIGTERM 断言退出码 0）与 tls 冒烟测试（HTTPS 请求 200）"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-11
+    description: "全量质量门禁：ruff 与 mypy(strict) 无错误"
+    action: "运行 ruff check . && mypy src"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "回退 create_app 中间件注册改动，恢复 v0.3.0 的 SafetyHeaders+RequestID 两中间件"
+    - "移除新增的 auth/rate_limit/request_size/cors 中间件与 circuit_breaker/factory.py"
+    - "如已改动 request_id.py 读取配置逻辑，恢复为无配置的固定行为"
+    - "人工确认回归测试（v0.1.0+v0.2.0+v0.3.0）通过后再合入"

@@ -91,3 +91,56 @@ def format_safety_recall(
             "category": category,
         },
     )
+
+
+# SSE event boundary delimiter (blank line terminates an event).
+_SSE_BOUNDARY = "\n\n"
+
+
+class SSEBuffer:
+    """Buffers raw SSE text chunks and yields complete events.
+
+    SSE events are delimited by ``\\n\\n`` (a blank line).  When a provider
+    streams via ``aiter_text()``, a single ``data: {json}\\n\\n`` event may be
+    split across two adjacent chunks.  This buffer accumulates raw text and
+    only yields events once the ``\\n\\n`` boundary is seen, ensuring no
+    partial events are passed downstream (B-03 / Decision 14).
+    """
+
+    def __init__(self) -> None:
+        self._buffer: str = ""
+
+    def feed(self, chunk: str) -> list[str]:
+        """Feed a raw text *chunk* and return all complete SSE events.
+
+        Complete events are those terminated by ``\\n\\n``.  The returned
+        strings include the trailing ``\\n\\n`` delimiter so they can be
+        forwarded to the client as-is.
+        """
+        self._buffer += chunk
+        events: list[str] = []
+        while _SSE_BOUNDARY in self._buffer:
+            idx = self._buffer.index(_SSE_BOUNDARY)
+            # Include the delimiter in the event text.
+            event = self._buffer[: idx + len(_SSE_BOUNDARY)]
+            self._buffer = self._buffer[idx + len(_SSE_BOUNDARY) :]
+            events.append(event)
+        return events
+
+    def flush(self) -> str | None:
+        """Return residual buffer content (if any) and clear the buffer.
+
+        Called at stream end to ensure trailing content without a ``\\n\\n``
+        terminator is not silently dropped.  Returns ``None`` when the buffer
+        is empty.
+        """
+        if self._buffer:
+            residual = self._buffer
+            self._buffer = ""
+            return residual
+        return None
+
+    @property
+    def pending(self) -> str:
+        """Return the current pending (incomplete) buffer content."""
+        return self._buffer

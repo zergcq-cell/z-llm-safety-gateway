@@ -9,9 +9,10 @@ appropriately (modify -> flag, since the response is already sent).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
+from z_llm_safety_gateway.models import find_result_by_action
 from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
 
 
@@ -30,6 +31,8 @@ class PostAuditOutcome:
         reason: The message of the triggering detector (if any).
         recall_needed: Whether a recall signal should be sent (True when the
             effective action is ``block``).
+        detector_results: The raw DetectionResult list from the pipeline run,
+            for audit logging (modify actions are downgraded at audit-build time).
     """
 
     effective_action: str = "allow"
@@ -39,6 +42,7 @@ class PostAuditOutcome:
     category: str | None = None
     reason: str | None = None
     recall_needed: bool = False
+    detector_results: list[Any] = field(default_factory=list)
 
 
 class PostAuditRunner:
@@ -60,13 +64,27 @@ class PostAuditRunner:
         self._detectors = output_detectors
         self._configs = detector_configs
 
-    async def run(self, content: str) -> PostAuditOutcome:
-        """Run post-audit detection on *content* and return the outcome."""
+    async def run(
+        self,
+        content: str,
+        request_id: str = "",
+        language: str | None = None,
+    ) -> PostAuditOutcome:
+        """Run post-audit detection on *content* and return the outcome.
+
+        Args:
+            content: The full accumulated streaming response text.
+            request_id: The current request id, propagated to the
+                DetectionContext (B-07).
+            language: The input-side language code to reuse for output
+                detection (B-07).
+        """
         from z_llm_safety_gateway.models import DetectionContext
 
         context = DetectionContext(
             direction="output",
-            request_id="",
+            request_id=request_id,
+            language=language,
             metadata={"content": content},
         )
         result: PipelineResult = await self._engine.run(
@@ -85,7 +103,7 @@ class PostAuditRunner:
         # block requires recall (response already delivered).
         recall_needed = effective == "block"
 
-        trigger = result.detector_results[0] if result.detector_results else None
+        trigger = find_result_by_action(result.detector_results, original)
         return PostAuditOutcome(
             effective_action=effective,
             original_action=original,
@@ -94,4 +112,5 @@ class PostAuditRunner:
             category=trigger.category if trigger else None,
             reason=trigger.message if trigger else None,
             recall_needed=recall_needed,
+            detector_results=result.detector_results,
         )

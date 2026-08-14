@@ -3,9 +3,10 @@ FROM python:3.10-slim AS builder
 
 WORKDIR /build
 
-# Install build dependencies
+# Install build dependencies (gcc for C extensions like pyahocorasick)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
@@ -20,11 +21,14 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy installed packages from builder
+# Copy installed packages from builder (includes compiled C extensions)
 COPY --from=builder /install /usr/local/lib/python3.10/site-packages
 
 # Copy application source
 COPY --from=builder /build/src/z_llm_safety_gateway /app/z_llm_safety_gateway
+
+# Copy default config
+COPY config/gateway.yaml /app/config/gateway.yaml
 
 # Set Python path
 ENV PYTHONPATH=/app:$PYTHONPATH

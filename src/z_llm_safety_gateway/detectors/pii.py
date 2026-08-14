@@ -47,7 +47,7 @@ class PIIDetector(Detector):
     - ``custom_patterns``: dict of ``name -> regex`` to add or override patterns.
     """
 
-    name: str = "pii_detector"
+    name: str = "pii_redaction"
     category: str = "pii"
     description: str = (
         "Detects and redacts PII: email, phone, SSN, credit card, IP address"

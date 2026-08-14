@@ -1,0 +1,58 @@
+# agent_spec.yaml — Agent 验证规格（Canonical YAML）
+# Capability: tls
+
+meta:
+  task_id: "tls"
+  change_id: "2026-08-12-v0.4.0-security-observability"
+  task_type: code
+  system: "z LLM Safety Gateway"
+  preconditions:
+    - "Python 3.12+ environment is available"
+    - "Project dependencies (FastAPI, uvicorn, pydantic, httpx, structlog) are installed"
+    - "config-system capability is implemented（security.tls.enabled/cert_file/key_file 可解析）"
+    - "一份可解析的测试配置文件（gateway.yaml）存在，用于测试"
+    - "存在用于测试的本地自签名证书 cert.pem / key.pem（如 openssl 生成）"
+
+steps:
+  - id: CP-1
+    description: "验证 TLS 默认关闭时以 HTTP 启动（SC-TLS-001）"
+    action: "运行 pytest：在 security.tls 未启用（或 enabled: false）的配置下启动 uvicorn，断言 uvicorn.run 未收到 ssl_certfile/ssl_keyfile，且通过 http://127.0.0.1:port 可访问 /health"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "http://127.0.0.1:8080/health"
+        expected: 200
+  - id: CP-2
+    description: "验证 TLS 启用时通过 HTTPS 提供服务（SC-TLS-002）"
+    action: "运行 pytest：配置 security.tls.enabled=true 与有效 cert_file/key_file，以 ssl_certfile/ssl_keyfile 启动，用 httpx 校验 https://127.0.0.1:port/health（verify=证书）返回 200"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: http_status
+        url: "https://127.0.0.1:8080/health"
+        expected: 200
+  - id: CP-3
+    description: "验证 TLS 启用但证书缺失时拒绝启动（SC-TLS-003）"
+    action: "运行 pytest：配置 security.tls.enabled=true 且 cert_file 指向不存在文件，断言 uvicorn.run 抛出异常/启动失败，错误信息包含文件路径"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-4
+    description: "运行 tls capability 完整测试套件"
+    action: "运行: pytest tests/ -k 'tls' -v"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-5
+    description: "运行 lint 与类型检查"
+    action: "运行: ruff check src/z_llm_safety_gateway/__main__.py && mypy src/z_llm_safety_gateway/__main__.py"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+rollback:
+  steps:
+    - "还原 src/z_llm_safety_gateway/__main__.py 中对 uvicorn.run 的 TLS 参数改动"
+    - "移除为 tls capability 添加的测试文件"
+    - "删除测试用自签名证书（如需保留供后续使用可保留在 fixtures）"
