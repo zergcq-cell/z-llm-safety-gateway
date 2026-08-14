@@ -1,0 +1,40 @@
+# STDD Change 元数据
+change_id: "2026-08-14-v0.5.1-example-plugins"
+title: "Example Plugins & Plugin Documentation"
+description: "补齐 v0.5.0 Plugin Ecosystem 声明的 2 项交付物：示例插件（Python in-process / Python gRPC / Go gRPC）与插件文档（开发指南 / gRPC 指南 / 商业指南）"
+created_at: "2026-08-14T13:00:00+08:00"
+mode: "lightweight"
+complexity: "L"
+is_critical: false
+safety_critical: false
+financial: false
+cross_system: false
+anchoring:
+  level: "L1"
+  rationale: "纯增量资产（示例代码 + 文档），无接口变更、无安全影响；参考 v0.5.0 DESIGN.md Section 7 与 SDK 包"
+related_changes:
+  - "2026-08-14-v0.5.0-plugin-ecosystem"
+
+what_changes:
+  - id: C1
+    description: "examples/plugins/python-inprocess/ — 可运行的 Python in-process 插件示例（自定义检测器 + entry points 注册 + 测试）"
+  - id: C2
+    description: "examples/plugins/python-grpc/ — 可运行的 Python gRPC sidecar 示例（实现 DetectorService v1，含 proto 生成脚本与 README）"
+  - id: C3
+    description: "examples/plugins/go-grpc/ — Go gRPC sidecar 示例源码（go.mod + main.go + proto 生成说明；本环境无 Go，标注未运行验证）"
+  - id: C4
+    description: "docs/plugin-development.md — Detector 开发指南（in-process 与 gRPC 两种模式、SDK 使用、发布与注册）"
+  - id: C5
+    description: "docs/grpc-integration.md — gRPC 对接指南（合约、生命周期、配置、TLS、超时、调试）"
+  - id: C6
+    description: "docs/commercial-plugin.md — 商业插件指南（SDK 许可、打包、认证、定价建议、支持）"
+
+risk_areas:
+  - "示例代码必须真实可运行（Python 两个示例需通过测试验证），避免交付无效示例"
+  - "文档与 v0.5.0 实际实现一致（proto 合约、配置字段、CLI 行为）"
+
+success_criteria:
+  - "Python in-process 示例可被网关 entry points 发现并运行检测"
+  - "Python gRPC 示例可通过 in-process 测试验证完整生命周期（initialize/detect/health/shutdown）"
+  - "Go 示例提供完整源码与构建说明（环境无 Go，标注未验证）"
+  - "三份文档覆盖 DESIGN.md Section 7 的关键主题且与实现一致"

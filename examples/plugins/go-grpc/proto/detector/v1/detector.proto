@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package z_llm_safety_gateway.detector.v1;
+
+import "google/protobuf/struct.proto";
+
+// Detector service definition for gRPC sidecar plugins.
+// Third-party detectors implement this service (DESIGN.md Section 7.3.1).
+service DetectorService {
+  // Initialize the detector with configuration.
+  // Called once at gateway startup.
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+
+  // Execute detection on content.
+  // Called for each request that reaches this detector.
+  rpc Detect(DetectRequest) returns (DetectResponse);
+
+  // Health check. Called periodically by the gateway.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Graceful shutdown. Called when the gateway is shutting down.
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+message InitializeRequest {
+  string detector_name = 1;
+  map<string, string> config = 2;    // passthrough config fields from YAML
+}
+
+message InitializeResponse {
+  bool success = 1;
+  string error_message = 2;
+  DetectorInfo info = 3;
+}
+
+message DetectorInfo {
+  string name = 1;
+  string category = 2;
+  string description = 3;
+  string version = 4;
+  repeated string supported_languages = 5;  // e.g., ["en", "zh"]
+}
+
+message DetectRequest {
+  string content = 1;
+  string direction = 2;             // "input" | "output"
+  string request_id = 3;
+  string user_id = 4;               // empty string if not provided
+  string language = 5;              // ISO 639-1 code, empty if unknown
+  int32 message_index = 6;          // input: index in messages array; output: -1 (none)
+  map<string, string> metadata = 7;
+}
+
+message DetectResponse {
+  string detector_name = 1;
+  string category = 2;
+  string action = 3;                // "allow" | "block" | "flag" | "modify"
+  float confidence = 4;
+  string risk_level = 5;            // "low" | "medium" | "high" | "critical"
+  string message = 6;
+  string modified_content = 7;      // only if action="modify"
+  google.protobuf.Struct details = 8;  // detector-specific details (arbitrary JSON)
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;                // "serving" | "not_serving" | "unknown"
+}
+
+message ShutdownRequest {}
+
+message ShutdownResponse {
+  bool success = 1;
+}

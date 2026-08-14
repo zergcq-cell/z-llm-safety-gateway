@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "acme-keyword-detector"
+version = "1.0.0"
+description = "Example in-process detector for the z LLM Safety Gateway (keyword based)"
+requires-python = ">=3.10"
+dependencies = [
+    "z-llm-safety-gateway-sdk>=1.0,<2.0",
+]
+
+[project.entry-points."z_llm_safety_gateway.detectors"]
+acme_keyword = "acme_keyword_detector.detector:AcmeKeywordDetector"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/acme_keyword_detector"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

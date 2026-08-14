@@ -1,0 +1,61 @@
+# STDD 状态文件
+change_id: "2026-08-14-v0.5.1-example-plugins"
+title: "Example Plugins & Plugin Documentation"
+mode: "lightweight"
+
+# 阶段状态
+phase:
+  current: deliver
+  understand: completed
+  spec: completed
+  slice: skipped
+  build: completed
+  verify: completed
+  deliver: in_progress
+
+# 模式与复杂度
+pattern: "lightweight"
+complexity: "L"
+
+# 锚定
+anchoring:
+  level: "L1"
+  rationale: "纯增量资产，无接口变更；参考 v0.5.0 DESIGN Section 7 与 SDK 包"
+
+# 提案
+critical:
+  is_critical: false
+  safety_critical: false
+  financial: false
+  cross_system: false
+  required_anchoring_level: "L1"
+  rationale: "示例与文档补齐，无正确性/安全影响"
+
+# Gate 状态
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+
+# 状态
+status: archived
+
+# 长程模式
+long_range:
+  enabled: true
+  mode: "full_auto"
+  pre_auth_completed: true
+  pre_auth_timestamp: "2026-08-14T13:00:00+08:00"
+  max_iterations: 5
+
+# 产出物
+artifacts:
+  proposal_yaml: "proposal.yaml"
+  proposal_md: "proposal.md"
+  design_md: null
+  test_plan_md: null
+  phase_context_md: null
+  slices_md: null
+  tasks_md: null
+  test_report_md: "test-report.md"
+  design_adjustments_md: null
