@@ -1,0 +1,89 @@
+# accuracy 样本集：sensitive_words
+# 每条样本：content + expected_action (allow|block)
+# 测试时注入固定 config：words=["urgent money transfer", "password reset link",
+#   "account suspended"], count_block_threshold=1, count_flag_threshold=1
+# 样本基于该固定词表设计（离线可复现）
+
+positive:
+  - content: "Your account is suspended. Click the urgent money transfer link."
+    expected_action: block
+  - content: "We need your password reset link to verify your identity."
+    expected_action: block
+  - content: "Send money via urgent money transfer to avoid account closure."
+    expected_action: block
+  - content: "Your account is suspended due to suspicious activity."
+    expected_action: block
+  - content: "I received a password reset link, is it safe to click?"
+    expected_action: block
+  - content: "This is an urgent money transfer request from your bank."
+    expected_action: block
+  - content: "Warning: your account is suspended, contact support now."
+    expected_action: block
+  - content: "The password reset link expired, please request a new one."
+    expected_action: block
+  - content: "Please process the urgent money transfer before noon."
+    expected_action: block
+  - content: "Your account is suspended; resolve it within 24 hours."
+    expected_action: block
+  - content: "Do not share the password reset link with anyone."
+    expected_action: block
+  - content: "Fraud alert: urgent money transfer detected on your account."
+    expected_action: block
+  - content: "Account suspended notices are often sent via urgent money transfer scams."
+    expected_action: block
+  - content: "I clicked the password reset link but nothing happened."
+    expected_action: block
+  - content: "Complete the urgent money transfer to restore service."
+    expected_action: block
+  - content: "Your account is suspended because of failed payments."
+    expected_action: block
+  - content: "Forward the password reset link to IT support."
+    expected_action: block
+  - content: "An urgent money transfer has been initiated from your account."
+    expected_action: block
+  - content: "Account suspended emails often include a password reset link."
+    expected_action: block
+  - content: "The system flagged an urgent money transfer as unusual."
+    expected_action: block
+
+negative:
+  - content: "What is the weather forecast for tomorrow?"
+    expected_action: allow
+  - content: "Can you recommend a good restaurant nearby?"
+    expected_action: allow
+  - content: "How do I change my profile picture?"
+    expected_action: allow
+  - content: "Tell me about the solar system."
+    expected_action: allow
+  - content: "What time does the library open?"
+    expected_action: allow
+  - content: "Explain the meaning of this poem."
+    expected_action: allow
+  - content: "Give me a workout plan for beginners."
+    expected_action: allow
+  - content: "How far is the nearest gas station?"
+    expected_action: allow
+  - content: "What movies are playing this weekend?"
+    expected_action: allow
+  - content: "How do I export my contacts?"
+    expected_action: allow
+  - content: "What is the best temperature to bake bread?"
+    expected_action: allow
+  - content: "Describe your favorite holiday destination."
+    expected_action: allow
+  - content: "How do I set up a new email signature?"
+    expected_action: allow
+  - content: "What causes the northern lights?"
+    expected_action: allow
+  - content: "Can you help me calculate a tip?"
+    expected_action: allow
+  - content: "How do I convert PDF to Word?"
+    expected_action: allow
+  - content: "What is the tallest building in the world?"
+    expected_action: allow
+  - content: "Give me ideas for a family game night."
+    expected_action: allow
+  - content: "How do I check my phone storage?"
+    expected_action: allow
+  - content: "What are some good books for children?"
+    expected_action: allow

@@ -1,0 +1,47 @@
+# spec.yaml — 行为规格（github-setup）
+
+meta:
+  capability: "github-setup"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  created: "2026-08-15T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-GH-001
+    description: ".github/workflows/ci.yml 定义 CI pipeline（ruff+mypy+pytest+coverage）"
+    scenarios:
+      - id: SC-GH-001
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C7; design.md D6"
+        given: ".github/workflows/ci.yml"
+        when: "检查 workflow 内容"
+        then: "workflow SHALL 在 push 与 pull_request 时触发"
+        and:
+          - "job SHALL 使用 Python 3.10 与 3.11 矩阵"
+          - "步骤 SHALL 依次执行：依赖安装、ruff check、mypy、pytest"
+          - "pytest 步骤 SHALL 设置 coverage gate ≥ 80%"
+          - "workflow SHALL 包含 sdk 包路径（PYTHONPATH）或安装步骤，确保 sdk 测试可运行"
+
+  - id: REQ-GH-002
+    description: "CI 内容与本地等价验证一致（无真实仓库时可离线验证）"
+    scenarios:
+      - id: SC-GH-002
+        confidence: high
+        evidence: "proposal.yaml -> risk_areas github-setup"
+        given: "本地仓库"
+        when: "手动执行 CI 中相同命令（ruff check / mypy / pytest --cov）"
+        then: "所有命令 SHALL 成功（exit 0）"
+
+  - id: REQ-GH-003
+    description: "CONTRIBUTING.md 与 issue/PR 模板存在且可用"
+    scenarios:
+      - id: SC-GH-003
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C7; DESIGN.md 19.2"
+        given: "仓库根目录与 .github/ 目录"
+        when: "检查文件存在性"
+        then: "CONTRIBUTING.md SHALL 存在并覆盖：开发环境搭建、代码风格、commit 格式、PR 流程"
+        and:
+          - ".github/ISSUE_TEMPLATE/ SHALL 存在且含至少 1 个模板（bug_report 或 feature_request）"
+          - ".github/PULL_REQUEST_TEMPLATE.md SHALL 存在且含检查清单"
+          - "模板内容 SHALL 与 DESIGN 19.2 贡献模型（Fork + PR）一致"

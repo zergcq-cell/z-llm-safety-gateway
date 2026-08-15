@@ -1,0 +1,44 @@
+# spec.yaml — 行为规格（performance-benchmark）
+
+meta:
+  capability: "performance-benchmark"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  created: "2026-08-15T10:00:00+08:00"
+  confidence: medium
+
+requirements:
+  - id: REQ-BENCH-001
+    description: "tests/benchmarks/bench_pipeline.py 存在且可运行（DESIGN 14.5 约定路径）"
+    scenarios:
+      - id: SC-BENCH-001
+        confidence: medium
+        evidence: "proposal.yaml -> what_changes C5; DESIGN.md 14.5"
+        given: "tests/benchmarks/bench_pipeline.py"
+        when: "执行 python -m tests.benchmarks.bench_pipeline --suite latency"
+        then: "脚本 SHALL 正常退出（exit 0）并输出延迟统计"
+        and:
+          - "输出 SHALL 包含 P50/P95/P99 延迟（规则型 pipeline 配置）"
+          - "脚本 SHALL 使用标准库（time/statistics），无新增第三方依赖"
+
+  - id: REQ-BENCH-002
+    description: "基准结果输出对照 DESIGN 14 章目标的报告"
+    scenarios:
+      - id: SC-BENCH-002
+        confidence: medium
+        evidence: "proposal.yaml -> success_criteria 5; DESIGN.md 14.1"
+        given: "基准运行完成"
+        when: "检查报告输出"
+        then: "报告 SHALL 包含与 DESIGN 14 章目标的对照表（目标值 vs 实测值 vs 达标状态）"
+        and:
+          - "未达标项 SHALL 有差异说明（不阻塞退出，作为发布评审依据）"
+          - "报告 SHALL 记录运行环境（Python 版本/OS）"
+
+  - id: REQ-BENCH-003
+    description: "基准测试不设 CI 硬门槛"
+    scenarios:
+      - id: SC-BENCH-003
+        confidence: high
+        evidence: "proposal.yaml -> constraints; design.md D4"
+        given: "CI pipeline 配置"
+        when: "检查 CI 是否执行基准"
+        then: "CI SHALL 不因基准数值未达标而失败（基准为手动/发布评审工具）"

@@ -1,0 +1,33 @@
+# agent_spec.yaml — 验证规格（github-setup）
+
+meta:
+  task_id: "github-setup"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  task_type: configuration
+  system: "CI workflow、CONTRIBUTING、issue/PR 模板"
+  preconditions:
+    - "本地质量命令（ruff/mypy/pytest）可运行"
+
+steps:
+  - id: CP-1
+    description: "CI workflow 定义完整"
+    action: "检查 .github/workflows/ci.yml"
+    assertions:
+      - type: file_exists
+        expected: true
+      - type: stdout_contains
+        expected: "push/PR 触发；3.10/3.11 矩阵；ruff+mypy+pytest；coverage ≥80%"
+
+  - id: CP-2
+    description: "本地等价命令全绿"
+    action: "ruff check src/ tests/ sdk/src/ && mypy src/ && pytest --cov≥80"
+    assertions:
+      - type: exit_code
+        expected: 0
+
+  - id: CP-3
+    description: "贡献文件与模板存在"
+    action: "检查 CONTRIBUTING.md、.github/ISSUE_TEMPLATE/、.github/PULL_REQUEST_TEMPLATE.md"
+    assertions:
+      - type: file_exists
+        expected: true

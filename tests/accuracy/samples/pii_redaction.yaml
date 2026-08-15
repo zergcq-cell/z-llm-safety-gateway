@@ -1,0 +1,88 @@
+# accuracy 样本集：pii_redaction
+# 每条样本：content + expected_action (allow|block)
+# block = 检测到 PII（mask/replace/hash 模式）；allow = 无 PII
+# 覆盖：email / phone / SSN / 信用卡 / IP
+
+positive:
+  - content: "Contact me at john.doe@example.com for details."
+    expected_action: block
+  - content: "My number is 555-123-4567, call me anytime."
+    expected_action: block
+  - content: "SSN: 123-45-6789"
+    expected_action: block
+  - content: "Credit card 4111-1111-1111-1111 was charged."
+    expected_action: block
+  - content: "The server IP is 192.168.1.100."
+    expected_action: block
+  - content: "Email: support@acme-corp.com or sales@acme-corp.com"
+    expected_action: block
+  - content: "Call (212) 555-0199 for support."
+    expected_action: block
+  - content: "Employee SSN 987-65-4321 must be encrypted."
+    expected_action: block
+  - content: "Visa 4532 1234 5678 9012 approved."
+    expected_action: block
+  - content: "Reach out to a.b@sub.domain.org."
+    expected_action: block
+  - content: "Phone +1-800-555-0100 is the toll-free line."
+    expected_action: block
+  - content: "The record shows SSN 111-22-3333."
+    expected_action: block
+  - content: "Card 5500-0000-0000-0004 declined."
+    expected_action: block
+  - content: "Gateway IP 10.0.0.1 is the default route."
+    expected_action: block
+  - content: "Write to hr@company.example.com for benefits."
+    expected_action: block
+  - content: "Dial 555-0142 extension 100."
+    expected_action: block
+  - content: "SSN 222-33-4444 used in the report."
+    expected_action: block
+  - content: "Amex 3782-822463-10005 on file."
+    expected_action: block
+  - content: "Server at 172.16.0.5 is down."
+    expected_action: block
+  - content: "Email user12345@mail.example.net."
+    expected_action: block
+
+negative:
+  - content: "Thank you for your order!"
+    expected_action: allow
+  - content: "The meeting is at 3pm in room 204."
+    expected_action: allow
+  - content: "Please review the attached document."
+    expected_action: allow
+  - content: "The report is due on Friday."
+    expected_action: allow
+  - content: "We appreciate your feedback."
+    expected_action: allow
+  - content: "The project was completed successfully."
+    expected_action: allow
+  - content: "Please confirm your attendance."
+    expected_action: allow
+  - content: "The system will be down for maintenance."
+    expected_action: allow
+  - content: "Kindly sign the form and return it."
+    expected_action: allow
+  - content: "The results will be published next week."
+    expected_action: allow
+  - content: "Enjoy your weekend!"
+    expected_action: allow
+  - content: "The proposal was approved by the board."
+    expected_action: allow
+  - content: "Check the shared folder for updates."
+    expected_action: allow
+  - content: "The invoice was sent yesterday."
+    expected_action: allow
+  - content: "All teams should attend the quarterly review."
+    expected_action: allow
+  - content: "The package will arrive on Monday."
+    expected_action: allow
+  - content: "Please update the status tracker."
+    expected_action: allow
+  - content: "The training session starts at 10am."
+    expected_action: allow
+  - content: "We look forward to hearing from you."
+    expected_action: allow
+  - content: "The server room is on floor 3."
+    expected_action: allow

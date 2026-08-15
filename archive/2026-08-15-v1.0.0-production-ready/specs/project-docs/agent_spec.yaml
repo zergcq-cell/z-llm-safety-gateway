@@ -1,0 +1,44 @@
+# agent_spec.yaml — 验证规格（project-docs）
+
+meta:
+  task_id: "project-docs"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  task_type: documentation
+  system: "LICENSE、README、docs/ 四份指南、DoD 清单"
+  preconditions:
+    - "v0.5.1 交付的 docs/ 三份插件文档存在"
+
+steps:
+  - id: CP-1
+    description: "LICENSE 文件合规"
+    action: "检查根目录 LICENSE"
+    assertions:
+      - type: file_exists
+        expected: true
+      - type: stdout_contains
+        expected: "Apache License 2.0 全文（含 9 条款）"
+
+  - id: CP-2
+    description: "README 覆盖门面清单"
+    action: "检查 README.md 内容"
+    assertions:
+      - type: file_exists
+        expected: true
+      - type: stdout_contains
+        expected: "介绍/特性/快速开始/配置示例/文档导航/许可"
+
+  - id: CP-3
+    description: "docs/ 四份指南存在且命令实测通过"
+    action: "检查 docs/ 并逐条执行指南中的命令"
+    assertions:
+      - type: file_exists
+        expected: true
+      - type: exit_code
+        expected: 0
+
+  - id: CP-4
+    description: "DoD 清单记录"
+    action: "检查 proposal.md/test-report.md 中 DoD 清单"
+    assertions:
+      - type: file_exists
+        expected: true

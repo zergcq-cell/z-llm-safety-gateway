@@ -1,0 +1,49 @@
+# spec.yaml — 行为规格（production-deployment）
+
+meta:
+  capability: "production-deployment"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  created: "2026-08-15T10:00:00+08:00"
+  confidence: medium
+
+requirements:
+  - id: REQ-DEPL-001
+    description: "docker-compose.prod.yml 提供生产级部署配置且通过校验"
+    scenarios:
+      - id: SC-DEPL-001
+        confidence: medium
+        evidence: "proposal.yaml -> what_changes C6; DESIGN.md 13"
+        given: "docker-compose.prod.yml"
+        when: "执行 docker compose -f docker-compose.prod.yml config"
+        then: "配置 SHALL 通过 compose config 校验（exit 0）"
+        and:
+          - "gateway 服务 SHALL 配置 deploy.replicas ≥ 2（多副本）"
+          - "gateway 服务 SHALL 配置 deploy.resources.limits（cpu 与 memory）"
+          - "gateway 服务 SHALL 配置 healthcheck（探测 /health）"
+          - "gateway 服务 SHALL 配置 restart: unless-stopped"
+          - "文件 SHALL 与现有 docker-compose.yml（开发版）并存，不修改开发版"
+
+  - id: REQ-DEPL-002
+    description: "生产 compose 包含 gRPC sidecar 示例集成"
+    scenarios:
+      - id: SC-DEPL-002
+        confidence: medium
+        evidence: "proposal.yaml -> what_changes C6"
+        given: "docker-compose.prod.yml 中的 sidecar 服务"
+        when: "检查 sidecar 配置"
+        then: "配置 SHALL 包含 gRPC sidecar 服务（示例镜像）与 gateway 的关联配置（endpoint/网络）"
+        and:
+          - "sidecar 服务 SHALL 有健康检查与资源限制"
+          - "配置注释 SHALL 说明如何替换为真实 sidecar 镜像"
+
+  - id: REQ-DEPL-003
+    description: "单副本冒烟验证可运行（本地无容器时降级为 config 校验）"
+    scenarios:
+      - id: SC-DEPL-003
+        confidence: low
+        evidence: "proposal.yaml -> risk_areas production-deployment"
+        given: "本地 Docker 环境"
+        when: "执行 docker compose -f docker-compose.prod.yml up -d --scale gateway=1"
+        then: "gateway 容器 SHALL 启动并通过 healthcheck"
+        and:
+          - "若本地无 Docker，则 SHALL 至少通过 docker compose config 校验（验证降级路径）"

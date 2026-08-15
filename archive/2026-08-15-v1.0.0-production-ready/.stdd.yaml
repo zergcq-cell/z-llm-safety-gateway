@@ -1,0 +1,69 @@
+# STDD 状态文件
+change_id: "2026-08-15-v1.0.0-production-ready"
+title: "v1.0.0 Production Ready"
+mode: "thorough"
+task_type: "feature"
+complexity_score: 11
+score_confidence: "preliminary"
+
+# 阶段状态
+phase:
+  current: deliver
+  understand: completed
+  spec: completed
+  slice: completed
+  build: completed
+  verify: completed
+  deliver: completed
+
+# 模式与复杂度
+pattern: "thorough"
+complexity: "H"
+
+# 锚定
+anchoring:
+  level: "L1"
+  rationale: "文档/测试/部署/CI 增量资产，无运行时代码变更，无安全影响"
+
+# 提案
+critical:
+  is_critical: false
+  safety_critical: false
+  financial: false
+  cross_system: false
+  required_anchoring_level: "L1"
+  rationale: "发布就绪工程化，不触碰运行时行为"
+
+# Gate 状态
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+
+# 状态
+status: archived
+
+# 长程模式
+long_range:
+  enabled: true
+  mode: "full_auto"
+  pre_auth_completed: true
+  pre_auth_timestamp: "2026-08-15T10:30:00+08:00"
+  max_iterations: 10
+  degradation_triggers:
+    - "连续自动修复 3 次失败"
+    - "测试通过率 < 95%"
+    - "安全相关问题"
+    - "预授权范围外的未预期情况"
+
+# 产出物
+artifacts:
+  proposal_yaml: "proposal.yaml"
+  proposal_md: "proposal.md"
+  design_md: "design.md"
+  test_plan_md: "test-plan.md"
+  phase_context_md: null
+  slices_md: "slices.md"
+  tasks_md: "tasks.md"
+  test_report_md: "test-report.md"
+  design_adjustments_md: null

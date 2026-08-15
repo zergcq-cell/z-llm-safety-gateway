@@ -1,0 +1,49 @@
+# spec.yaml — 行为规格（accuracy-testing）
+
+meta:
+  capability: "accuracy-testing"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  created: "2026-08-15T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-ACC-001
+    description: "tests/accuracy/ 提供 4 个规则型内置检测器的固定样本集"
+    scenarios:
+      - id: SC-ACC-001
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C4; design.md D3"
+        given: "tests/accuracy/samples/ 目录"
+        when: "检查样本集文件"
+        then: "prompt_injection、pii_redaction、sensitive_words、secret_leak 四个检测器 SHALL 各有一个样本 YAML 文件"
+        and:
+          - "每个样本文件 SHALL 含 positive 与 negative 两组样本，每组 ≥20 条"
+          - "样本 SHALL 离线可复现（无网络依赖、无外部数据源）"
+          - "样本 SHALL 有预期 action 标注（allow/block）以便断言"
+
+  - id: REQ-ACC-002
+    description: "accuracy 测试断言准确率阈值并可离线运行"
+    scenarios:
+      - id: SC-ACC-002
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C4; design.md D3"
+        given: "tests/accuracy/test_accuracy.py"
+        when: "运行 accuracy 测试（pytest tests/accuracy）"
+        then: "每个规则型检测器的准确率（正负样本判对比例）SHALL ≥ 0.9"
+        and:
+          - "误报率（negative 样本被判 block/flag 的比例）SHALL ≤ 0.1"
+          - "toxicity（ML）检测器 SHALL 以 skipif 标注模型环境依赖，无模型时跳过而非失败"
+          - "测试 SHALL 不依赖网络与外部服务"
+
+  - id: REQ-ACC-003
+    description: "accuracy 测试集成到全量测试但不阻塞无模型环境"
+    scenarios:
+      - id: SC-ACC-003
+        confidence: medium
+        evidence: "proposal.yaml -> success_criteria 4"
+        given: "完整测试套件"
+        when: "运行全量 pytest"
+        then: "accuracy 测试 SHALL 正常执行（规则型全绿；toxicity 按环境 skip）"
+        and:
+          - "规则型 accuracy 用例数 SHALL ≥ 4 个（每检测器 1 个）"
+          - "失败 SHALL 有明确错误信息（哪条样本判错）"

@@ -1,0 +1,35 @@
+# agent_spec.yaml — 验证规格（production-deployment）
+
+meta:
+  task_id: "production-deployment"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  task_type: configuration
+  system: "docker-compose.prod.yml 生产部署配置"
+  preconditions:
+    - "Docker 可用（或降级为 config 校验）"
+
+steps:
+  - id: CP-1
+    description: "compose config 校验通过"
+    action: "docker compose -f docker-compose.prod.yml config"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "replicas≥2 / resources.limits / healthcheck / restart"
+
+  - id: CP-2
+    description: "sidecar 服务集成存在"
+    action: "检查 docker-compose.prod.yml sidecar 服务"
+    assertions:
+      - type: file_exists
+        expected: true
+      - type: stdout_contains
+        expected: "sidecar 服务 + 健康检查 + 资源限制 + 替换说明"
+
+  - id: CP-3
+    description: "单副本冒烟（可用时）"
+    action: "docker compose -f docker-compose.prod.yml up -d --scale gateway=1"
+    assertions:
+      - type: exit_code
+        expected: 0

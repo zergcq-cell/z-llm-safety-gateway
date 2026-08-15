@@ -1,0 +1,113 @@
+# proposal.yaml — Canonical 格式（v1.0.0 Production Ready）
+
+meta:
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  title: "v1.0.0 Production Ready"
+  created: "2026-08-15T09:30:00+08:00"
+  status: draft
+
+why:
+  problem: >
+    DESIGN.md 第 18 章 Roadmap 的五个功能阶段（v0.1.0~v0.5.0）已全部完成，
+    但 v1.0.0 Production Ready 的交付物尚未启动：缺少生产级文档体系、
+    准确性测试、性能基准验证、生产部署配置与 GitHub 仓库建设；
+    README 仅 7 行占位；无 LICENSE 文件（开源合规缺口）。
+  motivation: >
+    v1.0.0 是首个稳定发布版本，需要可验证的完成标准：
+    文档能让新用户 30 分钟内上手，基准测试证明满足 DESIGN 14 章性能目标，
+    生产 compose 可一键部署，CI 保证质量门槛。完成这些后项目达到
+    "Production Ready" 状态，可以对外开源发布。
+
+what_changes:
+  - id: C1
+    description: "新增 Apache 2.0 LICENSE 文件（全文），对齐 DESIGN 19.1 与 pyproject.toml 声明"
+    type: new
+  - id: C2
+    description: "README.md 扩写为完整项目门面：介绍、功能特性、快速开始、配置示例、文档导航、社区与许可"
+    type: modified
+  - id: C3
+    description: "新增 docs/getting-started.md、docs/configuration.md、docs/api-spec.md、docs/deployment.md 四份指南（与已有 3 份插件文档构成完整文档体系）"
+    type: new
+  - id: C4
+    description: "新增 tests/accuracy/ 检测器准确性测试：5 个内置检测器各 ≥20 正/负样本，准确率阈值可断言"
+    type: new
+  - id: C5
+    description: "新增 tests/benchmarks/bench_pipeline.py 性能基准脚本（DESIGN 14.5 约定路径），输出对照 DESIGN 14 章目标的报告"
+    type: new
+  - id: C6
+    description: "新增 docker-compose.prod.yml 生产部署配置：多副本、资源限制、健康检查、gRPC sidecar 示例"
+    type: new
+  - id: C7
+    description: "新增 GitHub 仓库建设：.github/workflows/ci.yml（ruff+mypy+pytest+coverage gate）、CONTRIBUTING.md、issue/PR 模板"
+    type: new
+  - id: C8
+    description: "定义并记录 v1.0.0 完成标准（Definition of Done）清单，随 proposal/test-report 交付"
+    type: new
+
+capabilities:
+  new:
+    - name: project-docs
+      description: "LICENSE、README 扩写、docs/ 四份指南（getting-started/configuration/api-spec/deployment）"
+    - name: accuracy-testing
+      description: "内置检测器准确性测试套件（样本集 + 准确率阈值断言）"
+    - name: performance-benchmark
+      description: "性能基准脚本与 DESIGN 14 章目标对照报告"
+    - name: production-deployment
+      description: "docker-compose.prod.yml 生产部署配置（多副本/资源限制/健康检查/sidecar）"
+    - name: github-setup
+      description: "CI pipeline、CONTRIBUTING.md、issue/PR 模板"
+  modified: []
+
+constraints:
+  - "性能基准在本地开发机运行，结果用于发布评审，不强制 CI 失败（环境差异大）"
+  - "accuracy 样本集使用固定内置样本，不依赖外部数据源（可离线复现）"
+  - "CI 文件在仓库内就绪；真实 GitHub 仓库/远程地址由用户后续决定，不阻塞本次变更"
+  - "不引入新运行时依赖（基准/测试仅用标准库 + 已有测试依赖）"
+
+stakeholders:
+  - "项目维护者（验收完成标准、发布 v1.0.0）"
+  - "潜在第三方检测器开发者（文档体系）"
+  - "运维/部署工程师（生产 compose、benchmark 容量规划）"
+
+risk_areas:
+  - capability: performance-benchmark
+    risk: "基准在本地机器可能达不到 DESIGN 14 目标（如规则检测器 P50<5ms），导致发布阻塞"
+    mitigation: "基准脚本输出结果对照表；未达标项记录差异并评估（目标为发布评审依据，不设 CI 硬门槛）"
+  - capability: accuracy-testing
+    risk: "样本集构建成本高或选择偏差导致准确率虚高"
+    mitigation: "每检测器 ≥20 正/负样本，样本来源公开且固定；阈值设为保守值（≥0.9），测试只验证回归不达标不阻断发布"
+  - capability: github-setup
+    risk: "无真实 GitHub 仓库，CI 文件无法在线验证"
+    mitigation: "本地以等价命令验证 CI 内容（ruff/mypy/pytest 全绿）；提供 act 说明供用户 push 后验证"
+  - capability: production-deployment
+    risk: "生产 compose 在无容器环境无法完整验证"
+    mitigation: "本地 docker compose config 校验 + 单副本冒烟；多副本/sidecar 按 DESIGN 13 章编写并标注"
+
+non_goals:
+  - "不实现新功能（检测器、协议、安全特性均不加）"
+  - "不修改既有运行时行为（配置 schema、API 兼容 v0.5.x）"
+  - "不包含 v1.1+ 路线图内容（K8s Helm、Redis 限流、provider failover、mTLS 等）"
+  - "不执行真实 GitHub 发布（push/PR/release 由用户后续操作）"
+
+critical:
+  is_critical: false
+  risk_assessment:
+    safety_critical: false
+    financial: false
+    cross_system: false
+
+anchoring:
+  level: L1
+  reference_changes: []
+  anchor_implementations: []
+
+success_criteria:
+  - "LICENSE 文件存在且为 Apache License 2.0 全文"
+  - "README 覆盖：项目介绍、功能特性、快速开始、配置示例、文档导航、许可声明"
+  - "docs/ 包含 getting-started/configuration/api-spec/deployment 四份指南，且内容与实现一致"
+  - "tests/accuracy/ 覆盖 5 个内置检测器，每个 ≥20 正/负样本，准确率断言阈值 ≥0.9，测试全绿"
+  - "tests/benchmarks/bench_pipeline.py 可运行并输出对照 DESIGN 14 章目标的报告（达标或记录差异）"
+  - "docker-compose.prod.yml 通过 docker compose config 校验，含 ≥2 副本、资源限制、健康检查、gRPC sidecar 服务"
+  - ".github/workflows/ci.yml 存在且本地等价命令（ruff+mypy+pytest+coverage）全绿"
+  - "CONTRIBUTING.md、.github/ISSUE_TEMPLATE/、.github/PULL_REQUEST_TEMPLATE.md 存在"
+  - "v1.0.0 Definition of Done 清单记录于 proposal 与 test-report，逐项可勾选"

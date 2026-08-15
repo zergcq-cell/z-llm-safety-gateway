@@ -1,0 +1,28 @@
+# agent_spec.yaml — 验证规格（accuracy-testing）
+
+meta:
+  task_id: "accuracy-testing"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  task_type: code
+  system: "内置检测器准确性测试套件"
+  preconditions:
+    - "规则型检测器可初始化（无模型/网络依赖）"
+
+steps:
+  - id: CP-1
+    description: "样本集文件存在且结构完整"
+    action: "检查 tests/accuracy/samples/ 目录"
+    assertions:
+      - type: file_exists
+        expected: true
+      - type: stdout_contains
+        expected: "4 个检测器样本 YAML；每组 ≥20 条；含预期 action"
+
+  - id: CP-2
+    description: "accuracy 测试运行通过"
+    action: "pytest tests/accuracy -q"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "passed"

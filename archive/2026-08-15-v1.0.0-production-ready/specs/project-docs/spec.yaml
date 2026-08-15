@@ -1,0 +1,61 @@
+# spec.yaml — 行为规格（project-docs）
+
+meta:
+  capability: "project-docs"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  created: "2026-08-15T10:00:00+08:00"
+  confidence: high
+
+requirements:
+  - id: REQ-DOCS-001
+    description: "根目录 LICENSE 文件为 Apache License 2.0 全文"
+    scenarios:
+      - id: SC-DOCS-001
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C1; DESIGN.md 19.1"
+        given: "仓库根目录"
+        when: "检查 LICENSE 文件内容"
+        then: "LICENSE 文件 SHALL 存在且内容为 Apache License 2.0 官方全文（包含 9 个条款章节）"
+        and:
+          - "LICENSE 首行 SHALL 为 'Apache License' 且包含 'Version 2.0'"
+          - "LICENSE SHALL 与 pyproject.toml 的 license 声明（Apache-2.0）一致"
+
+  - id: REQ-DOCS-002
+    description: "README.md 提供完整项目门面与文档导航"
+    scenarios:
+      - id: SC-DOCS-002
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C2"
+        given: "仓库根目录 README.md"
+        when: "阅读 README.md 内容"
+        then: "README SHALL 包含：项目介绍、核心功能特性列表、快速开始步骤、配置示例、文档导航（链接 docs/ 各指南）与许可声明"
+        and:
+          - "快速开始 SHALL 包含可执行的安装与启动命令（pip install / uvicorn 或 docker）"
+          - "文档导航 SHALL 链接 docs/getting-started.md、docs/configuration.md、docs/api-spec.md、docs/deployment.md 及插件文档"
+          - "README SHALL 不包含虚构或不存在的命令"
+
+  - id: REQ-DOCS-003
+    description: "docs/ 包含 getting-started/configuration/api-spec/deployment 四份指南且与实现一致"
+    scenarios:
+      - id: SC-DOCS-003
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C3"
+        given: "docs/ 目录"
+        when: "检查四份指南文件"
+        then: "docs/ SHALL 包含 getting-started.md、configuration.md、api-spec.md、deployment.md 四个文件"
+        and:
+          - "getting-started SHALL 覆盖安装、最小配置、启动、curl 冒烟调用"
+          - "configuration SHALL 覆盖所有配置区块（server/providers/routing/pipeline/security/observability）并给出示例"
+          - "api-spec SHALL 覆盖 /v1/chat/completions 与健康/指标端点，字段与实现一致"
+          - "deployment SHALL 覆盖 docker compose 部署、生产建议、sidecar 集成与故障排查"
+          - "指南中的命令与配置 SHALL 与 v0.5.x 实现一致（逐条实测验证）"
+
+  - id: REQ-DOCS-004
+    description: "v1.0.0 Definition of Done 清单记录并随交付物可勾选"
+    scenarios:
+      - id: SC-DOCS-004
+        confidence: high
+        evidence: "proposal.yaml -> what_changes C8"
+        given: "变更交付物（proposal.md 与 test-report.md）"
+        when: "检查 DoD 清单"
+        then: "DoD 清单 SHALL 逐项列出 v1.0.0 完成标准，每项可明确勾选是/否"

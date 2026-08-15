@@ -1,0 +1,33 @@
+# agent_spec.yaml — 验证规格（performance-benchmark）
+
+meta:
+  task_id: "performance-benchmark"
+  change_id: "2026-08-15-v1.0.0-production-ready"
+  task_type: code
+  system: "性能基准脚本与目标对照报告"
+  preconditions:
+    - "规则型 pipeline 配置可构建"
+
+steps:
+  - id: CP-1
+    description: "基准脚本可运行并输出延迟统计"
+    action: "python -m tests.benchmarks.bench_pipeline --suite latency"
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: "P50/P95/P99"
+
+  - id: CP-2
+    description: "报告对照 DESIGN 14 目标"
+    action: "检查报告输出"
+    assertions:
+      - type: stdout_contains
+        expected: "目标值/实测值/达标状态对照表；未达标项有说明；含环境信息"
+
+  - id: CP-3
+    description: "CI 不设基准硬门槛"
+    action: "检查 .github/workflows/ci.yml"
+    assertions:
+      - type: stdout_contains
+        expected: "CI 不执行基准数值断言"

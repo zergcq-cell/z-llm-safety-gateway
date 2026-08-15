@@ -1,0 +1,83 @@
+# Production deployment configuration for z LLM Safety Gateway.
+# Usage: docker compose -f docker-compose.prod.yml up -d
+#   (multi-replica on single host: docker compose -f docker-compose.prod.yml up -d --scale gateway=2)
+#
+# Compared to docker-compose.yml (development):
+#   - deploy.replicas >= 2 (multi-replica)
+#   - deploy.resources.limits (CPU/memory limits)
+#   - healthcheck with start_period for warm-up
+#   - example gRPC sidecar service (replace with your own detector image)
+#
+# NOTE: deploy.replicas is honored by Docker Swarm; on plain Compose,
+# use --scale gateway=N to scale out.
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: z-safety-gateway:1.0.0
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/gateway.yaml:/app/config/gateway.yaml:ro
+      - gateway-logs:/app/logs
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY must be set}
+      - AZURE_API_KEY=${AZURE_API_KEY:-}
+      - LOG_LEVEL=INFO
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      restart_policy:
+        condition: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    depends_on:
+      - acme-guard
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+  # Example gRPC sidecar detector (replace image with your real detector).
+  # See docs/grpc-integration.md for the DetectorService v1 contract.
+  acme-guard:
+    image: acme/detector:1.0.0   # REPLACE: your sidecar detector image
+    expose:
+      - "50051"
+    environment:
+      - DETECTOR_API_KEY=${ACME_API_KEY:-sk-acme}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+      restart_policy:
+        condition: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('127.0.0.1', 50051), 2)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+volumes:
+  gateway-logs:
+
+networks:
+  gateway-net:
+    driver: bridge
