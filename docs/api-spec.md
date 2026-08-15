@@ -69,7 +69,7 @@ OpenAI 兼容：
 
 ### 安全阻断响应
 
-输入/输出检测触发 `block` 时，网关返回 HTTP 403，响应体带 OpenAI 兼容错误 + `safety` 扩展字段：
+检测触发 `block` 时，网关返回错误响应（输入阻断 → `400 safety_input_blocked`；输出阻断 → `422 safety_output_blocked`），响应体为 OpenAI 兼容错误 + `safety` 扩展字段：
 
 ```json
 {
@@ -108,17 +108,19 @@ event: safety
 data: {"type":"flag","detector":"sensitive_words","risk_level":"medium"}
 ```
 
-流式阻断：事件流中断并返回 403（或按 `on_max_size`/策略截断，见 configuration.md）。
+流式阻断：以 `event: safety` 事件发送阻断详情后结束流（`data: [DONE]`）；输入侧流式请求阻断同非流式（400 `safety_input_blocked`）。
 
 ### 错误码
 
 | HTTP | 场景 |
 |------|------|
 | 400 | 请求体非法（缺 messages/model） |
+| 400 | 输入内容被安全策略阻断（`safety_input_blocked`） |
 | 401 | 认证失败（auth 启用时） |
-| 403 | 内容被安全策略阻断 |
-| 429 | 限流触发（`Retry-After` 头） |
+| 404 | 无匹配 routing 规则（`model_not_found`） |
 | 413 | 请求体超过 `max_request_size` |
+| 422 | 输出内容被安全策略阻断（`safety_output_blocked`） |
+| 429 | 限流触发（`Retry-After` 头） |
 | 502 | 上游 provider 错误（含 `provider_error` 字段） |
 | 504 | 上游超时 |
 
