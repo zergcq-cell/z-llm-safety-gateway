@@ -386,7 +386,7 @@ def apply_output_modifications(
 
 ### 4.1 Supported Endpoints
 
-#### MVP (v0.1 - v1.0)
+#### MVP (v0.0.1 - v0.1.0)
 
 | Endpoint | Method | Description | Detection |
 |----------|--------|-------------|-----------|
@@ -400,9 +400,9 @@ def apply_output_modifications(
 
 | Endpoint | Target Version | Notes |
 |----------|---------------|-------|
-| `/v1/completions` | v1.1 | Legacy completions API |
-| `/v1/embeddings` | v1.1 | Input detection only |
-| `/v1/images/generations` | v1.2 | Multimodal content detection |
+| `/v1/completions` | v0.2.0 | Legacy completions API |
+| `/v1/embeddings` | v0.2.0 | Input detection only |
+| `/v1/images/generations` | v0.3.0 | Multimodal content detection |
 
 ### 4.2 Block Response Format
 
@@ -552,7 +552,7 @@ All enabled detectors for a given direction (input/output) execute **concurrentl
 - If **any** detector returns `modify`, the modification is collected and applied after all detectors complete. (Exception: if `short_circuit_on: block_and_modify` is configured, a `modify` result also triggers short-circuit, applying the modification immediately without waiting for remaining detectors.)
 - If all detectors return `allow` or `flag`, the engine waits for all to complete, then aggregates results into a **complete risk profile**.
 
-> **Note on `execution_mode`**: MVP supports **parallel mode only**. A `sequential` mode (detectors run one-by-one in priority order, useful for dependent detectors or cost optimization with external API detectors) is planned for v1.1+. The `execution_mode` config field is reserved but only `parallel` is valid in MVP.
+> **Note on `execution_mode`**: MVP supports **parallel mode only**. A `sequential` mode (detectors run one-by-one in priority order, useful for dependent detectors or cost optimization with external API detectors) is planned for v0.2.0+. The `execution_mode` config field is reserved but only `parallel` is valid in MVP.
 
 **Short-circuit modes**:
 
@@ -724,7 +724,7 @@ When no detector blocks, the engine aggregates all results:
 > **Mitigation strategies**:
 > 1. Design detectors to be position-independent (e.g., return fully modified content rather than patch instructions).
 > 2. Use `short_circuit_on: block_and_modify` when only one modification is needed (e.g., PII redaction alone).
-> 3. In the future `sequential` execution mode (v1.1+), each detector will see the modified content from the previous detector, resolving this issue.
+> 3. In the future `sequential` execution mode (v0.2.0+), each detector will see the modified content from the previous detector, resolving this issue.
 
 ### 5.6 Flag Escalation (Optional)
 
@@ -938,7 +938,7 @@ Five detectors for the initial release:
 | 4 | **Sensitive Word / Topic Filter** | Input | Rule-based (configurable word lists) | Enterprise-customizable content control |
 | 5 | **Secret / Credential Leak Detection** | Output | Regex patterns (API keys, tokens, private keys) | Prevent accidental leakage of sensitive credentials |
 
-> **Model sharing for dual-direction detectors**: The toxicity detector is configured for both input and output. In MVP, each direction instantiates a separate detector with its own model instance. A model registry to share a single loaded model across directions (reducing memory by ~50%) is planned for v1.1+. Until then, both configs must specify `model_name`, `model_cache_dir`, and `offline_mode` independently.
+> **Model sharing for dual-direction detectors**: The toxicity detector is configured for both input and output. In MVP, each direction instantiates a separate detector with its own model instance. A model registry to share a single loaded model across directions (reducing memory by ~50%) is planned for v0.2.0+. Until then, both configs must specify `model_name`, `model_cache_dir`, and `offline_mode` independently.
 
 ### 6.5 ML Model Distribution
 
@@ -1508,14 +1508,14 @@ For output-side streaming, the gateway maintains a sliding window of accumulated
 - Chinese characters map roughly 1:1 to tokens, so character-based works well for Chinese
 - 200 characters ≈ 50 tokens for English, ≈ 200 tokens for Chinese
 
-**Future enhancement** (v1.1+): Pluggable tokenizer support, allowing true token-based windows when the provider's tokenizer is known.
+**Future enhancement** (v0.2.0+): Pluggable tokenizer support, allowing true token-based windows when the provider's tokenizer is known.
 
 ```yaml
 pipeline:
   streaming:
     mode: sliding_window          # "sliding_window" (default) | "buffer"
     window_size: 200              # characters per window (MVP)
-    # window_unit: chars          # "chars" (default) | "tokens" (future, v1.1+)
+    # window_unit: chars          # "chars" (default) | "tokens" (future, v0.2.0+)
     # tokenizer: tiktoken         # "tiktoken" | "sentencepiece" | null (future)
     overlap: 50                   # character overlap between windows
     send_flag_events: false       # default: off; send safety_flag SSE events during streaming
@@ -1610,7 +1610,7 @@ pipeline:
 | Auth | `webhook_auth_header` | Optional `Authorization` header value |
 | Failure | Logged | If all retries fail, the recall is logged as `recall_delivery: "failed"` in the audit log. No further action. |
 
-> **No persistent queue**: Webhook recalls are not persisted to a queue. If the gateway restarts during retry, the recall is lost. For critical deployments, ensure the webhook endpoint is highly available. A persistent recall queue is planned for v1.1+.
+> **No persistent queue**: Webhook recalls are not persisted to a queue. If the gateway restarts during retry, the recall is lost. For critical deployments, ensure the webhook endpoint is highly available. A persistent recall queue is planned for v0.2.0+.
 
 ### 8.5 Streaming Memory Management
 
@@ -1702,9 +1702,9 @@ routing:
 
 **Routing rule conflict resolution**: If multiple glob patterns match the same model, the **first match in YAML order** wins. A warning is logged at startup if overlapping patterns are detected.
 
-### 9.4 Provider Failover (v1.1+)
+### 9.4 Provider Failover (v0.2.0+)
 
-MVP does not support provider failover. Planned for v1.1:
+MVP does not support provider failover. Planned for v0.2.0:
 
 ```yaml
 routing:
@@ -1731,9 +1731,9 @@ The gateway forwards provider-specific parameters (e.g., Azure's `api-version` q
 
 | Provider | Target Version | Notes |
 |----------|---------------|-------|
-| Anthropic Claude | v1.2 | Requires API format conversion |
-| Google Gemini | v1.2 | Requires API format conversion |
-| AWS Bedrock | v1.3 | Multiple model families |
+| Anthropic Claude | v0.3.0 | Requires API format conversion |
+| Google Gemini | v0.3.0 | Requires API format conversion |
+| AWS Bedrock | v0.4.0 | Multiple model families |
 
 ### 9.7 Provider Error Handling
 
@@ -1744,7 +1744,7 @@ When the upstream LLM provider returns an error, the gateway wraps it in an Open
 | Provider timeout (exceeds `security.timeout.upstream`) | HTTP 502 `provider_error` | Gateway aborts the upstream request, returns error to client |
 | Provider 4xx (e.g., 400, 401, 403) | HTTP 502 `provider_error` | Gateway wraps provider error; original status code and message included in `details` |
 | Provider 429 (rate limited) | HTTP 502 `provider_error` | Gateway does not retry; client should back off. `Retry-After` from provider is forwarded if present |
-| Provider 5xx (e.g., 500, 502, 503) | HTTP 502 `provider_error` | Gateway does not retry in MVP; provider failover planned for v1.1 |
+| Provider 5xx (e.g., 500, 502, 503) | HTTP 502 `provider_error` | Gateway does not retry in MVP; provider failover planned for v0.2.0 |
 | Provider network error (connection refused, DNS failure) | HTTP 502 `provider_error` | Gateway returns generic error; details logged for debugging |
 | Provider streaming error (mid-stream) | SSE `error` event + `[DONE]` | Gateway sends a standard SSE error event and closes the stream |
 
@@ -1764,7 +1764,7 @@ When the upstream LLM provider returns an error, the gateway wraps it in an Open
 }
 ```
 
-> **No retry in MVP**: The gateway does not retry failed provider requests. Retrying could duplicate side effects (e.g., duplicate billing, non-idempotent operations). Provider failover (v1.1+) will handle this via configured fallback providers.
+> **No retry in MVP**: The gateway does not retry failed provider requests. Retrying could duplicate side effects (e.g., duplicate billing, non-idempotent operations). Provider failover (v0.2.0+) will handle this via configured fallback providers.
 
 ### 9.8 `/v1/models` Passthrough
 
@@ -1774,7 +1774,7 @@ The `/v1/models` endpoint lists available models. The gateway forwards this requ
 - No input/output detection (detection column: None)
 - Authentication is still required (API key validation applies)
 - Rate limiting applies
-- A future enhancement (v1.1+) may aggregate models from all configured providers and filter by routing rules
+- A future enhancement (v0.2.0+) may aggregate models from all configured providers and filter by routing rules
 
 ---
 
@@ -1817,7 +1817,7 @@ routing:
 
 # --- Pipeline Engine ---
 pipeline:
-  execution_mode: parallel        # "parallel" (MVP only); "sequential" planned for v1.1+
+  execution_mode: parallel        # "parallel" (MVP only); "sequential" planned for v0.2.0+
   short_circuit_on: block         # "block" (default) | "block_and_modify"
   flag_escalation:
     enabled: false
@@ -1942,7 +1942,7 @@ security:
     rate: 100                     # requests per second
     burst: 200                    # burst capacity
     per: api_key                  # "api_key" | "ip"
-    storage: memory               # "memory" (MVP) | "redis" (v1.1+, for multi-instance)
+    storage: memory               # "memory" (MVP) | "redis" (v0.2.0+, for multi-instance)
 
   max_request_size: "10MB"
 
@@ -2065,9 +2065,9 @@ Body:
 | Storage | Scope | Multi-instance | Target Version |
 |---------|-------|----------------|----------------|
 | `memory` (default) | Single instance | No | MVP |
-| `redis` | Multi-instance | Yes | v1.1+ |
+| `redis` | Multi-instance | Yes | v0.2.0+ |
 
-For MVP, rate limiting uses in-memory storage. This is sufficient for single-instance deployment. For multi-instance Docker Compose or K8s deployments, Redis backend will be added in v1.1.
+For MVP, rate limiting uses in-memory storage. This is sufficient for single-instance deployment. For multi-instance Docker Compose or K8s deployments, Redis backend will be added in v0.2.0.
 
 ### 11.4 Request Size Limit
 
@@ -2119,10 +2119,10 @@ When `audit.sanitize_logs: true` (default), the gateway redacts known sensitive 
 
 | Feature | Target Version |
 |---------|---------------|
-| mTLS (mutual TLS) | v1.1 |
-| RBAC (role-based access control) | v1.1 |
-| OAuth 2.0 integration | v1.2 |
-| Redis-backed rate limiting (multi-instance) | v1.1 |
+| mTLS (mutual TLS) | v0.2.0 |
+| RBAC (role-based access control) | v0.2.0 |
+| OAuth 2.0 integration | v0.3.0 |
+| Redis-backed rate limiting (multi-instance) | v0.2.0 |
 
 ---
 
@@ -2481,7 +2481,7 @@ flowchart LR
 - Configure circuit breaker on the gateway side
 - Sidecar should implement graceful shutdown on SIGTERM
 
-### 13.6 Kubernetes (Future - v1.1+)
+### 13.6 Kubernetes (Future - v0.2.0+)
 
 K8s support requires the following additional work:
 
@@ -2826,11 +2826,25 @@ def mock_llm_provider():
 
 ---
 
+### Versioning Policy (v0.1.0, 2026-08-15)
+
+SemVer-aligned release strategy:
+
+| Version | Meaning |
+|---------|---------|
+| v0.0.x | Internal development phases (not for public distribution) |
+| v0.x.y | Public test releases — API may change between releases (current: v0.1.0) |
+| v1.0.0 | General availability — stable public API, formal release |
+
+The first public test release is v0.1.0 (previously labeled v1.0.0 internally).
+When the project is confident the API is stable and validated, the version
+moves to v1.0.0 (GA).
+
 ## 18. Development Roadmap
 
 Estimated based on AI-assisted programming efficiency (using tools like Trae, Copilot, etc.):
 
-### Phase 1: v0.1.0 - Framework Skeleton (2-3 days)
+### Phase 1: v0.0.1 - Framework Skeleton (2-3 days)
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -2842,7 +2856,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 | Health endpoints | `/health`, `/ready`, `/metrics` |
 | Request ID | Generation, propagation, response header |
 
-### Phase 2: v0.2.0 - Pipeline & Detectors (3-4 days)
+### Phase 2: v0.0.2 - Pipeline & Detectors (3-4 days)
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -2857,7 +2871,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 | Circuit breaker | For external/LLM-as-Judge detectors |
 | Block response format | OpenAI-compatible error + safety extension field |
 
-### Phase 3: v0.3.0 - Streaming & Audit (3-4 days)
+### Phase 3: v0.0.3 - Streaming & Audit (3-4 days)
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -2871,7 +2885,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 | stdout structured output | JSON logging for external collectors |
 | Log sanitization | Redact API keys, auth headers from logs |
 
-### Phase 4: v0.4.0 - Security & Observability (2-3 days)
+### Phase 4: v0.0.4 - Security & Observability (2-3 days)
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -2885,7 +2899,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 | OpenTelemetry tracing | Optional, configurable sampling |
 | Graceful shutdown | SIGTERM handling, in-flight request completion |
 
-### Phase 5: v0.5.0 - Plugin Ecosystem (3-4 days)
+### Phase 5: v0.0.5 - Plugin Ecosystem (3-4 days)
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -2896,7 +2910,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 | Example plugins | Python in-process, Python gRPC, Go gRPC |
 | Plugin documentation | Detector development guide, gRPC guide, commercial guide |
 
-### Phase 6: v1.0.0 - Production Ready (2-3 days)
+### Phase 6: v0.1.0 - First Public Test Release (2-3 days)
 
 | Deliverable | Description |
 |-------------|-------------|
@@ -2910,21 +2924,21 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 
 | Phase | Version | Duration |
 |-------|---------|----------|
-| Framework Skeleton | v0.1.0 | 2-3 days |
-| Pipeline & Detectors | v0.2.0 | 3-4 days |
-| Streaming & Audit | v0.3.0 | 3-4 days |
-| Security & Observability | v0.4.0 | 2-3 days |
-| Plugin Ecosystem | v0.5.0 | 3-4 days |
-| Production Ready | v1.0.0 | 2-3 days |
-| **Total** | **v1.0.0** | **15-21 days (~3 weeks)** |
+| Framework Skeleton | v0.0.1 | 2-3 days |
+| Pipeline & Detectors | v0.0.2 | 3-4 days |
+| Streaming & Audit | v0.0.3 | 3-4 days |
+| Security & Observability | v0.0.4 | 2-3 days |
+| Plugin Ecosystem | v0.0.5 | 3-4 days |
+| First Public Test Release | v0.1.0 | 2-3 days |
+| **Total** | **v0.1.0** | **15-21 days (~3 weeks)** |
 
-### Post-v1.0 Roadmap
+### Post-v0.1.0 Roadmap (until v1.0.0 GA)
 
 | Version | Focus |
 |---------|-------|
-| v1.1 | K8s Helm Chart, Redis rate limiting, provider failover, additional detectors (jailbreak, hallucination), mTLS |
-| v1.2 | Anthropic/Gemini provider support, RBAC, multi-tenancy, embeddings detection |
-| v1.3 | Agent execution rails, dashboard/observability UI, pluggable tokenizer, plugin marketplace |
+| v0.2.0 | K8s Helm Chart, Redis rate limiting, provider failover, additional detectors (jailbreak, hallucination), mTLS |
+| v0.3.0 | Anthropic/Gemini provider support, RBAC, multi-tenancy, embeddings detection |
+| v0.4.0 | Agent execution rails, dashboard/observability UI, pluggable tokenizer, plugin marketplace |
 
 ---
 
@@ -2989,7 +3003,7 @@ All key design decisions:
 | 6 | Detector interface | Async `detect(content, context) -> DetectionResult`; entry points + gRPC plugin system |
 | 7 | MVP detectors | Prompt Injection, PII Redaction, Toxicity, Sensitive Words, Secret Leak (5) |
 | 8 | Configuration | YAML + env var override; no hot reload |
-| 9 | Docker | Docker + Docker Compose; K8s in v1.1+ |
+| 9 | Docker | Docker + Docker Compose; K8s in v0.2.0+ |
 | 10 | Audit logs | JSONL file + stdout; no built-in cloud exporters (use external collectors) |
 | 11 | Error handling | Fail-Open default, configurable Fail-Closed per detector |
 | 12 | Performance targets | < 5ms P95 (rule-based only), < 100ms P95 (rule-based + ML), 1000 req/s, horizontal scaling |
@@ -3005,7 +3019,7 @@ All key design decisions:
 | 22 | Non-streaming output detection | Configurable: sync (default) or async |
 | 23 | Content extraction | Check system + user messages; skip assistant/tool messages; text parts only (MVP) |
 | 24 | Modify writeback | Replace specific message content; multimodal preserves image parts |
-| 25 | Sliding window unit | Character-based (MVP); pluggable tokenizer (v1.1+) |
+| 25 | Sliding window unit | Character-based (MVP); pluggable tokenizer (v0.2.0+) |
 | 26 | Detector priority | Explicit `priority` field; default 100; YAML order as tiebreaker |
 | 27 | Circuit breaker | Configurable per detector; for external/gRPC/LLM-as-Judge detectors |
 | 28 | Third-party detector modes | In-process (Python entry points) + gRPC sidecar |
@@ -3014,20 +3028,20 @@ All key design decisions:
 | 31 | ML model distribution | HuggingFace Hub download on first use; cache directory; offline mode |
 | 32 | Language detection | langdetect; per-message; stored in DetectionContext |
 | 33 | Sensitive word matching | Aho-Corasick automaton for O(n) multi-pattern matching |
-| 34 | Rate limiting | In-memory (MVP); Redis (v1.1+); 429 + Retry-After headers |
+| 34 | Rate limiting | In-memory (MVP); Redis (v0.2.0+); 429 + Retry-After headers |
 | 35 | Request ID | UUID v4 generated or client-propagated via X-Request-ID header |
 | 36 | Observability | Prometheus metrics + OpenTelemetry tracing (optional) |
 | 37 | Graceful shutdown | SIGTERM; stop_timeout 30s; flush logs; close detector resources |
 | 38 | Streaming memory | Max response size (1MB default); block or truncate policy |
-| 39 | Provider failover | Not in MVP; planned for v1.1 |
+| 39 | Provider failover | Not in MVP; planned for v0.2.0 |
 | 40 | Log sanitization | Redact auth headers, API keys from all logs (default: on) |
 | 41 | Output modification writeback | Non-streaming sync mode only; writes to `choices[0].message.content`; async/streaming: not applied |
 | 42 | Streaming modify behavior | Downgraded to `flag` (tokens already sent); recorded in audit with `applied: false` |
 | 43 | Buffer mode + post-audit | Post-audit auto-skipped in buffer mode (full detection already runs pre-send) |
 | 44 | Webhook recall retry | 3 retries, exponential backoff (1s/2s/4s), 5s timeout; no persistent queue in MVP |
 | 45 | Flag escalation rule | Simple DSL (not Python eval); supports count, max_risk_level, categories; parsed at config load |
-| 46 | Parallel modify limitation | All modifications computed on original content; sequential chaining is a v1.1+ feature |
-| 47 | Provider error handling | No retry in MVP; all provider errors wrapped as HTTP 502 `provider_error`; failover in v1.1+ |
+| 46 | Parallel modify limitation | All modifications computed on original content; sequential chaining is a v0.2.0+ feature |
+| 47 | Provider error handling | No retry in MVP; all provider errors wrapped as HTTP 502 `provider_error`; failover in v0.2.0+ |
 | 48 | `/v1/models` passthrough | Forwards to first configured provider; no aggregation in MVP |
 | 49 | Audit log granularity | One entry per direction (input + output are separate entries, linked by request_id) |
 | 50 | DetectionResult source | Defined in SDK; gateway re-exports; `pipeline/result.py` contains aggregation logic only |
@@ -3050,11 +3064,11 @@ The following items are identified but not yet decided. They are deferred to fut
 
 | # | Topic | Question | Target Version |
 |---|-------|----------|----------------|
-| 1 | Plugin marketplace | Should the gateway host a plugin registry/catalog for discovery, installation, and rating of detectors? (Like VS Code marketplace) | v1.3+ |
-| 2 | Multi-tenancy config isolation | How should different tenants have different detector configurations, thresholds, and word lists? Current API Key model has no tenant concept. | v1.2 |
-| 3 | Agent execution rails | How should the gateway handle agent/tool-use workflows where the LLM makes multiple tool calls? Detect each tool call? Detect the full agent trajectory? | v1.3 |
-| 4 | Multimodal content detection | How to detect unsafe content in image inputs (GPT-4V) and image outputs (DALL-E)? | v1.2+ |
-| 5 | Embedding endpoint detection | Should `/v1/embeddings` requests be checked? What would input detection look like for embeddings (no generation, but could leak PII)? | v1.1+ |
+| 1 | Plugin marketplace | Should the gateway host a plugin registry/catalog for discovery, installation, and rating of detectors? (Like VS Code marketplace) | v0.4.0+ |
+| 2 | Multi-tenancy config isolation | How should different tenants have different detector configurations, thresholds, and word lists? Current API Key model has no tenant concept. | v0.3.0 |
+| 3 | Agent execution rails | How should the gateway handle agent/tool-use workflows where the LLM makes multiple tool calls? Detect each tool call? Detect the full agent trajectory? | v0.4.0 |
+| 4 | Multimodal content detection | How to detect unsafe content in image inputs (GPT-4V) and image outputs (DALL-E)? | v0.3.0+ |
+| 5 | Embedding endpoint detection | Should `/v1/embeddings` requests be checked? What would input detection look like for embeddings (no generation, but could leak PII)? | v0.2.0+ |
 | 6 | Pluggable tokenizer | Which tokenizers to support for sliding window? tiktoken (OpenAI), SentencePiece (Gemini), or a generic fallback? | v1.1+ |
 | 7 | Hot reload | Should configuration hot reload be supported? What about reloading detectors without dropping connections? | v1.1+ (if requested) |
 | 8 | Distributed rate limiting | Redis backend for multi-instance rate limiting. How to handle Redis unavailability (fail-open vs fail-closed)? | v1.1 |

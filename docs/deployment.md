@@ -1,6 +1,6 @@
 # Deployment Guide
 
-> 适用版本：v1.0.0
+> 适用版本：v0.1.0
 
 ## 1. Docker 部署（推荐）
 
@@ -27,11 +27,11 @@ docker compose -f docker-compose.prod.yml up -d
 ## 2. 构建自定义镜像
 
 ```bash
-docker build -t z-safety-gateway:1.0.0 .
+docker build -t z-safety-gateway:0.1.0 .
 docker run -d -p 8080:8080 \
   -v $(pwd)/config/gateway.yaml:/app/config/gateway.yaml:ro \
   -e OPENAI_API_KEY=sk-... \
-  z-safety-gateway:1.0.0
+  z-safety-gateway:0.1.0
 ```
 
 ## 3. 生产建议

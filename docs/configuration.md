@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> 适用版本：v1.0.0
+> 适用版本：v0.1.0
 > 配置加载顺序：YAML 文件 → 环境变量覆盖（`ZLG_` 前缀）→ 默认值
 
 ## 顶层结构

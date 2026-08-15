@@ -1,10 +1,10 @@
 # spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
 # Capability: post-audit-recall
-# Change: 2026-08-12-v0.3.0-streaming-audit
+# Change: 2026-08-12-v0.0.3-streaming-audit
 
 meta:
   capability: "post-audit-recall"
-  change_id: "2026-08-12-v0.3.0-streaming-audit"
+  change_id: "2026-08-12-v0.0.3-streaming-audit"
   created: "2026-08-12T10:00:00+08:00"
   confidence: high
 

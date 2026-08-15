@@ -3,7 +3,7 @@
 
 meta:
   capability: plugin-loader
-  change_id: "2026-08-14-v0.5.0-plugin-ecosystem"
+  change_id: "2026-08-14-v0.0.5-plugin-ecosystem"
   created: "2026-08-14T10:30:00+08:00"
   confidence: high
 

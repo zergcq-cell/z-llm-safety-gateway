@@ -1,12 +1,12 @@
 # spec.yaml — 行为规格（Canonical YAML，AI 主读文档）
 # Capability: audit-logger
-# Change: 2026-08-12-v0.3.0-streaming-audit
+# Change: 2026-08-12-v0.0.3-streaming-audit
 # 覆盖：JSONL 审计日志格式、审计字段、detectors、流式字段、content_hash、
 #       store_content、双通道输出、日志脱敏、异步写入、audit.enabled 开关
 
 meta:
   capability: "audit-logger"
-  change_id: "2026-08-12-v0.3.0-streaming-audit"
+  change_id: "2026-08-12-v0.0.3-streaming-audit"
   created: "2026-08-12T10:00:00+08:00"
   confidence: high
 

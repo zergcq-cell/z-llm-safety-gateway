@@ -79,7 +79,9 @@ zlg-sdk new my-detector --type python     # scaffold a detector project
 
 ## Project Status
 
-v1.0.0 — Production Ready. See [DESIGN.md](DESIGN.md) for architecture and roadmap.
+v0.1.0 — first public test release. See [DESIGN.md](DESIGN.md) for architecture and roadmap.
+
+**Versioning policy** (SemVer): `v0.0.x` = internal development · `v0.x.y` = public test releases · `v1.0.0` = general availability (when the API is stable and validated).
 
 ## License
 

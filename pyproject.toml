@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "z-llm-safety-gateway"
-version = "0.4.0"
+version = "0.1.0"
 description = "Open-source, modular LLM content safety gateway"
 readme = "README.md"
 license = "Apache-2.0"

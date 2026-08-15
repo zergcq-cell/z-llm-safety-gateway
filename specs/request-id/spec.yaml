@@ -1,10 +1,10 @@
 # spec.yaml - 行为规格（Canonical YAML，AI 主读文档）
 # Capability: request-id
-# Change: 2026-08-11-v0.1.0-framework-skeleton
+# Change: 2026-08-11-v0.0.1-framework-skeleton
 
 meta:
   capability: "request-id"
-  change_id: "2026-08-11-v0.1.0-framework-skeleton"
+  change_id: "2026-08-11-v0.0.1-framework-skeleton"
   created: "2026-08-11T00:00:00+08:00"
   confidence: high
 
