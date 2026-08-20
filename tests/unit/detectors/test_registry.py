@@ -84,6 +84,16 @@ class _FailingInitDetector(Detector):
         )
 
 
+class _PartiallyInitializedDetector(_FailingInitDetector):
+    """Failing in-process plugin that allocated a cleanup-capable resource."""
+
+    name = "partial_init"
+    shutdown_called = False
+
+    async def shutdown(self) -> None:
+        type(self).shutdown_called = True
+
+
 class _FailingShutdownDetector(Detector):
     """Detector whose shutdown raises an exception."""
 
@@ -118,6 +128,19 @@ class TestDetectorRegistryRegistration:
         registry.register("dummy_a", _DummyDetectorA)
 
         assert "dummy_a" in registry.list()
+
+    async def test_create_detector_cleans_partially_initialized_instance(self) -> None:
+        """Failed plugin initialization performs bounded best-effort cleanup."""
+        _PartiallyInitializedDetector.shutdown_called = False
+        registry = DetectorRegistry()
+        registry.register("partial_init", _PartiallyInitializedDetector)
+
+        with pytest.raises(RuntimeError, match="initialize failed"):
+            await registry.create_detector(
+                "partial_init", {"timeout_seconds": 0.1}
+            )
+
+        assert _PartiallyInitializedDetector.shutdown_called is True
 
     def test_list_returns_all_registered_names(self) -> None:
         """list returns all registered detector names."""

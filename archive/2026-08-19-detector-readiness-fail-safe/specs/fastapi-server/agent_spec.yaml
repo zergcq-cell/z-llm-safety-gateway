@@ -1,0 +1,13 @@
+# agent_spec.yaml — 验证规格（fastapi-server）
+meta:
+  task_id: "fastapi-server"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "FastAPI 生命周期与业务安全准入"
+  preconditions: ["Provider 与 detector factory 可替换为计数测试替身"]
+steps:
+  - {id: CP-FAST-601, description: "启动保存全部配置状态", action: ".venv/bin/pytest tests/unit/test_startup_policy.py::test_create_app_stores_all_configured_detector_states -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-FAST-602, description: "required 失败传播启动异常", action: ".venv/bin/pytest tests/unit/test_startup_policy.py::test_required_startup_failure_propagates_before_ready -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-FAST-603, description: "input fail-closed 返回精确 503 契约", action: ".venv/bin/pytest tests/unit/routes/test_availability_guard.py::test_input_fail_closed_preflight_returns_exact_503_without_provider -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-FAST-604, description: "output fail-closed 覆盖 sync/stream/async 且 Provider 未调用", action: ".venv/bin/pytest tests/unit/routes/test_availability_guard.py::test_output_fail_closed_preflight_blocks_every_response_mode -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-FAST-605, description: "fail-open 跳过并传递降级快照", action: ".venv/bin/pytest tests/unit/routes/test_availability_guard.py::test_fail_open_issue_skips_detector_and_allows_provider tests/unit/routes/test_availability_guard.py::test_streaming_post_audit_uses_request_filtered_detectors -q", assertions: [{type: exit_code, expected: 0}]}

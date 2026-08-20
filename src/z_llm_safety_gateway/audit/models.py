@@ -32,6 +32,36 @@ class DetectorAuditRecord(BaseModel):
     applied: bool | None = None
 
 
+class DetectorAvailabilityRecord(BaseModel):
+    """Stable request-time snapshot of an unavailable detector."""
+
+    name: str
+    direction: Literal["input", "output"]
+    state: Literal["unavailable", "unhealthy"]
+    required: bool
+    on_error: Literal["fail_open", "fail_closed"]
+    reason_code: str = ""
+
+
+class DetectorLifecycleEvent(BaseModel):
+    """Audit event emitted only when a configured detector changes state."""
+
+    event_type: Literal["detector_lifecycle"] = "detector_lifecycle"
+    timestamp: str = Field(default_factory=_utcnow)
+    detector_name: str
+    direction: Literal["input", "output"]
+    detector_type: str
+    old_state: str
+    new_state: str
+    required: bool
+    on_error: Literal["fail_open", "fail_closed"]
+    reason_code: str = ""
+
+    def to_json_line(self) -> dict[str, Any]:
+        """Serialize the lifecycle event for the existing JSONL sinks."""
+        return self.model_dump()
+
+
 class AuditEntry(BaseModel):
     """A single JSONL audit log entry for one direction of a request.
 
@@ -62,6 +92,8 @@ class AuditEntry(BaseModel):
     recall_method: str | None = None
     # Non-streaming async output detection
     async_detection: str | None = None  # "pending" | "completed"
+    safety_degraded: bool = False
+    detector_availability: list[DetectorAvailabilityRecord] = Field(default_factory=list)
     # Content (only serialized when store_content=True)
     content: str | None = None
 

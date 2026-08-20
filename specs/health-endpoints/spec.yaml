@@ -116,3 +116,41 @@ requirements:
         then: "响应 SHALL 包含 X-Request-ID 头"
         and:
           - "X-Request-ID 值 SHALL 为 UUID v4 格式"
+
+# Merged from 2026-08-19-detector-readiness-fail-safe on 2026-08-20.
+  - id: REQ-HEALTH-601
+    description: "/health 保持纯 liveness，/ready 使用 app-scoped 状态"
+    scenarios:
+      - id: SC-HEALTH-601
+        confidence: high
+        evidence: "2026-08-19-detector-readiness-fail-safe proposal C7; design sections 5/6"
+        given: "无检测器或全部健康，且同进程存在多个 app 实例"
+        when: "分别请求 /health 与 /ready"
+        then: "/health SHALL 仅报告存活；/ready SHALL 返回 200 ready 且实例状态互不污染"
+      - id: SC-HEALTH-602
+        confidence: high
+        evidence: "2026-08-19-detector-readiness-fail-safe proposal C4/C7; design section 6"
+        given: "required 或 fail_closed 检测器 unavailable/unhealthy"
+        when: "请求 /ready"
+        then: "端点 SHALL 返回 503、status=not_ready 与确定的 detectors issues"
+      - id: SC-HEALTH-603
+        confidence: medium
+        evidence: "2026-08-19-detector-readiness-fail-safe proposal C5/C7; design section 6"
+        given: "仅有 fail_open 检测器 unavailable/unhealthy"
+        when: "请求 /ready"
+        then: "端点 SHALL 返回 200、status=ready、degraded=true 及精确摘要 schema"
+  - id: REQ-HEALTH-602
+    description: "readiness 健康检查并行、有界并支持恢复"
+    scenarios:
+      - id: SC-HEALTH-604
+        confidence: medium
+        evidence: "2026-08-19-detector-readiness-fail-safe design section 6"
+        given: "已加载检测器健康检查抛异常或超过自身 timeout"
+        when: "请求 /ready"
+        then: "检查 SHALL 有界完成并映射为稳定 exception/timeout reason_code"
+      - id: SC-HEALTH-605
+        confidence: high
+        evidence: "2026-08-19-detector-readiness-fail-safe design sections 4/6"
+        given: "先 unhealthy 后恢复的已加载检测器"
+        when: "后续 readiness 健康检查成功"
+        then: "状态与 HTTP readiness SHALL 自动恢复且产生一次状态变化事件"

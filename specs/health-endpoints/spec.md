@@ -114,3 +114,12 @@ Phase 1 中 `/metrics` 响应 body 为 `# z LLM Safety Gateway metrics placehold
 - **WHEN** 客户端发送 GET /metrics 请求（未携带 X-Request-ID 头）
 - **THEN** 响应 SHALL 包含 X-Request-ID 头
 - **AND** X-Request-ID 值 SHALL 为 UUID v4 格式
+# 2026-08-20 合并：Detector-aware Readiness
+
+> 来源：`2026-08-19-detector-readiness-fail-safe`
+
+- `REQ-HEALTH-601`：`/health` 保持纯 liveness；`/ready` 使用 app-scoped detector 状态。
+- `REQ-HEALTH-602`：健康检查并行、有界、脱敏，并支持后续恢复。
+
+required/fail-closed 故障返回 503 not-ready；仅 fail-open 故障返回 200 ready、
+`degraded: true`。摘要包含确定排序的 detector issues 与稳定 reason code。

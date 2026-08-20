@@ -203,3 +203,15 @@ FastAPI HTTP server that listens on a configured host:port and provides OpenAI-c
 | CP-13 | SC-013 | Unhandled Exception wrapped as 500 internal_error |
 | CP-14 | -- | Full test suite pass |
 | CP-15 | -- | Lint and type checks pass |
+# 2026-08-20 合并：Detector Readiness Fail-Safe
+
+> 来源：`2026-08-19-detector-readiness-fail-safe`
+
+## Detector 启动与业务准入
+
+- `REQ-FAST-601`：应用保存全部已配置 detector 状态，并传播 required 初始化失败。
+- `REQ-FAST-602`：input/output 严格故障在任何 Provider 工作前返回专用 503。
+- `REQ-FAST-603`：fail-open 跳过故障 detector，并携带请求级降级快照。
+
+该契约覆盖同步、SSE 流式与异步输出模式。503 使用 `safety_unavailable`、
+`safety_detector_unavailable` 和 `X-Safety-Action: block` 精确契约。

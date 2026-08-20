@@ -258,3 +258,17 @@ YAML configuration loading with Pydantic v2 schema validation, environment varia
 | CP-17 | SC-017 | Mixed env vars resolved in single recursive pass |
 | CP-18 | -- | Full test suite pass |
 | CP-19 | -- | Lint and type checks pass |
+# 2026-08-20 合并：Detector Readiness Fail-Safe
+
+> 来源：`2026-08-19-detector-readiness-fail-safe`
+
+## Required detector 配置
+
+- `REQ-CFG-601`：`required: bool = false` 向后兼容，并通过 input/output 配置提取路径传递。
+- `REQ-CFG-602`：拒绝 `required + fail_open` 和 `required + disabled`。
+
+| 场景 | 结果 |
+|------|------|
+| SC-CFG-601 | required 默认 false，显式值不丢失 |
+| SC-CFG-602 | required=true + fail_open 拒绝加载 |
+| SC-CFG-603 | required=true + enabled=false 拒绝加载 |

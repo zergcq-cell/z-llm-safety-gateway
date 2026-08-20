@@ -752,12 +752,17 @@ pipeline:
 
 ### 5.7 Error Handling
 
-When a detector itself errors (model load failure, timeout, etc.):
+Detector availability has two independent controls: `required` governs startup
+admission, while `on_error` governs runtime and optional-startup failures.
 
-| Strategy | Behavior | Use Case |
-|----------|----------|----------|
-| `fail_open` (default) | Skip the detector, log error, continue processing | General detectors where availability > strictness |
-| `fail_closed` | Block the request, log error | Critical detectors where safety > availability (e.g., PII redaction) |
+| Configuration | Initialization failure | Runtime/health failure |
+|---------------|------------------------|------------------------|
+| `required: true`, `on_error: fail_closed` | Abort startup after reverse-order cleanup and durable lifecycle audit | Remove readiness and block traffic |
+| `required: false`, `on_error: fail_closed` | Start diagnostic app as not-ready | `/ready` returns 503 and business requests are blocked before Provider routing |
+| `required: false`, `on_error: fail_open` | Start ready but explicitly degraded | Skip the unavailable detector and continue with audit and metrics signals |
+
+`required` defaults to `false`. `required: true` with `on_error: fail_open`, or
+with `enabled: false`, is invalid configuration and prevents startup.
 
 Configured per detector:
 
@@ -765,8 +770,10 @@ Configured per detector:
 detectors:
   input:
     - name: prompt_injection
+      required: false
       on_error: fail_open
     - name: pii_redaction
+      required: true
       on_error: fail_closed
 ```
 
@@ -2408,17 +2415,21 @@ services:
 
 | Endpoint | Method | Purpose | Response |
 |----------|--------|---------|----------|
-| `/health` | GET | Liveness probe - process is alive | `{"status": "ok"}` |
-| `/ready` | GET | Readiness probe - gateway ready to accept traffic | `{"status": "ready", "detectors": {"loaded": 5, "healthy": 5}}` (HTTP 200 when all healthy; HTTP 503 with `{"status": "not_ready", ...}` when any `fail_closed` detector is unhealthy) |
+| `/health` | GET | Pure liveness probe; detector/provider health is deliberately excluded | `{"status": "healthy"}` (always HTTP 200 while the process serves requests) |
+| `/ready` | GET | App-scoped readiness with bounded parallel detector health checks | HTTP 200 for healthy or fail-open degraded instances; HTTP 503 for any required/fail-closed issue |
 | `/metrics` | GET | Prometheus metrics | Prometheus format |
 
 **`/ready` health logic**:
 
-| Detector State | `on_error` | `/ready` Result | Rationale |
-|----------------|------------|-----------------|-----------|
-| Healthy | any | HTTP 200 | Detector is operational |
-| Unhealthy | `fail_closed` | HTTP 503 | Critical detector down → gateway should not receive traffic (safety > availability) |
-| Unhealthy | `fail_open` | HTTP 200 (with warning) | Non-critical detector down → gateway can still process requests (availability > safety). The unhealthy detector is skipped and its `on_error` strategy applies. The response includes `"detectors": {"loaded": 5, "healthy": 4, "unhealthy": ["toxicity"]}` for visibility. |
+| Detector State | Policy | `/ready` Result | Business admission |
+|----------------|--------|-----------------|--------------------|
+| Healthy | any | HTTP 200 | Detector executes normally |
+| Unavailable/unhealthy | required or `fail_closed` | HTTP 503 `not_ready` | HTTP 503 `safety_detector_unavailable` before Provider routing |
+| Unavailable/unhealthy | optional `fail_open` | HTTP 200 `ready`, `degraded: true` | Faulted detector is excluded from sync, async, streaming, and post-audit execution |
+
+The readiness response contains deterministic aggregate counts and an `issues`
+array with `name`, `direction`, `state`, and a stable `reason_code` when one is
+available. Raw exception text, endpoints, and credentials are never exposed.
 
 > **Load balancer consideration**: When using `/ready` for load balancing, `fail_open` detector failures do not remove the gateway from the pool. Only `fail_closed` detector failures trigger HTTP 503 and pool removal.
 
@@ -3055,6 +3066,7 @@ All key design decisions:
 | 58 | `safety_flag` event granularity | One aggregated event per sliding window (not per detector); includes highest `risk_level` and comma-separated `flagged_by` list |
 | 59 | Async `X-Safety-Action` header | Reflects only input detection result at response time; output detection outcome delivered via webhook |
 | 60 | `model_version` config | Maps to HuggingFace Hub `revision` parameter (branch/tag/commit); optional, defaults to latest |
+| 61 | Detector availability policy | `required` controls startup admission; optional `fail_closed` blocks readiness and requests; optional `fail_open` is explicitly degraded; all signals share an app-scoped lifecycle registry |
 
 ---
 

@@ -1,0 +1,31 @@
+# spec.yaml — 行为规格（degraded-safety-visibility）
+meta:
+  capability: "degraded-safety-visibility"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DSV-001
+    description: "每个受降级影响的请求留下完整但脱敏的可见性"
+    scenarios:
+      - id: SC-DSV-001
+        confidence: medium
+        evidence: "proposal C8; design section 8"
+        given: "请求在 optional fail_open 检测器不可用时继续"
+        when: "请求审计完成"
+        then: "审计 SHALL 标记 safety_degraded 并列出 detector_availability"
+      - id: SC-DSV-002
+        confidence: high
+        evidence: "proposal C4/C8; design sections 7/8"
+        given: "请求因 fail_closed 检测器不可用被拒绝"
+        when: "网关返回 503"
+        then: "结构化日志与请求审计 SHALL 记录稳定的不可用状态"
+  - id: REQ-DSV-002
+    description: "所有降级信号必须脱敏且低基数"
+    scenarios:
+      - id: SC-DSV-003
+        confidence: high
+        evidence: "proposal constraints; design sections 2/8"
+        given: "初始化或健康异常包含 endpoint、凭据或敏感正文"
+        when: "产生 API、日志、审计和指标信号"
+        then: "输出 SHALL 仅含稳定 reason_code，不得包含原始异常秘密"

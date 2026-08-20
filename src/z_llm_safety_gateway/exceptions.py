@@ -23,6 +23,17 @@ class ConfigValidationError(ConfigError):
     """Raised when configuration validation fails (Pydantic or cross-field)."""
 
 
+class DetectorInitializationError(ConfigError):
+    """Raised when a required safety detector cannot initialize."""
+
+    def __init__(self, detector_name: str, direction: str) -> None:
+        self.detector_name = detector_name
+        self.direction = direction
+        super().__init__(
+            f"Required detector '{detector_name}' failed to initialize for {direction}"
+        )
+
+
 class OpenAIErrorDetail(BaseModel):
     """A single error detail in the OpenAI-compatible error format.
 
@@ -69,6 +80,15 @@ class SafetyBlockError(Exception):
         self.message = message
         self.direction = direction  # "input" or "output"
         super().__init__(message)
+
+
+class SafetyUnavailableError(Exception):
+    """Raised before Provider work when required safety capability is unavailable."""
+
+    def __init__(self, affected_directions: list[str], detectors: list[str]) -> None:
+        self.affected_directions = sorted(set(affected_directions))
+        self.detectors = sorted(set(detectors))
+        super().__init__("Safety detection is temporarily unavailable")
 
 
 class SafetyErrorDetail(OpenAIErrorDetail):

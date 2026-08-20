@@ -198,35 +198,43 @@ class GRPCDetector:
         """Return True when the sidecar reports ``serving``."""
         if self._stub is None:
             return False
-        try:
-            resp = await self._call(
-                lambda: self._stub.HealthCheck(
-                    self._detector_pb2.HealthCheckRequest()
-                ),
-                "health check",
-            )
-            return bool(resp.status == "serving")
-        except Exception:
-            logger.warning("gRPC health check failed", endpoint=self._endpoint, exc_info=True)
-            return False
+        resp = await self._call(
+            lambda: self._stub.HealthCheck(
+                self._detector_pb2.HealthCheckRequest()
+            ),
+            "health check",
+        )
+        return bool(resp.status == "serving")
 
     async def shutdown(self) -> None:
         """Call remote Shutdown and close the channel (failure-tolerant)."""
-        if self._stub is not None:
-            try:
-                await self._call(
-                    lambda: self._stub.Shutdown(
-                        self._detector_pb2.ShutdownRequest()
-                    ),
-                    "shutdown",
-                )
-            except Exception:
-                logger.warning("gRPC shutdown call failed", endpoint=self._endpoint, exc_info=True)
+        try:
+            if self._stub is not None:
+                try:
+                    await self._call(
+                        lambda: self._stub.Shutdown(
+                            self._detector_pb2.ShutdownRequest()
+                        ),
+                        "shutdown",
+                    )
+                except Exception:
+                    logger.warning(
+                        "grpc_shutdown_call_failed",
+                        reason_code="shutdown_error",
+                    )
+        finally:
+            self._close_channel()
+
+    def _close_channel(self) -> None:
+        """Always release the local channel, including during cancellation."""
         if self._channel is not None:
             try:
                 self._channel.close()
-            except Exception:  # pragma: no cover - defensive
-                logger.warning("gRPC channel close failed", exc_info=True)
+            except Exception:
+                logger.warning(
+                    "grpc_channel_close_failed",
+                    reason_code="channel_close_error",
+                )
         self._stub = None
         self._channel = None
 

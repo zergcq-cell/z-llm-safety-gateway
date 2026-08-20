@@ -45,9 +45,11 @@ from z_llm_safety_gateway.exceptions import (
     OpenAIErrorBody,
     OpenAIErrorDetail,
     SafetyBlockError,
+    SafetyUnavailableError,
 )
 from z_llm_safety_gateway.language import detect_language, detect_language_for_messages
 from z_llm_safety_gateway.models import DetectionContext, DetectionResult, find_result_by_action
+from z_llm_safety_gateway.observability import metrics as observability_metrics
 from z_llm_safety_gateway.pipeline.engine import PipelineResult
 from z_llm_safety_gateway.post_audit.audit import PostAuditRunner
 from z_llm_safety_gateway.providers.base import ProviderError
@@ -101,6 +103,75 @@ def _error_response(
 def _find_block_result(results: list[Any]) -> Any | None:
     """Find the first DetectionResult with action == 'block'."""
     return find_result_by_action(results, "block")
+
+
+def _filter_available_detectors(
+    request: Request,
+    direction: str,
+    detectors: list[Any],
+) -> list[Any]:
+    """Exclude unavailable/unhealthy detector instances for this request."""
+    registry = getattr(request.app.state, "detector_status_registry", None)
+    if registry is None:
+        return detectors
+    unavailable_detector_ids = {
+        id(status.detector)
+        for status in registry.issues()
+        if status.direction == direction and status.detector is not None
+    }
+    return [
+        detector
+        for detector in detectors
+        if id(detector) not in unavailable_detector_ids
+    ]
+
+
+def _enforce_detector_availability(request: Request) -> None:
+    """Apply fail-closed admission and capture the fail-open request snapshot."""
+    registry = getattr(request.app.state, "detector_status_registry", None)
+    if registry is None:
+        request.state.safety_degraded = False
+        request.state.detector_availability = []
+        return
+
+    issues = registry.issues()
+    strict_issues = [status for status in issues if status.is_strict]
+    request.state.safety_degraded = bool(issues)
+    request.state.detector_availability = [
+        status.to_availability_dict() for status in issues
+    ]
+    request.state.input_detectors = _filter_available_detectors(
+        request,
+        "input",
+        getattr(request.app.state, "input_detectors", []),
+    )
+    request.state.output_detectors = _filter_available_detectors(
+        request,
+        "output",
+        getattr(request.app.state, "output_detectors", []),
+    )
+    if strict_issues:
+        request.state.safety_action = "block"
+        request.state.safety_risk_level = "high"
+        raise SafetyUnavailableError(
+            affected_directions=[status.direction for status in strict_issues],
+            detectors=[status.name for status in strict_issues],
+        )
+    for status in issues:
+        observability_metrics.record_degraded_request(
+            status.direction,
+            status.name,
+        )
+
+
+def _availability_audit_fields(request: Request) -> dict[str, Any]:
+    """Return request-scoped availability fields for every audit direction."""
+    return {
+        "safety_degraded": bool(getattr(request.state, "safety_degraded", False)),
+        "detector_availability": getattr(
+            request.state, "detector_availability", []
+        ),
+    }
 
 
 def _higher_risk(a: str | None, b: str | None) -> str | None:
@@ -282,13 +353,21 @@ def _build_streaming_response(
     detection, recall signals, and audit logging.
     """
     streaming_config = getattr(request.app.state, "streaming_config", None)
-    output_detectors: list[Any] = getattr(request.app.state, "output_detectors", [])
+    output_detectors: list[Any] = getattr(
+        request.state,
+        "output_detectors",
+        getattr(request.app.state, "output_detectors", []),
+    )
     output_detector_configs: dict[str, dict[str, Any]] = getattr(
         request.app.state, "output_detector_configs", {}
     )
-    post_audit_runner: PostAuditRunner | None = getattr(
-        request.app.state, "post_audit_runner", None
-    )
+    post_audit_runner: PostAuditRunner | None = None
+    if engine is not None and output_detectors:
+        post_audit_runner = PostAuditRunner(
+            engine=engine,
+            output_detectors=output_detectors,
+            detector_configs=output_detector_configs,
+        )
     streaming_webhook: WebhookRecall | None = getattr(
         request.app.state, "streaming_webhook_recall", None
     )
@@ -380,6 +459,7 @@ def _build_streaming_response(
                         total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
                         user_id=user_id,
                         post_audit={"executed": False},
+                        **_availability_audit_fields(request),
                     )
                 )
             return
@@ -431,6 +511,7 @@ def _build_streaming_response(
                         total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
                         user_id=user_id,
                         post_audit={"executed": False},
+                        **_availability_audit_fields(request),
                     )
                 )
             return
@@ -521,6 +602,7 @@ def _build_streaming_response(
                     post_audit=effective_post_audit,
                     recalled=recalled if recalled else None,
                     recall_method=recall_method,
+                    **_availability_audit_fields(request),
                 )
             )
 
@@ -577,6 +659,11 @@ async def chat_completions(request: Request) -> Response:
             code="missing_model",
         )
 
+    # Safety availability is checked before even selecting a Provider. This
+    # protects direct-to-instance requests that bypass load-balancer readiness.
+    request.state.safety_model = model
+    _enforce_detector_availability(request)
+
     # 3. Route to provider
     model_router: ModelRouter = request.app.state.router
     provider = model_router.route(model)
@@ -588,7 +675,11 @@ async def chat_completions(request: Request) -> Response:
         forward_headers["X-Request-ID"] = request_id
 
     # 5. Input safety pipeline
-    input_detectors: list[Any] = getattr(request.app.state, "input_detectors", [])
+    input_detectors: list[Any] = getattr(
+        request.state,
+        "input_detectors",
+        getattr(request.app.state, "input_detectors", []),
+    )
     input_detector_configs: dict[str, dict[str, Any]] = getattr(
         request.app.state, "input_detector_configs", {}
     )
@@ -697,6 +788,7 @@ async def chat_completions(request: Request) -> Response:
                 total_duration_ms=(time.monotonic() - request_start) * 1000.0,
                 user_id=user_id,
                 applied_modify=input_applied_modify,
+                **_availability_audit_fields(request),
             )
         )
 
@@ -722,7 +814,11 @@ async def chat_completions(request: Request) -> Response:
     provider_response_time = time.monotonic()
 
     # 8. Output safety pipeline
-    output_detectors: list[Any] = getattr(request.app.state, "output_detectors", [])
+    output_detectors: list[Any] = getattr(
+        request.state,
+        "output_detectors",
+        getattr(request.app.state, "output_detectors", []),
+    )
     output_detector_configs: dict[str, dict[str, Any]] = getattr(
         request.app.state, "output_detector_configs", {}
     )
@@ -815,6 +911,7 @@ async def chat_completions(request: Request) -> Response:
                                         if bg_result.final_action == "block"
                                         else None
                                     ),
+                                    **_availability_audit_fields(request),
                                 )
                             )
             except Exception:
@@ -837,6 +934,7 @@ async def chat_completions(request: Request) -> Response:
                     * 1000.0,
                     user_id=user_id,
                     async_detection="pending",
+                    **_availability_audit_fields(request),
                 )
             )
 
@@ -970,6 +1068,7 @@ async def chat_completions(request: Request) -> Response:
                 total_duration_ms=(time.monotonic() - provider_response_time) * 1000.0,
                 user_id=user_id,
                 applied_modify=output_applied_modify,
+                **_availability_audit_fields(request),
             )
         )
 

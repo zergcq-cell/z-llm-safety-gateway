@@ -1,0 +1,11 @@
+# agent_spec.yaml — 验证规格（degraded-safety-visibility）
+meta:
+  task_id: "degraded-safety-visibility"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "降级请求可见性契约"
+  preconditions: ["审计、结构化日志与指标测试替身可捕获输出"]
+steps:
+  - {id: CP-DSV-001, description: "fail-open 请求审计含 availability", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_fail_open_request_audit_contains_availability -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DSV-002, description: "fail-closed 503 有审计证据", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_fail_closed_503_records_request_audit -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DSV-003, description: "所有外部信号脱敏", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_real_initialization_exception_is_sanitized_in_all_signals tests/unit/audit/test_detector_availability_audit.py::test_fail_closed_503_records_request_audit -q", assertions: [{type: exit_code, expected: 0}]}

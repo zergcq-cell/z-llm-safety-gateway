@@ -106,10 +106,25 @@ def _validate_detectors_v2(config: GatewayConfig) -> None:
     ]
 
     for _direction, detector in all_detectors:
+        _validate_required_policy(detector)
         _validate_thresholds(detector)
         _validate_detector_name(detector)
         _validate_grpc_detector(detector)
         _validate_word_list_file(detector)
+
+
+def _validate_required_policy(detector: DetectorConfig) -> None:
+    """Reject contradictory startup requirements before initialization."""
+    if not detector.required:
+        return
+    if not detector.enabled:
+        raise ConfigValidationError(
+            f"Detector '{detector.name}': required detector cannot be disabled"
+        )
+    if detector.on_error != "fail_closed":
+        raise ConfigValidationError(
+            f"Detector '{detector.name}': required detector must use fail_closed"
+        )
 
 
 def _validate_thresholds(detector: DetectorConfig) -> None:

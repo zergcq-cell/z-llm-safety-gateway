@@ -6,8 +6,10 @@ a configurable fake DetectorService stub, so no external sidecar is required.
 
 from __future__ import annotations
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import grpc
 import pytest
@@ -222,6 +224,40 @@ async def test_health_check_returns_bool(grpc_server) -> None:
 
     grpc_server.fake.health_status = "not_serving"
     assert await det.health_check() is False
+
+
+async def test_health_check_exception_propagates_without_sensitive_log(capsys) -> None:
+    """Readiness owns reason mapping; the client must not leak endpoint/errors."""
+    det = GRPCDetector()
+    det._stub = object()
+    det._endpoint = "private.example:50051"
+    det._call = AsyncMock(side_effect=RuntimeError("secret-token"))
+
+    with pytest.raises(RuntimeError, match="secret-token"):
+        await det.health_check()
+
+    output = capsys.readouterr().out
+    assert "private.example" not in output
+    assert "secret-token" not in output
+
+
+async def test_shutdown_cancellation_still_closes_local_channel() -> None:
+    """Outer cleanup timeout cannot bypass local gRPC channel release."""
+    closed: list[bool] = []
+    channel = SimpleNamespace()
+    channel.close = lambda: closed.append(True)
+    det = GRPCDetector()
+    det._stub = object()
+    det._channel = channel
+    det._detector_pb2 = SimpleNamespace(ShutdownRequest=lambda: object())
+    det._call = AsyncMock(side_effect=asyncio.CancelledError)
+
+    with pytest.raises(asyncio.CancelledError):
+        await det.shutdown()
+
+    assert closed == [True]
+    assert det._stub is None
+    assert det._channel is None
 
 
 # --------------------------------------------------------------------------- #

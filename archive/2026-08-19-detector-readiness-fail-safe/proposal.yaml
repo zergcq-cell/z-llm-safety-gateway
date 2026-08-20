@@ -1,0 +1,133 @@
+# proposal.yaml — Canonical 格式
+
+meta:
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  title: "检测器初始化失败与 Readiness Fail-Safe 加固"
+  created: "2026-08-19T21:37:03+08:00"
+  status: confirmed
+
+why:
+  problem: >
+    当前配置中的检测器初始化失败时，网关捕获异常并跳过该检测器，随后仍将实例标记为
+    ready。这可能造成配置要求执行安全检测、实际检测器未运行、负载均衡器却继续分发流量
+    的静默安全降级。现有 DESIGN、detector-framework spec、fastapi-server spec 与实际实现
+    对初始化失败和 readiness 的语义也不一致。
+  motivation: >
+    LLM Safety Gateway 必须在安全能力缺失时提供确定、可观测且可验证的 fail-safe 行为。
+    本变更将启动准入、请求期错误策略和运行期健康状态分离，确保 required 或 fail-closed
+    检测器失效时不会静默绕过，同时保留显式 fail-open 的可用性选择。
+
+what_changes:
+  - id: C1
+    description: "DetectorConfig 新增 required 字段，默认 false，用于声明启动必需检测器"
+    type: new
+  - id: C2
+    description: "校验 required 与 on_error 的组合；required=true 必须配合 on_error=fail_closed"
+    type: new
+  - id: C3
+    description: "required 检测器初始化失败时中止启动，不接受业务流量"
+    type: modified
+  - id: C4
+    description: "非 required、fail_closed 检测器初始化失败时保持 not-ready，受影响请求按 fail-closed 阻断"
+    type: modified
+  - id: C5
+    description: "非 required、fail_open 检测器初始化失败时允许 degraded 启动，但必须暴露降级状态"
+    type: modified
+  - id: C6
+    description: "为 built-in、ML、已配置的 in-process plugin 和 gRPC sidecar 建立统一生命周期状态模型"
+    type: new
+  - id: C7
+    description: "/ready 返回 loaded、healthy、unhealthy、degraded 检测器摘要；/health 保持纯 liveness"
+    type: modified
+  - id: C8
+    description: "初始化失败和降级请求接入脱敏结构化日志、审计记录及 Prometheus 指标"
+    type: modified
+  - id: C9
+    description: "更新 detector-framework、config-system、health-endpoints、fastapi-server 和 observability 规格"
+    type: modified
+
+capabilities:
+  new:
+    - name: detector-lifecycle-status
+      description: "统一记录 configured、initializing、healthy、unavailable、unhealthy 状态及脱敏原因"
+    - name: required-detector-policy
+      description: "声明启动必需检测器，并阻止 required 检测器缺失时接受流量"
+    - name: degraded-safety-visibility
+      description: "通过 readiness、日志、审计和指标暴露安全能力降级"
+  modified:
+    - name: config-system
+      description: "增加 required 字段、默认值和与 on_error 的组合校验"
+    - name: detector-framework
+      description: "统一四类检测器的初始化、健康及失败状态语义"
+    - name: health-endpoints
+      description: "readiness 纳入检测器状态和 fail-open/fail-closed 策略"
+    - name: fastapi-server
+      description: "启动阶段不再无条件吞掉安全关键检测器的初始化失败"
+    - name: audit-logger
+      description: "记录不可用检测器和降级请求，避免审计结果误示为完整检测"
+    - name: prometheus-metrics
+      description: "暴露检测器初始化失败、健康状态和降级请求信号"
+
+constraints:
+  - "严格 TDD：先覆盖启动与运行期失败矩阵，再修改实现"
+  - "/health 的纯 liveness 语义不得改变"
+  - "readiness、日志、审计和指标不得泄露密钥、endpoint 凭据或原始敏感异常内容"
+  - "built-in、ML、已配置的 in-process plugin 和 gRPC sidecar 必须遵循同一策略矩阵"
+  - "required 默认 false，现有配置无需修改即可加载"
+  - "fail-closed 状态下，即使客户端绕过负载均衡直接访问实例，也不得静默放行受影响请求"
+
+stakeholders:
+  - "网关部署与运维人员（启动、readiness、告警和故障诊断）"
+  - "应用与平台团队（请求在降级状态下的确定行为）"
+  - "安全策略维护者（required/fail-closed 策略配置）"
+  - "内置、ML、in-process 与 gRPC 检测器开发者"
+
+risk_areas:
+  - capability: required-detector-policy
+    risk: "过严的启动策略可能降低可用性，或使已有 fail-closed 配置在依赖故障时无法接收流量"
+    mitigation: "required 默认 false；明确策略矩阵；为配置迁移和诊断提供清晰错误与文档"
+  - capability: health-endpoints
+    risk: "readiness 响应和状态切换错误可能造成实例错误摘除或继续接流量"
+    mitigation: "覆盖初始化失败、运行期不健康、恢复及并发读取场景；保持 /health 独立"
+  - capability: detector-lifecycle-status
+    risk: "四类检测器的初始化路径不同，状态可能遗漏或不一致"
+    mitigation: "在共同编排层集中记录状态，并用参数化契约测试覆盖所有 detector type"
+  - capability: degraded-safety-visibility
+    risk: "错误详情进入日志、审计或指标标签可能泄露秘密或造成高基数"
+    mitigation: "仅暴露稳定状态码和脱敏摘要；禁止原始异常进入指标标签"
+
+non_goals:
+  - "不实现检测器热加载或配置热更新"
+  - "不实现无限自动重试或自动拉起 gRPC sidecar"
+  - "不修改 Provider readiness、重试或 failover"
+  - "不新增检测器"
+  - "不引入 Redis、Kubernetes Operator 或独立控制面"
+  - "不重新设计正常请求期的阈值、聚合和熔断算法"
+  - "未配置的损坏 entry point 仍按既有插件发现策略记录警告并跳过"
+
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: true
+
+anchoring:
+  level: L3
+  reference_changes:
+    - "2026-08-11-v0.0.2-pipeline-detectors"
+    - "2026-08-12-v0.0.4-security-observability"
+    - "2026-08-14-v0.0.5-plugin-ecosystem"
+  anchor_implementations: []
+
+success_criteria:
+  - "required 默认值为 false，现有配置无需修改即可加载"
+  - "required=true 与 on_error=fail_open 的组合在配置阶段被拒绝并给出明确错误"
+  - "required 检测器初始化失败时，网关启动失败且不会接受业务流量"
+  - "非 required、fail_closed 检测器初始化失败时，/ready 返回 503，受影响请求按 fail-closed 阻断"
+  - "非 required、fail_open 检测器初始化失败时，网关可用但 /ready 明确标记 degraded"
+  - "built-in、ML、in-process plugin、gRPC sidecar 均通过同一行为矩阵测试"
+  - "/ready 报告 loaded、healthy、unhealthy、degraded 检测器；/health 保持纯 liveness"
+  - "初始化失败和降级请求产生脱敏结构化日志、审计记录及 Prometheus 指标"
+  - "不存在配置了检测器、初始化失败、请求静默绕过且无可观测信号的路径"
+  - "新增单元、集成和失败路径测试，全量 pytest、ruff、mypy 通过，覆盖率不下降"

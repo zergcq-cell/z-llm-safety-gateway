@@ -13,6 +13,12 @@ from z_llm_safety_gateway.detectors.prompt_injection import PromptInjectionDetec
 from z_llm_safety_gateway.detectors.registry import DetectorRegistry
 from z_llm_safety_gateway.detectors.secret_leak import SecretLeakDetector
 from z_llm_safety_gateway.detectors.sensitive_words import SensitiveWordsDetector
+from z_llm_safety_gateway.detectors.status import (
+    DetectorReasonCode,
+    DetectorState,
+    DetectorStatus,
+    DetectorStatusRegistry,
+)
 from z_llm_safety_gateway.detectors.toxicity import ToxicityDetector
 from z_llm_safety_gateway.models import DetectionContext, DetectionResult
 
@@ -21,6 +27,10 @@ __all__ = [
     "DetectionResult",
     "Detector",
     "DetectorRegistry",
+    "DetectorReasonCode",
+    "DetectorState",
+    "DetectorStatus",
+    "DetectorStatusRegistry",
     "PromptInjectionDetector",
     "PIIDetector",
     "SensitiveWordsDetector",

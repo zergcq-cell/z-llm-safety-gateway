@@ -1,0 +1,31 @@
+# spec.yaml — 行为规格（detector-framework）
+meta:
+  capability: "detector-framework"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DF-601
+    description: "四类已配置检测器共享同一初始化与状态协调器"
+    scenarios:
+      - id: SC-DF-601
+        confidence: high
+        evidence: "proposal C6; design sections 4/5"
+        given: "built-in、ML、in-process plugin、gRPC sidecar 配置"
+        when: "共同编排层初始化检测器"
+        then: "四类 SHALL 使用相同状态转换和 required/on_error 决策入口"
+      - id: SC-DF-602
+        confidence: high
+        evidence: "proposal non-goals; design section 1"
+        given: "已配置检测器 factory 失败或未返回实例"
+        when: "初始化结束"
+        then: "协调器 SHALL 登记 unavailable 并执行策略，不得构造 sentinel detector"
+  - id: REQ-DF-602
+    description: "已加载实例遵守统一 health 与 shutdown 合约"
+    scenarios:
+      - id: SC-DF-603
+        confidence: high
+        evidence: "design sections 4/5/6"
+        given: "一组成功加载与一组 unavailable 检测器"
+        when: "执行健康检查和应用关闭"
+        then: "只对已加载实例调用 health_check/shutdown，unavailable 项 SHALL 不被调用"

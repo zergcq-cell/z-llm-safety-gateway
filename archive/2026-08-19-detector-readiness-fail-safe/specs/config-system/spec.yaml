@@ -1,0 +1,31 @@
+# spec.yaml — 行为规格（config-system）
+meta:
+  capability: "config-system"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-CFG-601
+    description: "DetectorConfig 支持向后兼容的 required 声明"
+    scenarios:
+      - id: SC-CFG-601
+        confidence: high
+        evidence: "proposal C1; design section 3"
+        given: "省略或显式提供 required 的 input/output detector 配置"
+        when: "Pydantic 加载并由应用提取配置"
+        then: "required SHALL 默认为 false，显式布尔值 SHALL 原样传入共同编排层"
+  - id: REQ-CFG-602
+    description: "配置阶段拒绝自相矛盾的 required 组合"
+    scenarios:
+      - id: SC-CFG-602
+        confidence: high
+        evidence: "proposal C2; design section 3"
+        given: "required=true 且 on_error=fail_open"
+        when: "加载 GatewayConfig"
+        then: "验证 SHALL 失败并指出 required detector 必须 fail_closed"
+      - id: SC-CFG-603
+        confidence: medium
+        evidence: "design section 3, Gate 2 decision"
+        given: "required=true 且 enabled=false"
+        when: "加载 GatewayConfig"
+        then: "验证 SHALL 失败并指出 required detector 不能被禁用"

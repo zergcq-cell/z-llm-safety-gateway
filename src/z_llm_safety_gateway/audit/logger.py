@@ -17,7 +17,7 @@ import logging
 import logging.handlers
 from pathlib import Path
 
-from z_llm_safety_gateway.audit.models import AuditEntry
+from z_llm_safety_gateway.audit.models import AuditEntry, DetectorLifecycleEvent
 from z_llm_safety_gateway.audit.sanitizer import sanitize_content
 
 logger = logging.getLogger("z_llm_safety_gateway.audit")
@@ -86,7 +86,7 @@ class AuditLogger:
         handler.setFormatter(logging.Formatter("%(message)s"))
         return handler
 
-    def record(self, entry: AuditEntry) -> None:
+    def record(self, entry: AuditEntry | DetectorLifecycleEvent) -> None:
         """Write an audit entry to the configured output channels.
 
         If ``store_content`` is disabled, content is dropped (hash only).
@@ -97,7 +97,7 @@ class AuditLogger:
             return
 
         data = entry.to_json_line()
-        if entry.content is not None:
+        if isinstance(entry, AuditEntry) and entry.content is not None:
             if not self._store_content:
                 data.pop("content", None)
             else:

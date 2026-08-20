@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 from typing import Any
@@ -150,7 +151,22 @@ class DetectorRegistry:
         """
         detector_class = self.get(name)
         detector = detector_class()
-        await detector.initialize(config)
+        try:
+            await detector.initialize(config)
+        except Exception:
+            shutdown = getattr(detector, "shutdown", None)
+            if callable(shutdown):
+                try:
+                    await asyncio.wait_for(
+                        shutdown(),
+                        timeout=float(config.get("timeout_seconds", 5.0)),
+                    )
+                except Exception:
+                    logger.warning(
+                        "detector initialization cleanup failed: %s",
+                        name,
+                    )
+            raise
         return detector
 
     async def initialize_all(

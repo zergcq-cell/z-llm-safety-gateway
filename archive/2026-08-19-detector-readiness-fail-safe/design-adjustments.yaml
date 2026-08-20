@@ -1,0 +1,8 @@
+meta:
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-20T03:51:19+08:00"
+  total_adjustments: 0
+  requires_re_spec: false
+  requires_re_build: false
+
+adjustments: []

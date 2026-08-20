@@ -105,6 +105,24 @@ class MetricsRegistry:
             ["detector_name"],
             registry=self._registry,
         )
+        self.detector_up = Gauge(
+            "safety_detector_up",
+            "Whether a configured detector is loaded and healthy",
+            ["detector_name", "direction", "detector_type"],
+            registry=self._registry,
+        )
+        self.detector_initialization_failures = Counter(
+            "safety_detector_initialization_failures_total",
+            "Detector initialization failures",
+            ["detector_name", "direction", "detector_type", "policy"],
+            registry=self._registry,
+        )
+        self.gateway_degraded_requests = Counter(
+            "safety_gateway_degraded_requests_total",
+            "Requests continued with an explicitly degraded safety capability",
+            ["direction", "detector_name"],
+            registry=self._registry,
+        )
 
         # --- Provider metrics (DESIGN 12.5) ---
         self.provider_requests = Counter(
@@ -283,6 +301,52 @@ def set_circuit_breaker_state(detector_name: str, state: int) -> None:
     reg.detector_circuit_breaker_state.labels(detector_name=detector_name).set(
         state
     )
+
+
+def set_detector_up(
+    detector_name: str,
+    direction: str,
+    detector_type: str,
+    is_up: bool,
+) -> None:
+    """Set a detector's current loaded-and-healthy state."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.detector_up.labels(
+        detector_name=detector_name,
+        direction=direction,
+        detector_type=detector_type,
+    ).set(1 if is_up else 0)
+
+
+def record_detector_initialization_failure(
+    detector_name: str,
+    direction: str,
+    detector_type: str,
+    policy: str,
+) -> None:
+    """Increment the detector initialization failure counter."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.detector_initialization_failures.labels(
+        detector_name=detector_name,
+        direction=direction,
+        detector_type=detector_type,
+        policy=policy,
+    ).inc()
+
+
+def record_degraded_request(direction: str, detector_name: str) -> None:
+    """Increment the per-detector fail-open degraded request counter."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.gateway_degraded_requests.labels(
+        direction=direction,
+        detector_name=detector_name,
+    ).inc()
 
 
 def record_provider_request(

@@ -309,6 +309,7 @@ class DetectorConfig(BaseModel):
     name: str
     type: str = ""  # optional; "grpc" for gRPC sidecar detectors
     enabled: bool = True
+    required: bool = False
     priority: int = 100
     on_error: str = "fail_open"  # "fail_open" | "fail_closed"
     circuit_breaker: CircuitBreakerConfig | None = None

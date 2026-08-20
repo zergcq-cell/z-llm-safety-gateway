@@ -21,6 +21,7 @@ METRICS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 def app() -> FastAPI:
     """Minimal FastAPI app with only the health router (no middleware)."""
     test_app = FastAPI()
+    test_app.state.ready = False
     test_app.include_router(router)
     return test_app
 
@@ -76,7 +77,7 @@ def test_health_liveness_probe_returns_healthy(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ready_when_ready_returns_200(client: TestClient) -> None:
+def test_ready_when_ready_returns_200(app: FastAPI, client: TestClient) -> None:
     """TC-HEALTH-002: Readiness probe returns 200 when server is ready.
 
     GIVEN the server configuration is loaded and provider clients initialized
@@ -85,7 +86,7 @@ def test_ready_when_ready_returns_200(client: TestClient) -> None:
     AND the response body is JSON {"status": "ready"}
     AND the Content-Type is application/json
     """
-    set_ready(True)
+    set_ready(app, True)
     response = client.get("/ready")
 
     assert response.status_code == 200
@@ -98,7 +99,7 @@ def test_ready_when_ready_returns_200(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ready_when_not_ready_returns_503(client: TestClient) -> None:
+def test_ready_when_not_ready_returns_503(app: FastAPI, client: TestClient) -> None:
     """TC-HEALTH-003: Readiness probe returns 503 when server is not ready.
 
     GIVEN the server configuration is not loaded or provider clients not initialized
@@ -107,7 +108,7 @@ def test_ready_when_not_ready_returns_503(client: TestClient) -> None:
     AND the response body is JSON {"status": "not_ready"}
     AND the Content-Type is application/json
     """
-    set_ready(False)
+    set_ready(app, False)
     response = client.get("/ready")
 
     assert response.status_code == 503

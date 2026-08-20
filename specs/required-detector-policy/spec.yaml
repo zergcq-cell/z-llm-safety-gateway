@@ -1,0 +1,42 @@
+meta:
+  capability: "required-detector-policy"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-RDP-001
+    description: "required 检测器失败时拒绝启动并完整清理"
+    scenarios:
+      - id: SC-RDP-001
+        confidence: high
+        evidence: "proposal C3/C6; design sections 3/5"
+        given: "四类检测器之一被标记 required 且初始化失败"
+        when: "应用执行启动生命周期"
+        then: "启动 SHALL 抛出异常且不得接受业务流量"
+      - id: SC-RDP-002
+        confidence: high
+        evidence: "design sections 5/9"
+        given: "required 失败前已有检测器和审计资源初始化成功"
+        when: "启动被中止"
+        then: "应用 SHALL 逆序清理检测器并刷新关闭审计资源"
+  - id: REQ-RDP-002
+    description: "非 required 故障严格遵循 on_error 且多故障结果确定"
+    scenarios:
+      - id: SC-RDP-003
+        confidence: high
+        evidence: "proposal C4; design section 3"
+        given: "optional fail_closed 检测器初始化失败"
+        when: "应用完成诊断性启动"
+        then: "应用 SHALL 保持 not-ready 且业务准入 fail-closed"
+      - id: SC-RDP-004
+        confidence: high
+        evidence: "proposal C5; design section 3"
+        given: "optional fail_open 检测器初始化失败"
+        when: "应用完成启动"
+        then: "应用 SHALL 可用但显式 degraded，并跳过该检测器"
+      - id: SC-RDP-005
+        confidence: high
+        evidence: "design sections 3/6"
+        given: "多个检测器同时处于不同故障策略"
+        when: "计算启动与 readiness 决策"
+        then: "结果 SHALL 采用最严格策略且 issues 排序确定"

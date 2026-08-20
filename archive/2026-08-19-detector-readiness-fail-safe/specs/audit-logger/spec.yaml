@@ -1,0 +1,40 @@
+# spec.yaml — 行为规格（audit-logger）
+meta:
+  capability: "audit-logger"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-AUDIT-601
+    description: "审计记录 detector 生命周期状态变化"
+    scenarios:
+      - id: SC-AUDIT-601
+        confidence: medium
+        evidence: "proposal C8; design section 8"
+        given: "检测器状态实际发生变化"
+        when: "注册表提交状态转换"
+        then: "审计 SHALL 写 detector_lifecycle 事件及规定字段，相同状态不得重复写"
+  - id: REQ-AUDIT-602
+    description: "致命启动失败也保留可验证的审计证据"
+    scenarios:
+      - id: SC-AUDIT-602
+        confidence: high
+        evidence: "design sections 5/9"
+        given: "required 检测器初始化失败"
+        when: "应用中止启动"
+        then: "失败生命周期事件 SHALL 在审计 flush/close 后仍可读取；审计关闭时结构化日志 SHALL 存在"
+  - id: REQ-AUDIT-603
+    description: "请求审计区分完整检测与安全降级"
+    scenarios:
+      - id: SC-AUDIT-603
+        confidence: high
+        evidence: "proposal C8; design section 8"
+        given: "fail-open 故障下业务请求继续"
+        when: "写请求审计"
+        then: "AuditEntry SHALL 含 safety_degraded=true 和确定排序的 detector_availability"
+      - id: SC-AUDIT-604
+        confidence: high
+        evidence: "proposal constraints; design section 8"
+        given: "异常包含秘密、endpoint 和高基数正文"
+        when: "写生命周期或请求审计"
+        then: "审计 SHALL 仅保存稳定 reason_code 和配置元数据"

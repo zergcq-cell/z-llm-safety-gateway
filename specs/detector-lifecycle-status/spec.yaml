@@ -1,0 +1,36 @@
+meta:
+  capability: "detector-lifecycle-status"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DLS-001
+    description: "应用级注册表以方向和名称唯一标识每个已配置检测器"
+    scenarios:
+      - id: SC-DLS-001
+        confidence: high
+        evidence: "proposal C6; design sections 4-5"
+        given: "input 与 output 配置了同名检测器"
+        when: "初始化状态注册表"
+        then: "注册表 SHALL 保存两个独立记录，身份键为 direction 与 detector_name"
+      - id: SC-DLS-002
+        confidence: high
+        evidence: "design section 4"
+        given: "一个检测器初始化成功"
+        when: "共同编排层完成初始化"
+        then: "状态 SHALL 依次为 configured、initializing、healthy，且只在变化时发事件"
+  - id: REQ-DLS-002
+    description: "初始化失败与运行期健康失败使用可恢复性不同的状态"
+    scenarios:
+      - id: SC-DLS-003
+        confidence: high
+        evidence: "proposal C6; design section 4"
+        given: "已配置检测器初始化抛出异常"
+        when: "编排层捕获失败"
+        then: "记录 SHALL 进入 unavailable 且只保存稳定脱敏 reason_code"
+      - id: SC-DLS-004
+        confidence: high
+        evidence: "design sections 4 and 6"
+        given: "已加载检测器健康检查先失败后成功"
+        when: "连续执行 readiness 健康检查"
+        then: "状态 SHALL 从 healthy 变为 unhealthy 并恢复为 healthy"

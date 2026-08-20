@@ -122,7 +122,29 @@ data: {"type":"flag","detector":"sensitive_words","risk_level":"medium"}
 | 422 | 输出内容被安全策略阻断（`safety_output_blocked`） |
 | 429 | 限流触发（`Retry-After` 头） |
 | 502 | 上游 provider 错误（含 `provider_error` 字段） |
+| 503 | required/fail-closed 检测器不可用（`safety_detector_unavailable`，Provider 不会被调用） |
 | 504 | 上游超时 |
+
+检测器可用性准入失败的契约固定如下，且发生在 Provider 路由前：
+
+```http
+HTTP/1.1 503 Service Unavailable
+X-Safety-Action: block
+```
+
+```json
+{
+  "error": {
+    "message": "Safety detection is temporarily unavailable",
+    "type": "safety_unavailable",
+    "code": "safety_detector_unavailable",
+    "safety": {
+      "affected_directions": ["input"],
+      "detectors": ["guard"]
+    }
+  }
+}
+```
 
 错误响应体（OpenAI 兼容）：
 
@@ -150,18 +172,36 @@ data: {"type":"flag","detector":"sensitive_words","risk_level":"medium"}
 
 ## GET /ready
 
+健康或无检测器时返回 200；optional fail-open 故障仍返回 200，但明确标记
+`degraded: true`。required 或 fail-closed 故障返回 503：
+
 ```json
-{"status": "ready"}
+{
+  "status": "not_ready",
+  "degraded": false,
+  "detectors": {
+    "configured": 1,
+    "loaded": 0,
+    "healthy": 0,
+    "unavailable": 1,
+    "unhealthy": 0,
+    "degraded": 0,
+    "issues": [{"name": "guard", "direction": "input", "state": "unavailable", "reason_code": "initialization_error"}]
+  }
+}
 ```
 
-- 就绪 → 200
-- 未就绪（初始化中/失败）→ 503 `{"status": "not_ready"}`
+`/ready` 会并行执行带独立超时的已加载检测器健康检查，并能在后续探测时恢复。
+`/health` 不执行这些依赖检查。
 
 ## GET /metrics
 
 启用 `observability.metrics.enabled` 时返回 Prometheus 文本格式；未启用 → 404。
 
-主要指标：`zlg_http_requests_total`、`zlg_detector_*`、`zlg_provider_*`、`zlg_recall_*` 等。
+检测器可用性指标包括 `safety_detector_up`、
+`safety_detector_initialization_failures_total` 和
+`safety_gateway_degraded_requests_total`。标签仅包含有界的检测器身份、方向、类型和策略，
+不会包含异常文本或敏感配置。
 
 ## 限流
 

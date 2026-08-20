@@ -1,0 +1,37 @@
+# spec.yaml — 行为规格（prometheus-metrics）
+meta:
+  capability: "prometheus-metrics"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  created: "2026-08-19T22:06:44+08:00"
+  confidence: high
+requirements:
+  - id: REQ-PROM-601
+    description: "指标暴露初始化失败与当前 detector 可用性"
+    scenarios:
+      - id: SC-PROM-601
+        confidence: medium
+        evidence: "proposal C8; design section 8"
+        given: "检测器初始化失败"
+        when: "采集 Prometheus metrics"
+        then: "safety_detector_initialization_failures_total SHALL 按 name/direction/type/policy 增加一次"
+      - id: SC-PROM-602
+        confidence: high
+        evidence: "proposal C8; design section 8"
+        given: "检测器在 healthy、unhealthy 或 unavailable 间转换"
+        when: "采集 Prometheus metrics"
+        then: "safety_detector_up Gauge SHALL 仅用有界标签准确反映 1 或 0"
+  - id: REQ-PROM-602
+    description: "指标统计降级请求且在 disabled 模式安全 no-op"
+    scenarios:
+      - id: SC-PROM-603
+        confidence: high
+        evidence: "proposal C8; design section 8"
+        given: "请求因 fail-open detector 故障降级继续"
+        when: "请求处理完成"
+        then: "safety_gateway_degraded_requests_total SHALL 按 direction/name 增加且每个 detector 每请求至多一次"
+      - id: SC-PROM-604
+        confidence: high
+        evidence: "existing observability contract; design section 8"
+        given: "Prometheus metrics 被禁用"
+        when: "初始化失败、状态变化或降级请求发生"
+        then: "指标调用 SHALL 安全 no-op 且不改变网关决策"

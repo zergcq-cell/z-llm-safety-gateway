@@ -428,3 +428,44 @@ requirements:
     then: 网关 SHALL 对每个 gRPC 检测器调用 shutdown()（远端 Shutdown + 关闭通道）
     and:
     - 单个 gRPC 检测器关闭失败 SHALL 记录日志且不阻断整体关闭
+
+# Merged from 2026-08-19-detector-readiness-fail-safe on 2026-08-20.
+- id: REQ-FAST-601
+  description: "应用启动保存每个配置检测器的状态并传播 required 致命失败"
+  scenarios:
+  - id: SC-FAST-601
+    confidence: high
+    evidence: "2026-08-19-detector-readiness-fail-safe proposal C3/C6; design sections 4/5"
+    given: "input/output 配置包含成功与失败的检测器"
+    when: "create_app lifespan 初始化检测器"
+    then: "app state SHALL 保存所有配置项状态，不得无条件吞掉初始化失败"
+  - id: SC-FAST-602
+    confidence: high
+    evidence: "2026-08-19-detector-readiness-fail-safe proposal C3; design sections 3/5"
+    given: "required 检测器初始化失败"
+    when: "应用 lifespan 启动"
+    then: "启动异常 SHALL 传播给 ASGI server，ready 不得被置为 true"
+- id: REQ-FAST-602
+  description: "fail-closed 状态在任何 Provider 工作前阻断业务请求"
+  scenarios:
+  - id: SC-FAST-603
+    confidence: medium
+    evidence: "2026-08-19-detector-readiness-fail-safe proposal C4; design section 7"
+    given: "input fail_closed 检测器 unavailable/unhealthy"
+    when: "提交 chat completion"
+    then: "网关 SHALL 在 Provider 前返回精确的 503 safety_unavailable 错误与 block header"
+  - id: SC-FAST-604
+    confidence: high
+    evidence: "2026-08-19-detector-readiness-fail-safe constraints; design section 7"
+    given: "output fail_closed 检测器 unavailable/unhealthy"
+    when: "提交同步、流式或异步输出请求"
+    then: "所有路径 SHALL 在 Provider 前返回 503，Provider 调用次数为零"
+- id: REQ-FAST-603
+  description: "fail-open 状态允许请求继续但显式跳过不可用检测器"
+  scenarios:
+  - id: SC-FAST-605
+    confidence: high
+    evidence: "2026-08-19-detector-readiness-fail-safe proposal C5/C8; design sections 7/8"
+    given: "input 或 output 仅有 fail_open 检测器故障"
+    when: "提交 chat completion"
+    then: "请求 SHALL 继续且不调用故障检测器，并传递降级快照供审计与指标使用"

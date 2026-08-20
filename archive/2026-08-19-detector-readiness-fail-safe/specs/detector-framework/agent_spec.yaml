@@ -1,0 +1,11 @@
+# agent_spec.yaml — 验证规格（detector-framework）
+meta:
+  task_id: "detector-framework"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "统一 detector 初始化、健康与关闭合约"
+  preconditions: ["四类 detector adapter 可参数化构造"]
+steps:
+  - {id: CP-DF-601, description: "四类 detector 使用同一协调器", action: ".venv/bin/pytest tests/unit/test_detector_initialization.py::test_four_detector_types_share_initialization_coordinator -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DF-602, description: "配置项失败登记状态且不用 sentinel", action: ".venv/bin/pytest tests/unit/test_detector_initialization.py::test_configured_factory_failure_registers_unavailable_without_sentinel tests/unit/test_detector_initialization.py::test_configured_factory_returning_none_is_unavailable -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DF-603, description: "只调用已加载实例的健康与关闭接口", action: ".venv/bin/pytest tests/unit/test_detector_initialization.py::test_unavailable_detector_is_not_shut_down tests/unit/test_detector_initialization.py::test_partially_initialized_grpc_detector_is_cleaned tests/unit/detectors/test_registry.py::TestDetectorRegistryRegistration::test_create_detector_cleans_partially_initialized_instance tests/unit/routes/test_detector_readiness.py::test_ready_keeps_duck_typed_plugin_without_health_check_healthy tests/unit/plugins/grpc/test_client.py::test_shutdown_cancellation_still_closes_local_channel -q", assertions: [{type: exit_code, expected: 0}]}

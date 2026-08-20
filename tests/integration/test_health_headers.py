@@ -33,10 +33,10 @@ def create_test_app() -> FastAPI:
     Response flow: route handler -> SafetyHeaders -> RequestID
     """
     test_app = FastAPI()
+    test_app.state.ready = True
     test_app.add_middleware(SafetyHeadersMiddleware)
     test_app.add_middleware(RequestIDMiddleware)
     test_app.include_router(router)
-    set_ready(True)
     return test_app
 
 

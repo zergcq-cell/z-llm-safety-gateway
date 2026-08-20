@@ -1,0 +1,12 @@
+# agent_spec.yaml — 验证规格（prometheus-metrics）
+meta:
+  task_id: "prometheus-metrics"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "Detector availability 与 degraded request Prometheus 指标"
+  preconditions: ["可使用隔离 CollectorRegistry"]
+steps:
+  - {id: CP-PROM-601, description: "初始化失败 counter 名称、值与标签", action: ".venv/bin/pytest tests/unit/observability/test_detector_availability_metrics.py::test_initialization_failure_counter_is_wired_to_coordinator -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-PROM-602, description: "up gauge 随状态转换", action: ".venv/bin/pytest tests/unit/observability/test_detector_availability_metrics.py::test_detector_up_gauge_is_wired_to_registry_transitions -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-PROM-603, description: "降级请求 counter 每 detector 每请求一次", action: ".venv/bin/pytest tests/unit/observability/test_detector_availability_metrics.py::test_fail_open_guard_counts_each_degraded_detector_once_per_request tests/unit/observability/test_detector_availability_metrics.py::test_strict_rejection_does_not_count_as_degraded_continuation -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-PROM-604, description: "metrics disabled 时 no-op", action: ".venv/bin/pytest tests/unit/observability/test_detector_availability_metrics.py::test_detector_availability_metrics_disabled_are_no_op -q", assertions: [{type: exit_code, expected: 0}]}

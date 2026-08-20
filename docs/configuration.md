@@ -62,8 +62,9 @@ pipeline:
     input:      # 输入侧检测（请求内容）
       - name: prompt_injection
         enabled: true
+        required: false              # true: 初始化失败时拒绝启动；默认 false
         priority: 1                # 数字越小越先聚合（默认 100）
-        on_error: fail_open        # fail_open | fail_closed | fail_fixed
+        on_error: fail_open        # fail_open | fail_closed
         timeout: 5s                # 检测超时（可选，默认 security.timeout.detector）
         config:                    # 检测器私有配置
           # prompt_injection: min_confidence / max_confidence / escalation
@@ -83,6 +84,13 @@ pipeline:
     #     endpoint: "localhost:50051"
     #     api_key: "sk-..."         # 透传（endpoint/tls_* 为网关内部字段，不透传）
 ```
+
+`required` 与 `on_error` 分工如下：`required: true` 只允许搭配
+`on_error: fail_closed`，初始化失败会清理已加载检测器并拒绝启动；optional
+`fail_closed` 允许诊断实例启动，但 `/ready` 和业务请求均返回 503；optional
+`fail_open` 会跳过故障检测器并以 degraded 状态继续。`required: true` 与
+`enabled: false` 的组合也会在配置校验时被拒绝。规则同时适用于 input、output、
+built-in、ML、in-process plugin 和 gRPC sidecar。
 
 ### 阈值语义（重要）
 

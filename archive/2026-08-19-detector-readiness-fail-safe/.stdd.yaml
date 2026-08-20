@@ -1,0 +1,140 @@
+# STDD 状态文件
+change_id: "2026-08-19-detector-readiness-fail-safe"
+title: "检测器初始化失败与 Readiness Fail-Safe 加固"
+mode: "thorough"
+task_type: "code"
+complexity_score: 15
+score_confidence: "preliminary"
+
+phase:
+  current: deliver
+  understand: completed
+  spec: completed
+  slice: completed
+  build: completed
+  verify: completed
+  deliver: completed
+
+pattern: "thorough"
+complexity: "H"
+
+anchoring:
+  level: "L3"
+  rationale: "安全关键的启动准入、fail-open/fail-closed 与 readiness 跨组件语义变更"
+  reference_changes:
+    - "2026-08-11-v0.0.2-pipeline-detectors"
+    - "2026-08-12-v0.0.4-security-observability"
+    - "2026-08-14-v0.0.5-plugin-ecosystem"
+
+critical:
+  is_critical: true
+  safety_critical: true
+  financial: false
+  cross_system: true
+  required_anchoring_level: "L3"
+  rationale: "错误实现可能导致安全检测器缺失时仍接受流量"
+
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+
+confirmed_at:
+  gate1_understand: "2026-08-19T21:37:03+08:00"
+  gate2_spec: "2026-08-19T22:06:44+08:00"
+  gate3_verify: "2026-08-20T07:05:35+08:00"
+
+status: archived
+
+long_range:
+  mode: full_auto
+  authorized_at: "2026-08-19T22:06:44+08:00"
+  authorization: "确认全部"
+
+artifacts:
+  proposal_yaml: "proposal.yaml"
+  proposal_md: "proposal.md"
+  design_md: "design.md"
+  test_plan_md: "test-plan.md"
+  phase_context_md: "phase-context.md"
+  slices_md: "slices.md"
+  tasks_md: "tasks.md"
+  test_report_md: "test-report.md"
+  design_adjustments_md: "design-adjustments.md"
+
+phase5:
+  verified_at: "2026-08-20T07:05:35+08:00"
+  tests: "862 passed, 1 skipped"
+  coverage: "93% full source; change core files >= 90%"
+  tc_coverage: "36/36"
+  lint: passed
+  typecheck: passed
+  review_final: "C0 H0 M0 L0"
+  failure_modes: "12/12 checked"
+  experience_update: "skipped: bin/stdd missing (exit 2)"
+
+phase6:
+  archived_at: "2026-08-20T07:29:53+08:00"
+  specs_merge: completed
+  merged_capabilities: 9
+  canonical_cli_verify: "skipped: bin/stdd and top-level canonical index unavailable"
+  structure_merge: "skipped: bin/stdd unavailable"
+  experience_share: "skipped: no deposited experience index and bin/stdd unavailable"
+  git_commit: completed
+  git_tag: deferred_to_v0.1.1
+
+specs:
+  - "detector-lifecycle-status"
+  - "required-detector-policy"
+  - "degraded-safety-visibility"
+  - "config-system"
+  - "detector-framework"
+  - "health-endpoints"
+  - "fastapi-server"
+  - "audit-logger"
+  - "prometheus-metrics"
+
+phase4:
+  slices_completed:
+    "S1":
+      status: done
+      tc_coverage: "7/7"
+      new_tests: 7
+      verified_at: "2026-08-19T22:41:36+08:00"
+      regression: "811 passed, 1 skipped"
+    "S2":
+      status: done
+      tc_coverage: "5/5"
+      new_tests: 11
+      verified_at: "2026-08-19T22:45:26+08:00"
+      regression: "822 passed, 1 skipped"
+    "S3":
+      status: done
+      tc_coverage: "5/5"
+      new_tests: 5
+      verified_at: "2026-08-19T22:47:44+08:00"
+      regression: "827 passed, 1 skipped"
+    "S4":
+      status: done
+      tc_coverage: "5/5"
+      new_tests: 5
+      verified_at: "2026-08-19T22:51:07+08:00"
+      regression: "832 passed, 1 skipped"
+    "S5":
+      status: done
+      tc_coverage: "3/3"
+      new_tests: 5
+      verified_at: "2026-08-19T22:55:57+08:00"
+      regression: "837 passed, 1 skipped"
+    "S6":
+      status: done
+      tc_coverage: "7/7"
+      new_tests: 5
+      verified_at: "2026-08-19T22:59:41+08:00"
+      regression: "842 passed, 1 skipped"
+    "S7":
+      status: done
+      tc_coverage: "4/4"
+      new_tests: 4
+      verified_at: "2026-08-19T23:02:01+08:00"
+      regression: "846 passed, 1 skipped"
