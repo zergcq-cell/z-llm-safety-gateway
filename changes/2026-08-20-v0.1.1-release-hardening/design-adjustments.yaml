@@ -1,7 +1,7 @@
 meta:
   change_id: "2026-08-20-v0.1.1-release-hardening"
   created: "2026-08-21T10:26:00+08:00"
-  total_adjustments: 8
+  total_adjustments: 9
   requires_re_spec: false
   requires_re_build: false
 
@@ -62,3 +62,10 @@ adjustments:
     original: "Verify skill 宣称 12 类但 vendored v2.9.5 正文仅定义 a-k 11 类"
     actual: "保留上游哈希不修改，将 l 明确定义为独立 L3 锚定缺失检查"
     rationale: "既完成项目要求的 12 类检查，又不破坏固定来源 vendored CLI/skill 完整性"
+  - id: "ADJ-009"
+    phase: "deliver"
+    type: "ci-build-environment"
+    status: "accepted"
+    original: "dev extra 包含 build frontend，但未显式包含 build-system 声明的 Hatchling backend"
+    actual: "dev extra 显式包含 hatchling>=1.25.0，并由契约测试锁定 no-isolation 构建前置条件"
+    rationale: "全新 GitHub runner 的发布契约使用 build --no-isolation；构建后端不能依赖开发机的偶然全局安装"

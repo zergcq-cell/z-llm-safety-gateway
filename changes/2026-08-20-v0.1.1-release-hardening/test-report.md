@@ -13,7 +13,7 @@
 
 | 指标 | 结果 |
 |------|------|
-| 最终自动化回归 | 904 passed / 1 skipped / 0 failed |
+| 最终自动化回归 | 905 passed / 1 skipped / 0 failed（含 Deliver 期 CI 防回归契约） |
 | 源码覆盖率 | 92.85%（门槛 90%） |
 | Ruff | passed |
 | Mypy strict | 88 source files，0 issues |
@@ -38,7 +38,7 @@ pytest tests/ examples/plugins/python-inprocess/tests examples/plugins/python-gr
   --cov=src/z_llm_safety_gateway --cov-fail-under=90
 ```
 
-结果：904 passed / 1 skipped，92.85%。示例 gRPC sidecar 的 API key mismatch 路径也已纳入正式门禁。
+Phase 5 结果：904 passed / 1 skipped，92.85%。Gate 3 后新增 1 个 CI 构建后端防回归契约，Deliver 期本地复验为 905 passed / 1 skipped，92.85%。示例 gRPC sidecar 的 API key mismatch 路径也已纳入正式门禁。
 
 ### 2.2 多版本状态
 
@@ -128,6 +128,12 @@ vendored v2.9.5 Verify 正文定义 a-k 11 类，但入口宣称 12 类。本 ch
 | TC-REL-007 | 创建并 push `v0.1.1` tag；验证 GitHub Release 和四个产物 | PENDING |
 
 这些动作具有外部可见或难撤回状态，严格保留到用户明确确认 Gate 3 后。
+
+### 8.1 Gate 3 后首次远程 CI 反馈
+
+提交 `c299164` 已成功 push；Dependabot 的 root pip、SDK pip、GitHub Actions 三项更新扫描均成功。CI run `32442183506` 在 Python 3.12 的 pytest 步骤失败并触发 fail-fast，公开检查显示 Ruff/Mypy 已通过。
+
+隔离 Python 3.12 容器按 CI 命令复现为 902 passed / 1 skipped / 2 setup errors：发布契约使用 `build --no-isolation`，而全新环境仅安装了 build frontend、没有 Hatchling backend。严格 RED→GREEN 后，dev extra 增加 `hatchling>=1.25.0`，新增契约先失败再通过；相关测试 3/3、全量本地 905/1、全新 3.12 容器 gateway/SDK 四产物构建全部通过。TC-GH-004 仍保持 PENDING，直至修复提交的远程三版本矩阵全绿。
 
 ## 9. Gate 3 建议
 

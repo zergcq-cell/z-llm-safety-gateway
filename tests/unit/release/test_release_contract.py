@@ -87,6 +87,16 @@ def test_release_versions_and_changelog_are_consistent() -> None:
     assert len(section.group(0).strip().splitlines()) >= 5
 
 
+def test_ci_dev_dependencies_include_no_isolation_build_backend() -> None:
+    """Fresh CI installs must include the backend used by no-isolation builds."""
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    build_system = pyproject.split("[build-system]", 1)[1].split("[project]", 1)[0]
+    dev_dependencies = pyproject.split("dev = [", 1)[1].split("]", 1)[0]
+
+    assert '"hatchling"' in build_system
+    assert re.search(r'"hatchling(?:[<>=!~].*)?"', dev_dependencies)
+
+
 def test_release_notes_extraction_stops_at_adjacent_version() -> None:
     """TC-REL-006: extracted 0.1.1 notes cannot include adjacent releases."""
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")

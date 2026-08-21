@@ -16,6 +16,7 @@
 | ADJ-006 | STDD 诊断覆盖率与 90% 发布硬门分离 | 对齐 Verify 规范且保持发布门槛 | 已接受 |
 | ADJ-007 | 行为准则与漏洞披露使用不同入口 | 两类事件的隐私与处置流程不同 | 已接受 |
 | ADJ-008 | 第 12 类作为独立 L3 锚定检查 | 上游 v2.9.5 正文只定义 a-k，且 vendored 内容不可改写 | 已接受 |
+| ADJ-009 | 开发依赖显式包含 `hatchling>=1.25.0` | 全新 CI 环境的 `build --no-isolation` 必须具备项目声明的构建后端 | 已接受 |
 
 ## 影响说明
 
@@ -23,5 +24,6 @@
 - ADJ-004 的最终运行证据为：sidecar healthy；8080/8081 两个 gateway 副本均 healthy/ready；每个副本 configured=3、loaded=3、healthy=3、degraded=false；容器、网络、卷均已清理。
 - ADJ-005 的 GitHub Release URL 在 Gate 3 后创建 `v0.1.1` Release 时变为可下载；远程发布前不会对外宣称已经可用。
 - ADJ-008 不修改 `.stdd/skills/verify.md` 或 platform copies，以保持官方 v2.9.5 固定提交哈希；本报告单独记录 `(l) 锚定缺失` 的检查证据。
+- ADJ-009 来自 Gate 3 后首次远程 CI：Python 3.12 在发布契约 fixture 中因全新环境缺少 Hatchling 产生 2 个 setup error；新增 RED 契约后补齐依赖，相关测试 3/3、全量本地 905/1、全新 3.12 容器四产物构建均通过，等待远程矩阵复验。
 
 机器可读版本见 `design-adjustments.yaml`。

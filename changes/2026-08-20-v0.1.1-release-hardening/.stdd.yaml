@@ -149,6 +149,25 @@ phase5:
     - "EXP-2026-0007"
   tc_status: "28 passed; 3 Gate 3 remote pending"
 
+phase6:
+  status: "in_progress"
+  release_candidate_commit: "c2991645e6315a95a0357c16edc7c3ed66e49d86"
+  initial_push_at: "2026-08-21T11:06:00+08:00"
+  remote_ci_initial:
+    run_id: 32442183506
+    status: "failed"
+    failing_job: "test (3.12)"
+    root_cause: "fresh runner missing Hatchling backend required by build --no-isolation"
+    dependabot_updates: "3/3 succeeded"
+  ci_fix:
+    adjustment: "ADJ-009"
+    red: "build backend dependency contract failed"
+    green: "3 targeted passed; fresh Python 3.12 gateway+SDK four-artifact build passed"
+    local_regression: "905 passed, 1 skipped; coverage 92.85%"
+    ruff: passed
+    mypy: "88 source files, 0 issues"
+  remote_ci_retry: pending
+
 # v2.9.5 CLI compatibility view; kept in sync with the canonical `phase` block.
 phases:
   understand:
