@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 #: Detector interface attributes required for validation.
 _REQUIRED_ATTRS = ("name", "category", "description", "version")
@@ -19,6 +21,11 @@ _REQUIRED_METHODS = ("initialize", "detect")
 
 #: Entry point group used in generated pyproject.toml.
 ENTRY_POINT_GROUP = "z_llm_safety_gateway.detectors"
+SDK_RELEASE_DEPENDENCY = (
+    "z-llm-safety-gateway-sdk @ "
+    "https://github.com/zergcq-cell/z-llm-safety-gateway/releases/download/"
+    "v0.1.1/z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl"
+)
 
 
 def _snake(name: str) -> str:
@@ -44,13 +51,16 @@ name = "{args.name}"
 version = "0.1.0"
 description = "A safety detector for the z LLM Safety Gateway"
 requires-python = ">=3.10"
-dependencies = ["z-llm-safety-gateway-sdk>=1.0,<2.0"]
+dependencies = ["{SDK_RELEASE_DEPENDENCY}"]
 
 [project.entry-points."{ENTRY_POINT_GROUP}"]
 {entry_point_name} = "{pkg}.detector:{_camel(entry_point_name)}Detector"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/{pkg}"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 '''
     (proj_dir / "pyproject.toml").write_text(pyproject)
 
@@ -179,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point (console script ``zlg-sdk``)."""
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.handler(args)
+    handler = cast(Callable[[argparse.Namespace], int], args.handler)
+    return handler(args)
 
 
 if __name__ == "__main__":

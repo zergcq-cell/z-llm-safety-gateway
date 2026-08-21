@@ -36,7 +36,11 @@ def test_sdk_new_python_creates_template(tmp_path, monkeypatch) -> None:
 
     pyproject = (proj / "pyproject.toml").read_text()
     assert 'z_llm_safety_gateway.detectors' in pyproject  # entry point group
-    assert "z-llm-safety-gateway-sdk" in pyproject  # SDK dependency
+    assert (
+        "z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl"
+        in pyproject
+    )
+    assert "allow-direct-references = true" in pyproject
 
 
 def test_sdk_new_python_detector_is_valid(monkeypatch, tmp_path) -> None:

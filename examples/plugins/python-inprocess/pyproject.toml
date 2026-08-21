@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Example in-process detector for the z LLM Safety Gateway (keyword based)"
 requires-python = ">=3.10"
 dependencies = [
-    "z-llm-safety-gateway-sdk>=1.0,<2.0",
+    "z-llm-safety-gateway-sdk @ https://github.com/zergcq-cell/z-llm-safety-gateway/releases/download/v0.1.1/z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl",
 ]
 
 [project.entry-points."z_llm_safety_gateway.detectors"]
@@ -16,6 +16,9 @@ acme_keyword = "acme_keyword_detector.detector:AcmeKeywordDetector"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/acme_keyword_detector"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

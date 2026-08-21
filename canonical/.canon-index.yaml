@@ -1,0 +1,14 @@
+changes:
+  2026-08-19-detector-readiness-fail-safe:
+    proposal: canonical/proposals/2026-08-19-detector-readiness-fail-safe.yaml
+    capabilities:
+    - audit-logger
+    - config-system
+    - degraded-safety-visibility
+    - detector-framework
+    - detector-lifecycle-status
+    - fastapi-server
+    - health-endpoints
+    - prometheus-metrics
+    - required-detector-policy
+    verified: true

@@ -1,0 +1,13 @@
+# agent_spec.yaml — 验证规格（required-detector-policy）
+meta:
+  task_id: "required-detector-policy"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "启动准入与故障策略矩阵"
+  preconditions: ["四类 detector factory 可由测试替身控制"]
+steps:
+  - {id: CP-RDP-001, description: "四类 required 初始化失败均中止启动", action: ".venv/bin/pytest tests/unit/test_detector_initialization.py::test_required_initialization_failure_aborts_for_all_types -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-RDP-002, description: "致命失败清理资源并刷新审计", action: ".venv/bin/pytest tests/unit/test_detector_initialization.py::test_required_failure_cleans_loaded_detectors_and_flushes_audit tests/unit/test_detector_initialization.py::test_fatal_cleanup_is_bounded_and_still_flushes_audit -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-RDP-003, description: "optional fail_closed 保持 not-ready", action: ".venv/bin/pytest tests/unit/test_startup_policy.py::test_optional_fail_closed_startup_is_not_ready -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-RDP-004, description: "optional fail_open 降级运行", action: ".venv/bin/pytest tests/unit/test_startup_policy.py::test_optional_fail_open_startup_is_ready_but_degraded -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-RDP-005, description: "多故障采用最严格且确定结果", action: ".venv/bin/pytest tests/unit/test_startup_policy.py::test_multiple_failures_use_strictest_policy_and_stable_order -q", assertions: [{type: exit_code, expected: 0}]}

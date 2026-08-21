@@ -23,12 +23,13 @@ test:
   framework: pytest
   unit_dir: tests/
   integration_dir: tests/
-  coverage_target: 80
+  coverage_target: 90
 
 quality:
-  test: "pytest tests/ -v"
-  lint: "ruff check src/ tests/"
-  typecheck: "mypy src/"
+  test: "PYTHONPATH=sdk/src:examples/plugins/python-inprocess/src:examples/plugins/python-grpc/src OPENAI_API_KEY=sk-test pytest tests/ examples/plugins/python-inprocess/tests examples/plugins/python-grpc/tests --cov=src/z_llm_safety_gateway --cov-fail-under=0 -v"
+  release_test: "PYTHONPATH=sdk/src:examples/plugins/python-inprocess/src:examples/plugins/python-grpc/src OPENAI_API_KEY=sk-test pytest tests/ examples/plugins/python-inprocess/tests examples/plugins/python-grpc/tests --cov=src/z_llm_safety_gateway --cov-fail-under=90 -v"
+  lint: "ruff check src/ tests/ sdk/src/ tools/ examples/plugins/python-inprocess/src examples/plugins/python-inprocess/tests examples/plugins/python-grpc/src examples/plugins/python-grpc/tests"
+  typecheck: "mypy src/ sdk/src tools/"
   e2e:
     enabled: false
     runner: playwright

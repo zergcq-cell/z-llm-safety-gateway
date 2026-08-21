@@ -1,0 +1,258 @@
+meta:
+  last_updated: '2026-08-20T15:15:38.145843+00:00'
+  total_changes: 1
+modules:
+  DESIGN.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/.stdd.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/design-adjustments.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/design-adjustments.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/design.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/phase-context.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/proposal.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/proposal.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/slices.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/audit-logger/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/audit-logger/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/audit-logger/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/config-system/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/config-system/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/config-system/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/degraded-safety-visibility/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/degraded-safety-visibility/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/degraded-safety-visibility/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/detector-framework/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/detector-framework/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/detector-framework/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/detector-lifecycle-status/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/detector-lifecycle-status/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/detector-lifecycle-status/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/fastapi-server/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/fastapi-server/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/fastapi-server/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/health-endpoints/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/health-endpoints/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/health-endpoints/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/prometheus-metrics/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/prometheus-metrics/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/prometheus-metrics/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/required-detector-policy/agent_spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/required-detector-policy/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/specs/required-detector-policy/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/tasks.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/test-plan.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  archive/2026-08-19-detector-readiness-fail-safe/test-report.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  docs/api-spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  docs/configuration.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/audit-logger/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/audit-logger/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/config-system/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/config-system/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/degraded-safety-visibility/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/degraded-safety-visibility/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/detector-framework/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/detector-framework/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/detector-lifecycle-status/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/detector-lifecycle-status/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/fastapi-server/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/fastapi-server/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/health-endpoints/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/health-endpoints/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/prometheus-metrics/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/prometheus-metrics/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/required-detector-policy/spec.md:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  specs/required-detector-policy/spec.yaml:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/app.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/audit/logger.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/audit/models.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/config/models.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/config/validators.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/detectors/__init__.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/detectors/registry.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/detectors/status.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/exceptions.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/observability/metrics.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/plugins/grpc/client.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/routes/chat.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/routes/health.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/integration/test_health_headers.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/audit/test_detector_availability_audit.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/config/test_detector_required.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/detectors/test_registry.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/detectors/test_status_registry.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/observability/test_detector_availability_metrics.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/plugins/grpc/test_client.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/routes/test_availability_guard.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/routes/test_detector_readiness.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/routes/test_health.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/test_detector_initialization.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/test_startup_policy.py:
+    changes:
+    - 2026-08-19-detector-readiness-fail-safe
+changes:
+- 2026-08-19-detector-readiness-fail-safe

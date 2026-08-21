@@ -21,29 +21,25 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import statistics
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "src"))
+import structlog
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "sdk" / "src"))
+
+from tools.benchmark_report import (  # noqa: E402
+    format_seconds,
+    render_comparison,
+    render_report,
+)
 from z_llm_safety_gateway.detectors import create_default_registry  # noqa: E402
 from z_llm_safety_gateway.models import DetectionContext  # noqa: E402
-
-#: DESIGN.md 14.1 detection latency targets (rule-based only, seconds).
-LATENCY_TARGETS = {
-    "p50_rule_only": 0.005,
-    "p95_rule_only": 0.010,
-    "p99_any_mix": 0.200,
-}
-
-#: DESIGN.md 14.3 throughput targets (req/s, single instance).
-THROUGHPUT_TARGETS = {
-    "rule_based": 1000,
-}
 
 #: Number of detection runs per sample for stable statistics.
 _N_RUNS = 200
@@ -127,57 +123,6 @@ def bench_throughput(engine: object, detectors: list[object], configs: dict) -> 
     return asyncio.run(_run_batch(500))
 
 
-def _fmt_seconds(seconds: float) -> str:
-    return f"{seconds * 1000:.2f}ms"
-
-
-def render_report(
-    lat: dict, throughput: float, python_version: str, os_name: str
-) -> str:
-    """Render a Markdown report comparing results against DESIGN 14 targets."""
-    lines = [
-        "# Performance Benchmark Report",
-        "",
-        f"- Date: {datetime.now(timezone.utc).isoformat()}",
-        f"- Python: {python_version}",
-        f"- OS: {os_name}",
-        f"- Runs: {lat['n']} (latency), 500 (throughput)",
-        "- Detector mix: rule-based only (prompt_injection, secret_leak, sensitive_words)",
-        "",
-        "## Latency (end-to-end pipeline, rule-based only)",
-        "",
-        "| Metric | Measured | Target (DESIGN 14.1) | Status |",
-        "|--------|----------|----------------------|--------|",
-    ]
-    rows = [
-        ("P50", lat["p50"], LATENCY_TARGETS["p50_rule_only"]),
-        ("P95", lat["p95"], LATENCY_TARGETS["p95_rule_only"]),
-        ("P99", lat["p99"], LATENCY_TARGETS["p99_any_mix"]),
-    ]
-    for label, measured, target in rows:
-        status = "PASS" if measured <= target else "BELOW TARGET"
-        lines.append(
-            f"| {label} | {_fmt_seconds(measured)} | {_fmt_seconds(target)} | {status} |"
-        )
-    lines += [
-        "",
-        "## Throughput (single instance, rule-based only)",
-        "",
-        "| Metric | Measured | Target (DESIGN 14.3) | Status |",
-        "|--------|----------|----------------------|--------|",
-        f"| req/s | {throughput:.0f} | {THROUGHPUT_TARGETS['rule_based']} | "
-        f"{'PASS' if throughput >= THROUGHPUT_TARGETS['rule_based'] else 'BELOW TARGET'} |",
-        "",
-        "## Notes",
-        "",
-        "- Results are advisory for release review and are NOT enforced by CI.",
-        "- The benchmark uses a single connection; throughput scales with concurrency.",
-        "- Below-target values should be recorded as differences for the release review.",
-        "",
-    ]
-    return "\n".join(lines)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Pipeline performance benchmark")
     parser.add_argument(
@@ -194,6 +139,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Suppress gateway debug/info logs so the report is not polluted.
+    # structlog defaults to a PrintLogger, so filter at the wrapper level.
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING),
+    )
+
     engine, detectors, configs = _build_engine()
     import platform
 
@@ -201,19 +152,29 @@ def main() -> int:
     throughput = None
     if args.suite in ("latency", "all"):
         lat = bench_latency(engine, detectors, configs)
-        print(f"Latency: P50={_fmt_seconds(lat['p50'])} P95={_fmt_seconds(lat['p95'])} "
-              f"P99={_fmt_seconds(lat['p99'])}")
+        print(
+            f"Latency: P50={format_seconds(lat['p50'])} "
+            f"P95={format_seconds(lat['p95'])} P99={format_seconds(lat['p99'])}"
+        )
     if args.suite in ("throughput", "all"):
         throughput = bench_throughput(engine, detectors, configs)
         print(f"Throughput: {throughput:.0f} req/s")
 
     if lat is not None or throughput is not None:
         report = render_report(
-            lat or {"p50": 0, "p95": 0, "p99": 0, "n": 0},
-            throughput or 0.0,
+            lat,
+            throughput,
             platform.python_version(),
             platform.system(),
         )
+        baseline = Path(__file__).parent / "results" / "2026-08-15.md"
+        if lat is not None and throughput is not None and baseline.exists():
+            report += "\n" + render_comparison(
+                lat,
+                throughput,
+                baseline.read_text(encoding="utf-8"),
+                "v0.1.0",
+            )
         out = args.output or (
             Path(__file__).parent / "results"
             / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"

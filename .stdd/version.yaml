@@ -1,0 +1,6 @@
+stdd_version: 2.9.5
+cli_version: 2.9.5
+cli_source_commit: fd9df3104d3588eb145cc84ec551c1803e783c9e
+locked: true
+project_overlay: true
+restored_at: "2026-08-20T23:04:08+08:00"

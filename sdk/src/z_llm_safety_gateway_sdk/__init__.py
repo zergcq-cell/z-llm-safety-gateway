@@ -9,7 +9,7 @@ from z_llm_safety_gateway_sdk.context import DetectionContext
 from z_llm_safety_gateway_sdk.modification import Modification
 from z_llm_safety_gateway_sdk.result import DetectionResult
 
-__version__ = "1.0.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "Detector",

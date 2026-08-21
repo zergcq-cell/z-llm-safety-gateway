@@ -1,0 +1,12 @@
+meta:
+  task_id: "project-docs"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: documentation
+  system: "版本、Quick Start 与文档导航"
+  preconditions: ["构建与入口可用"]
+steps:
+  - {id: CP-DOCS-005, description: "版本/Python 口径", action: ".venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_release_version_and_python_support_are_consistent -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DOCS-006, description: "Quick Start", action: ".venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_readme_quick_start_matches_executable_source_flow -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DOCS-007, description: "本地链接", action: ".venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_active_markdown_has_no_broken_local_links_or_anchors -q", assertions: [{type: exit_code, expected: 0}]}
+rollback:
+  steps: ["文档变更可独立回退，不回退已验证代码"]

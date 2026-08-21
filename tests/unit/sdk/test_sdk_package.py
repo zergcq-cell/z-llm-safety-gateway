@@ -35,7 +35,38 @@ def test_sdk_reexports_core_types() -> None:
 
 def test_sdk_has_independent_version() -> None:
     """TC-SDK-001b: SDK has its own version independent of the gateway."""
-    assert sdk.__version__ == "1.0.0"
+    assert sdk.__version__ == "0.1.1"
+
+
+def test_sdk_modification_fields_and_to_dict() -> None:
+    """TC-SDK-001c: Modification stores fields and serializes to dict."""
+    mod = Modification(
+        detector_name="pii_redaction",
+        modified_content="***@example.com",
+        priority=10,
+        message_index=2,
+    )
+    assert mod.detector_name == "pii_redaction"
+    assert mod.modified_content == "***@example.com"
+    assert mod.priority == 10
+    assert mod.message_index == 2
+    assert mod.to_dict() == {
+        "detector_name": "pii_redaction",
+        "modified_content": "***@example.com",
+        "priority": 10,
+        "message_index": 2,
+    }
+
+
+def test_sdk_modification_optional_message_index() -> None:
+    """TC-SDK-001d: message_index is omitted from dict when None."""
+    mod = Modification(
+        detector_name="d",
+        modified_content="x",
+        priority=5,
+    )
+    assert mod.message_index is None
+    assert "message_index" not in mod.to_dict()
 
 
 # --------------------------------------------------------------------------- #

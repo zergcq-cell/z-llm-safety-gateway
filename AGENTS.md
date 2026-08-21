@@ -7,7 +7,7 @@
 
 z LLM Safety Gateway 是一个开源、模块化的 LLM 内容安全网关，作为应用程序与 LLM 提供商之间的透明代理，执行实时内容安全检测和过滤。
 
-- **技术栈**: Python 3.12+ / FastAPI / Pydantic v2 / httpx / structlog
+- **技术栈**: Python 3.10–3.12（推荐 3.12）/ FastAPI / Pydantic v2 / httpx / structlog
 - **源码目录**: `src/`
 - **测试目录**: `tests/`
 - **主设计文档**: `DESIGN.md`（项目级 master spec，60 条设计决策）

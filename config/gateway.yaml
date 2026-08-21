@@ -1,9 +1,15 @@
-# z LLM Safety Gateway — Example Configuration
-# Based on DESIGN.md Section 10.2
+# z LLM Safety Gateway — Example Configuration (v0.1.1)
+# 完整配置项与说明见 docs/configuration.md
+#
+# 最小可启动示例：
+#   export OPENAI_API_KEY=sk-...
+#   z-safety-gateway --config config/gateway.yaml
 
 server:
   host: "0.0.0.0"
   port: 8080
+  workers: 1
+  stop_timeout: "30s"
 
 providers:
   - name: "openai"
@@ -11,15 +17,17 @@ providers:
     base_url: "https://api.openai.com/v1"
     api_key: "${OPENAI_API_KEY}"
 
-  - name: "local_llama"
-    type: "openai_compatible"
-    base_url: "http://localhost:11434/v1"
+  # openai_compatible 示例（如本地 Ollama: http://localhost:11434/v1）：
+  # - name: "local_llama"
+  #   type: "openai_compatible"
+  #   base_url: "http://localhost:11434/v1"
 
-  - name: "azure"
-    type: "azure_openai"
-    base_url: "https://my-resource.openai.azure.com"
-    api_key: "${AZURE_API_KEY}"
-    api_version: "2024-06-01"
+  # Azure OpenAI 示例（需 export AZURE_API_KEY）：
+  # - name: "azure"
+  #   type: "azure_openai"
+  #   base_url: "https://my-resource.openai.azure.com"
+  #   api_key: "${AZURE_API_KEY}"
+  #   api_version: "2024-06-01"
 
 routing:
   rules:
@@ -27,23 +35,27 @@ routing:
       provider: "openai"
     - pattern: "gpt-3.5*"
       provider: "openai"
-    - pattern: "llama*"
-      provider: "local_llama"
-    - pattern: "azure-*"
-      provider: "azure"
 
 pipeline:
   mode: "sync"
-  detectors: []
+  execution_mode: "parallel"
+  detectors:
+    input:
+      - name: "prompt_injection"
+        enabled: true
+      - name: "pii_redaction"
+        enabled: true
+    output: []
 
 security:
   timeout:
-    upstream: 120
-
-audit:
-  enabled: false
-  sanitize_logs: true
+    upstream: "120s"
+    detector: "5s"
 
 observability:
-  metrics_enabled: false
-  tracing_enabled: false
+  metrics:
+    enabled: true
+
+logging:
+  level: "INFO"
+  format: "json"

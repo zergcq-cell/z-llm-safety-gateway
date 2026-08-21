@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""STDD CLI 入口文件 — 委托到 stdd/cli/ 包。"""
+import sys
+from pathlib import Path
+
+STDD_SOURCE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(STDD_SOURCE))
+
+import stdd.cli.utils as utils
+utils.STDD_SOURCE = STDD_SOURCE
+
+from stdd.cli import main
+main()

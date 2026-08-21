@@ -17,12 +17,14 @@
 
 ## Checklist
 
-- [ ] I have run `ruff check src/ tests/ sdk/src/` with no errors
-- [ ] I have run `mypy src/` with no errors
-- [ ] I have run `pytest tests/ -q` and all tests pass
+- [ ] I have run the full Ruff command from `CONTRIBUTING.md` with no errors
+- [ ] I have run `mypy src/ sdk/src tools/` with no errors
+- [ ] I have run the 90% coverage command from `CONTRIBUTING.md`
+- [ ] I followed the project's STDD and RED → GREEN → REFACTOR workflow for code changes
 - [ ] I have added/updated tests for my changes (behavior changes)
 - [ ] I have updated documentation if user-facing behavior changed
 - [ ] No new third-party runtime dependencies (unless discussed)
+- [ ] I did not include secrets or undisclosed vulnerability details
 
 ## Testing
 

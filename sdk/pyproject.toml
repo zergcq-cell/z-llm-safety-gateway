@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "z-llm-safety-gateway-sdk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Detector SDK for z LLM Safety Gateway — build third-party content safety detectors"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 authors = [
     { name = "z LLM Safety Gateway Contributors" },
 ]

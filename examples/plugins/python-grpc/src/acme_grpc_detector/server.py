@@ -25,7 +25,9 @@ The server applies a simple keyword policy: block messages containing
 from __future__ import annotations
 
 import argparse
+import hmac
 import logging
+import os
 from concurrent import futures
 from typing import Any
 
@@ -45,13 +47,26 @@ REDACT_KEYWORD = "internal-ref"
 class AcmeGuardService(detector_pb2_grpc.DetectorServiceServicer):
     """DetectorService v1 implementation with a keyword policy."""
 
-    def __init__(self) -> None:
+    def __init__(self, expected_api_key: str | None = None) -> None:
         self._sensitivity: str = "medium"
         self._ready = True  # serving = process alive, before Initialize
+        self._expected_api_key = (
+            expected_api_key
+            if expected_api_key is not None
+            else os.getenv("DETECTOR_API_KEY")
+        )
 
     # -- lifecycle ------------------------------------------------------ #
     def Initialize(self, request: detector_pb2.InitializeRequest, context: Any) -> detector_pb2.InitializeResponse:
         """Load passthrough config from the gateway."""
+        supplied_api_key = request.config.get("api_key", "")
+        if self._expected_api_key is not None and not hmac.compare_digest(
+            supplied_api_key, self._expected_api_key
+        ):
+            return detector_pb2.InitializeResponse(
+                success=False,
+                error_message="invalid api_key",
+            )
         self._sensitivity = request.config.get("sensitivity", "medium")
         logger.info("initialized with sensitivity=%s", self._sensitivity)
         return detector_pb2.InitializeResponse(

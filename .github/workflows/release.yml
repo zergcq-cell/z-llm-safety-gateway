@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to validate without publishing"
+        required: true
+        default: "0.1.1"
+        type: string
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate version and release notes
+        env:
+          RELEASE_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+        run: python tools/release_checks.py verify --version "$RELEASE_VERSION"
+
+      - name: Build distributions (gateway + SDK)
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build --outdir dist
+          python -m build --outdir dist sdk
+          python -m twine check dist/*
+
+      - name: Clean-install all CLI entry points
+        run: |
+          python -m venv release-smoke
+          release-smoke/bin/python -m pip install dist/*.whl
+          release-smoke/bin/z-safety-gateway --help
+          release-smoke/bin/zlg --help
+          release-smoke/bin/zlg-sdk --help
+
+      - name: Upload verified distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/*
+          if-no-files-found: error
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit resolved production dependencies
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          python -m venv audit-env
+          audit-env/bin/python -m pip install . ./sdk
+          audit-env/bin/python -m pip freeze \
+            | grep -Ev '^(z-llm-safety-gateway|pip==|setuptools==)' \
+            > audit-requirements.txt
+          test -s audit-requirements.txt
+          python -m pip_audit --no-deps --disable-pip -r audit-requirements.txt
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [quality, build, audit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+
+      - name: Extract deterministic release notes
+        run: python tools/release_checks.py notes --version "$GITHUB_REF_NAME" --output release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "z LLM Safety Gateway $GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag

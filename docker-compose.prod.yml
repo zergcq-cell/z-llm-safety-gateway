@@ -6,7 +6,7 @@
 #   - deploy.replicas >= 2 (multi-replica)
 #   - deploy.resources.limits (CPU/memory limits)
 #   - healthcheck with start_period for warm-up
-#   - example gRPC sidecar service (replace with your own detector image)
+#   - runnable gRPC sidecar example (replace with your own detector in production)
 #
 # NOTE: deploy.replicas is honored by Docker Swarm; on plain Compose,
 # use --scale gateway=N to scale out.
@@ -16,15 +16,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: z-safety-gateway:0.1.0
+    image: z-safety-gateway:0.1.1
     ports:
-      - "8080:8080"
+      - "8080-8081:8080"
     volumes:
-      - ./config/gateway.yaml:/app/config/gateway.yaml:ro
-      - gateway-logs:/app/logs
+      - ./config/gateway.prod.yaml:/app/config/gateway.yaml:ro
+      - gateway-logs:/var/log/safety-gateway
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY must be set}
       - AZURE_API_KEY=${AZURE_API_KEY:-}
+      - ACME_API_KEY=${ACME_API_KEY:?ACME_API_KEY must be set}
       - LOG_LEVEL=INFO
     deploy:
       replicas: 2
@@ -45,19 +46,23 @@ services:
       start_period: 10s
       retries: 3
     depends_on:
-      - acme-guard
+      acme-guard:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - gateway-net
 
-  # Example gRPC sidecar detector (replace image with your real detector).
+  # Runnable example gRPC sidecar detector; replace it with your real detector.
   # See docs/grpc-integration.md for the DetectorService v1 contract.
   acme-guard:
-    image: acme/detector:1.0.0   # REPLACE: your sidecar detector image
+    build:
+      context: .
+      dockerfile: examples/plugins/python-grpc/Dockerfile
+    image: z-safety-acme-example:1.0.0
     expose:
       - "50051"
     environment:
-      - DETECTOR_API_KEY=${ACME_API_KEY:-sk-acme}
+      - DETECTOR_API_KEY=${ACME_API_KEY:?ACME_API_KEY must be set}
     deploy:
       resources:
         limits:

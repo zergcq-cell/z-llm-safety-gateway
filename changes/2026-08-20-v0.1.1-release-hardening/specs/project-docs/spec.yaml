@@ -1,0 +1,36 @@
+meta:
+  capability: "project-docs"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  created: "2026-08-20T22:38:45+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DOCS-005
+    description: "版本与 Python 支持口径在项目文档和元数据中一致"
+    scenarios:
+      - id: SC-DOCS-005
+        confidence: high
+        evidence: "proposal.yaml C4/C7; design.md D5/D6"
+        given: "AGENTS、README、pyproject、SDK 元数据、CHANGELOG 与用户文档"
+        when: "扫描版本号和 Python 支持声明"
+        then: "发布状态 SHALL 为 v0.1.1，最低 Python SHALL 为 3.10，推荐版本 SHALL 为 3.12"
+        and: ["SDK 0.1.1 SHALL 标注为本次协调发布且未来独立演进"]
+  - id: REQ-DOCS-006
+    description: "Quick Start 可在干净环境按文档执行"
+    scenarios:
+      - id: SC-DOCS-006
+        confidence: high
+        evidence: "proposal.yaml C5/C6; PLAN_v0.1.1 2.1"
+        given: "无项目安装状态的干净虚拟环境"
+        when: "按 README 执行源码安装、最小配置、启动和 health 请求"
+        then: "所有本地步骤 SHALL 成功且命令与实际入口一致"
+        and: ["文档 SHALL 明确当前未发布到 PyPI"]
+  - id: REQ-DOCS-007
+    description: "文档导航与安全/贡献/反馈链接完整"
+    scenarios:
+      - id: SC-DOCS-007
+        confidence: high
+        evidence: "proposal.yaml C6"
+        given: "仓库内 Markdown 文档"
+        when: "解析所有相对链接"
+        then: "本地链接 SHALL 全部指向存在的文件或锚点"
+        and: ["README SHALL 链接 SECURITY、CONTRIBUTING、CODE_OF_CONDUCT 和 Issue 反馈入口"]

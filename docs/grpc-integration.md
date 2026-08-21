@@ -1,6 +1,6 @@
 # gRPC 对接指南（gRPC Integration Guide）
 
-> 适用版本：v0.5.0
+> 适用版本：v0.1.1
 > 合约：`proto/detector/v1/detector.proto`
 > 示例：`examples/plugins/python-grpc/`、`examples/plugins/go-grpc/`
 
@@ -99,7 +99,10 @@ pipeline:
 
 ## 4. TLS
 
-启用双向信任：`tls_enabled: true` + `tls_ca_file` 指向 sidecar CA 证书。网关用 `grpc.ssl_channel_credentials(root_certificates=CA)` 建立 secure channel。未配置 CA 时使用系统默认根证书。
+启用单向 TLS 服务端认证：`tls_enabled: true` + `tls_ca_file` 指向 sidecar CA
+证书。网关用 `grpc.ssl_channel_credentials(root_certificates=CA)` 验证 sidecar
+服务端证书；未配置 CA 时使用系统默认根证书。v0.1.1 不发送客户端证书，因而
+不提供 mTLS；需要双向认证时应在服务网格或反向代理层终止 mTLS。
 
 ```yaml
 config:
@@ -138,7 +141,7 @@ grpcurl -plaintext -d '{}' localhost:50051 z_llm_safety_gateway.detector.v1.Dete
 | 启动报 `not serving` | sidecar 未启动或 HealthCheck 返回非 serving | 确认进程存活；HealthCheck 初始应返回 serving |
 | 初始化失败 ERROR 日志 | Initialize 返回 success=false | 检查透传配置合法性 |
 | Detect 超时 | 检测耗时 > 配置超时 | 调大 `timeout`，或优化检测逻辑 |
-| `grpcio` 未安装 | 未装可选依赖 | `pip install z-llm-safety-gateway[grpc]` |
+| `grpcio` 未安装 | 未装可选依赖 | 在仓库根目录执行 `pip install -e ".[grpc]"` |
 | 生成代码 import 报错 | protobuf 7.x well-known type | 重新生成后需补 `from google.protobuf import struct_pb2`（见示例 gen_proto.sh 后处理） |
 
 ## 7. 版本与兼容

@@ -12,14 +12,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import grpc
 import pytest
+from z_llm_safety_gateway.models import DetectionContext
+from z_llm_safety_gateway.plugins.grpc.client import GRPCDetector
 
 from acme_grpc_detector.detector.v1 import (
     detector_pb2,
     detector_pb2_grpc,
 )
 from acme_grpc_detector.server import AcmeGuardService
-from z_llm_safety_gateway.models import DetectionContext
-from z_llm_safety_gateway.plugins.grpc.client import GRPCDetector
 
 
 @pytest.fixture
@@ -92,3 +92,18 @@ def test_grpc_sidecar_health_serving(sidecar_port: int) -> None:
         channel.close()
 
     asyncio.run(_run())
+
+
+def test_initialize_rejects_mismatched_api_key() -> None:
+    """The production example enforces its configured initialization secret."""
+    service = AcmeGuardService(expected_api_key="sk-expected")
+    bad = service.Initialize(
+        detector_pb2.InitializeRequest(config={"api_key": "sk-wrong"}), None
+    )
+    assert bad.success is False
+    assert bad.error_message == "invalid api_key"
+
+    good = service.Initialize(
+        detector_pb2.InitializeRequest(config={"api_key": "sk-expected"}), None
+    )
+    assert good.success is True

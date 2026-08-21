@@ -11,6 +11,9 @@ build/
 .venv/
 venv/
 
+# Local Python env workaround (shadows TRAE sitecustomize.py)
+.sitefix/
+
 # IDE
 .vscode/
 .idea/

@@ -1,6 +1,6 @@
 # 商业插件指南（Commercial Plugin Guide）
 
-> 适用版本：v0.5.0
+> 适用版本：v0.1.1
 > 许可证：网关与 SDK 均为 Apache License 2.0
 
 本指南面向希望通过第三方检测器商业化的团队：如何基于 SDK / gRPC 合约构建、打包、授权并销售检测器插件。
@@ -30,7 +30,9 @@
 [project]
 name = "acme-detector"
 version = "1.0.0"
-dependencies = ["z-llm-safety-gateway-sdk>=1.0,<2.0"]
+dependencies = [
+  "z-llm-safety-gateway-sdk @ https://github.com/zergcq-cell/z-llm-safety-gateway/releases/download/v0.1.1/z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl"
+]
 
 [project.entry-points."z_llm_safety_gateway.detectors"]
 acme_detector = "acme_detector.detector:AcmeDetector"
@@ -66,7 +68,8 @@ services:
 ## 4. 认证与密钥
 
 - **API key**：网关 `config.api_key` 透传给 `InitializeRequest.config`，sidecar 内校验并锁定
-- **mTLS**（推荐，v1.1 路线图）：`tls_enabled: true` + `tls_ca_file`，双向证书
+- **TLS**：v0.1.1 的 `tls_enabled` + `tls_ca_file` 仅验证 sidecar 服务端证书；
+  双向 mTLS 仍在路线图中，当前请由服务网格或反向代理提供
 - **许可证 key**：建议在 `config` 中透传 license key，`Initialize` 时校验；无效返回 `success=false`，网关记录 ERROR 并停止使用该检测器
 
 ## 5. 计量与计费（建议）

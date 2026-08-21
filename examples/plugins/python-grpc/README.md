@@ -11,6 +11,7 @@ language.
 - blocks content containing `secret-project`
 - redacts content containing `internal-ref`
 - reads `sensitivity` from the gateway's passthrough config
+- validates the passthrough `api_key` against the sidecar's `DETECTOR_API_KEY`
 
 ## Files
 

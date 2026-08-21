@@ -1,0 +1,11 @@
+# agent_spec.yaml — 验证规格（config-system）
+meta:
+  task_id: "config-system"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "DetectorConfig required 字段与跨字段校验"
+  preconditions: ["GatewayConfig 可从字典构建"]
+steps:
+  - {id: CP-CFG-601, description: "required 默认、显式值与提取正确", action: ".venv/bin/pytest tests/unit/config/test_detector_required.py::test_required_default_explicit_values_and_extraction -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-CFG-602, description: "required+fail_open 非法", action: ".venv/bin/pytest tests/unit/config/test_detector_required.py::test_required_fail_open_is_rejected -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-CFG-603, description: "required+disabled 非法", action: ".venv/bin/pytest tests/unit/config/test_detector_required.py::test_required_disabled_is_rejected -q", assertions: [{type: exit_code, expected: 0}]}

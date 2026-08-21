@@ -1,0 +1,24 @@
+# agent_spec.yaml — 验证规格（detector-lifecycle-status）
+meta:
+  task_id: "detector-lifecycle-status"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "DetectorStatusRegistry 与状态转换"
+  preconditions: ["应用可构造隔离的状态注册表"]
+steps:
+  - id: CP-DLS-001
+    description: "同名检测器按方向隔离"
+    action: ".venv/bin/pytest tests/unit/detectors/test_status_registry.py::test_registry_same_name_different_direction_remains_distinct -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-DLS-002
+    description: "成功初始化状态转换"
+    action: ".venv/bin/pytest tests/unit/detectors/test_status_registry.py::test_registry_successful_initialization_emits_only_state_changes -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-DLS-003
+    description: "初始化失败进入 unavailable 且脱敏"
+    action: ".venv/bin/pytest tests/unit/test_detector_initialization.py::test_configured_factory_failure_registers_unavailable_without_sentinel -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-DLS-004
+    description: "健康失败与恢复"
+    action: ".venv/bin/pytest tests/unit/detectors/test_status_registry.py::test_registry_loaded_detector_can_become_unhealthy_and_recover -q"
+    assertions: [{type: exit_code, expected: 0}]

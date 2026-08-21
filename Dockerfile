@@ -14,7 +14,7 @@ COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
 # Install dependencies into a target directory
-RUN pip install --no-cache-dir --target=/install .
+RUN pip install --no-cache-dir --target=/install ".[grpc]"
 
 # --- Stage 2: Runtime ---
 FROM python:3.10-slim

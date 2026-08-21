@@ -1,0 +1,12 @@
+meta:
+  task_id: "production-deployment"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: configuration
+  system: "Docker Compose 静态与运行验证"
+  preconditions: ["测试密钥仅使用占位值"]
+steps:
+  - {id: CP-DEPL-004, description: "两个 Compose config", action: "OPENAI_API_KEY=sk-test docker compose config && OPENAI_API_KEY=sk-test ACME_API_KEY=sk-acme-test docker compose -f docker-compose.prod.yml config", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DEPL-005, description: "生产不变量", action: ".venv/bin/pytest tests/unit/release/test_deployment_contract.py -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-DEPL-006, description: "运行健康冒烟", action: "run bounded docker compose smoke and cleanup", assertions: [{type: http_status, url: "http://127.0.0.1:8080/health", expected: 200}]}
+rollback:
+  steps: ["使用 docker compose down 正常停止本次冒烟创建的资源"]

@@ -1,0 +1,12 @@
+# agent_spec.yaml — 验证规格（audit-logger）
+meta:
+  task_id: "audit-logger"
+  change_id: "2026-08-19-detector-readiness-fail-safe"
+  task_type: code
+  system: "Detector 生命周期与降级请求审计"
+  preconditions: ["内存审计 sink 与结构化日志捕获器可用"]
+steps:
+  - {id: CP-AUDIT-601, description: "生命周期事件 schema 与去重", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_lifecycle_event_schema_and_state_change_deduplication -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-AUDIT-602, description: "fatal startup flush 且审计关闭时有日志", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_fatal_startup_persists_lifecycle_to_real_file_sink tests/unit/audit/test_detector_availability_audit.py::test_fatal_startup_with_audit_disabled_keeps_sanitized_structured_log -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-AUDIT-603, description: "fail-open 请求 availability 完整", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_fail_open_request_audit_contains_availability tests/unit/audit/test_detector_availability_audit.py::test_request_audit_availability_order_is_stable -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-AUDIT-604, description: "审计原因脱敏低基数", action: ".venv/bin/pytest tests/unit/audit/test_detector_availability_audit.py::test_real_initialization_exception_is_sanitized_in_all_signals -q", assertions: [{type: exit_code, expected: 0}]}

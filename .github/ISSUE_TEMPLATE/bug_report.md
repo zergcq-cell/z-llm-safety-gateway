@@ -16,7 +16,7 @@ Steps to reproduce the behavior:
 3. Expected vs actual response
 
 **Environment**
-- Version: (e.g. v1.0.0)
+- Version: (e.g. v0.1.1)
 - Python version:
 - OS:
 - Deployment: (local / docker)

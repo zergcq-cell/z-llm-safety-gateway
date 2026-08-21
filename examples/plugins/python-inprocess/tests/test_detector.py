@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from acme_keyword_detector.detector import AcmeKeywordDetector
 from z_llm_safety_gateway_sdk.testing import (
     assert_allowed,

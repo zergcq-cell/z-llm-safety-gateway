@@ -1,0 +1,73 @@
+# Production Compose example for z LLM Safety Gateway v0.1.1.
+# Replace the example acme-guard implementation and credentials before real deployment.
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  workers: 1
+  stop_timeout: "30s"
+
+providers:
+  - name: "openai"
+    type: "openai"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+
+routing:
+  rules:
+    - pattern: "gpt-4*"
+      provider: "openai"
+    - pattern: "gpt-3.5*"
+      provider: "openai"
+
+pipeline:
+  mode: "sync"
+  execution_mode: "parallel"
+  detectors:
+    input:
+      - name: "prompt_injection"
+        enabled: true
+        required: true
+        on_error: "fail_closed"
+      - name: "pii_redaction"
+        enabled: true
+        required: true
+        on_error: "fail_closed"
+      - name: "acme_guard"
+        type: "grpc"
+        enabled: true
+        required: false
+        on_error: "fail_open"
+        config:
+          endpoint: "acme-guard:50051"
+          api_key: "${ACME_API_KEY}"
+        circuit_breaker:
+          enabled: true
+          failure_threshold: 5
+          recovery_timeout: "30s"
+          fallback_action: "fail_open"
+    output: []
+
+security:
+  timeout:
+    upstream: "120s"
+    detector: "5s"
+
+observability:
+  metrics:
+    enabled: true
+
+audit:
+  enabled: true
+  sanitize_logs: true
+  store_content: false
+  file:
+    enabled: true
+    path: "/var/log/safety-gateway"
+    rotation: "daily"
+    retention_days: 90
+  stdout: true
+
+logging:
+  level: "INFO"
+  format: "json"

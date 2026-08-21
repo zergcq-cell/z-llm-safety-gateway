@@ -1,0 +1,13 @@
+meta:
+  task_id: "github-setup"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: configuration
+  system: "GitHub Actions 与 Dependabot"
+  preconditions: ["workflow YAML 可解析"]
+steps:
+  - {id: CP-GH-004, description: "三版本矩阵", action: ".venv/bin/pytest tests/unit/release/test_ci_contract.py::test_ci_covers_all_supported_python_versions -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-GH-005, description: "质量范围与门槛", action: ".venv/bin/pytest tests/unit/release/test_ci_contract.py::test_ci_quality_commands_cover_owned_code tests/unit/release/test_ci_contract.py::test_stdd_quality_commands_match_release_gate -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-GH-006, description: "Dependabot 三范围", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_dependabot_covers_both_packages_and_actions -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-GH-007, description: "远程 checks", action: "verify GitHub checks for v0.1.1 commit", assertions: [{type: http_status, url: "https://github.com/zergcq-cell/z-llm-safety-gateway/actions", expected: 200}]}
+rollback:
+  steps: ["回退 workflow 配置但保留测试报告和失败证据"]

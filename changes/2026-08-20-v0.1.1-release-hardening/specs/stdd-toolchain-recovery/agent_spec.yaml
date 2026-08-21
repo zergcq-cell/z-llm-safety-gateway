@@ -1,0 +1,33 @@
+meta:
+  task_id: "stdd-toolchain-recovery"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: code
+  system: "Vendored STDD CLI、canonical、structure 与 experience backfill"
+  preconditions: ["官方固定提交已审查", "archive readiness change 存在"]
+steps:
+  - id: CP-STDD-001
+    description: "来源与许可证"
+    action: ".venv/bin/pytest tests/unit/stdd/test_cli_recovery.py::test_upstream_provenance -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-002
+    description: "文件完整性"
+    action: ".venv/bin/pytest tests/unit/stdd/test_cli_recovery.py::test_vendored_manifest_matches_upstream -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-003
+    description: "CLI 离线冒烟"
+    action: ".venv/bin/pytest tests/unit/stdd/test_cli_recovery.py::test_help_and_status -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-004
+    description: "Canonical 补录"
+    action: ".venv/bin/pytest tests/unit/stdd/test_backfill.py::test_canonical_backfill_preserves_archive -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-005
+    description: "结构索引幂等补录"
+    action: ".venv/bin/pytest tests/unit/stdd/test_backfill.py::test_structure_backfill_is_idempotent -q"
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-006
+    description: "经验真实生命周期"
+    action: ".venv/bin/pytest tests/unit/stdd/test_backfill.py::test_experience_backfill_respects_lifecycle -q"
+    assertions: [{type: exit_code, expected: 0}]
+rollback:
+  steps: ["移除本 change 新增的 vendored CLI 与派生索引，保留既有 archive"]

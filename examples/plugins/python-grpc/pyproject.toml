@@ -10,11 +10,14 @@ requires-python = ">=3.10"
 dependencies = [
     "grpcio>=1.60",
     "protobuf>=4.25",
-    "z-llm-safety-gateway-sdk>=1.0,<2.0",
+    "z-llm-safety-gateway-sdk @ https://github.com/zergcq-cell/z-llm-safety-gateway/releases/download/v0.1.1/z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/acme_grpc_detector"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -15,45 +15,39 @@ Open-source, modular LLM content safety gateway that acts as a transparent proxy
 
 ## Quick Start
 
+The v0.1.1 packages are not yet published to PyPI. Install from the repository source. Python
+3.10–3.12 is supported; Python 3.12 is recommended for a new environment.
+
 ```bash
-# 1. Install
-pip install z-llm-safety-gateway
+# 1. Clone and create an isolated environment
+git clone https://github.com/zergcq-cell/z-llm-safety-gateway.git
+cd z-llm-safety-gateway
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e .
 
-# 2. Configure (see docs/configuration.md for all options)
-cat > config/gateway.yaml <<'YAML'
-server:
-  host: 0.0.0.0
-  port: 8080
-providers:
-  - name: openai
-    type: openai
-    base_url: https://api.openai.com/v1
-    api_key: ${OPENAI_API_KEY}
-routing:
-  rules:
-    - pattern: gpt-4*
-      provider: openai
-pipeline:
-  detectors:
-    input:
-      - name: prompt_injection
-        enabled: true
-YAML
-
-# 3. Run
+# 2. Run the checked-in minimal configuration
+export OPENAI_API_KEY=sk-replace-with-a-real-provider-key
 z-safety-gateway --config config/gateway.yaml
-
-# 4. Smoke test
-curl http://localhost:8080/health
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Or with Docker:
+In another terminal:
 
 ```bash
-docker compose up -d
+# 3. Verify process liveness and detector readiness
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+```
+
+`/health` should return `{"status":"healthy"}` and `/ready` should return status `ready`.
+Sending a chat request requires a valid provider key. See
+[Getting Started](docs/getting-started.md) for the first request and detector checks.
+
+Docker alternative:
+
+```bash
+OPENAI_API_KEY=sk-replace-with-a-real-provider-key docker compose up -d --build
 ```
 
 ## Documentation
@@ -68,6 +62,14 @@ docker compose up -d
 | [gRPC Integration](docs/grpc-integration.md) | Sidecar contract, lifecycle, TLS, debugging |
 | [Commercial Plugins](docs/commercial-plugin.md) | License, packaging, monetization |
 
+## Community and Security
+
+- Read [Contributing](CONTRIBUTING.md) before opening a pull request.
+- Follow the [Code of Conduct](CODE_OF_CONDUCT.md) in all project spaces.
+- Report vulnerabilities privately under the [Security Policy](SECURITY.md).
+- Use the [issue chooser](https://github.com/zergcq-cell/z-llm-safety-gateway/issues/new/choose)
+  for bug reports and feature requests that contain no sensitive security details.
+
 ## CLI Tools
 
 ```bash
@@ -79,7 +81,11 @@ zlg-sdk new my-detector --type python     # scaffold a detector project
 
 ## Project Status
 
-v0.1.0 — first public test release. See [DESIGN.md](DESIGN.md) for architecture and roadmap.
+Current source version: **v0.1.1**, a public-test patch release. See
+[DESIGN.md](DESIGN.md) for architecture and roadmap.
+
+Supported Python versions: **3.10–3.12**; **3.12 is recommended** for releases and new
+development environments.
 
 **Versioning policy** (SemVer): `v0.0.x` = internal development · `v0.x.y` = public test releases · `v1.0.0` = general availability (when the API is stable and validated).
 

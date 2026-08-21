@@ -1,0 +1,33 @@
+meta:
+  capability: "detector-sdk"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  created: "2026-08-20T22:38:45+08:00"
+  confidence: high
+requirements:
+  - id: REQ-SDK-007
+    description: "SDK 参与严格质量门禁并保持版本一致"
+    scenarios:
+      - id: SC-SDK-007
+        confidence: high
+        evidence: "proposal.yaml C3; design.md D4"
+        given: "sdk/src 与 SDK 单元测试"
+        when: "执行 mypy strict、Ruff 和 SDK tests"
+        then: "全部检查 SHALL 退出码为 0"
+        and: ["SDK CLI main SHALL 返回明确 int 而非 Any"]
+      - id: SC-SDK-008
+        confidence: high
+        evidence: "proposal.yaml C7; design.md D6"
+        given: "SDK pyproject、模块 __version__ 和发布测试"
+        when: "准备本次协调补丁发布"
+        then: "三个位置 SHALL 一致为 0.1.1"
+        and: ["文档 SHALL 保留 SDK 独立版本语义"]
+  - id: REQ-SDK-008
+    description: "SDK 可独立构建、安装和运行"
+    scenarios:
+      - id: SC-SDK-009
+        confidence: high
+        evidence: "proposal.yaml success_criteria 5; design.md D6/D7"
+        given: "SDK wheel 与不含 gateway 包的干净环境"
+        when: "安装 wheel 并运行 zlg-sdk --help"
+        then: "安装和入口 SHALL 成功"
+        and: ["SDK 核心导入 SHALL 不依赖 FastAPI、httpx 或 gateway 包"]

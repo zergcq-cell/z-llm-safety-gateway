@@ -1,6 +1,6 @@
 # Detector 开发指南（Plugin Development Guide）
 
-> 适用版本：v0.5.0（Plugin Ecosystem）
+> 适用版本：v0.1.1（Plugin Ecosystem）
 > 配套：`examples/plugins/python-inprocess/`（in-process 示例）、`examples/plugins/python-grpc/`（gRPC 示例）
 
 本指南说明如何为 z LLM Safety Gateway 开发第三方检测器。两种模式：
@@ -18,7 +18,8 @@
 ### 1.1 用 SDK 脚手架生成项目
 
 ```bash
-pip install z-llm-safety-gateway-sdk
+git clone https://github.com/zergcq-cell/z-llm-safety-gateway.git
+pip install -e ./z-llm-safety-gateway/sdk
 zlg-sdk new my-detector --type python
 cd my-detector
 ```
@@ -152,4 +153,6 @@ gRPC 插件测试：参考 `examples/plugins/python-grpc/tests/test_server.py`�
 - **错误处理**：抛异常会被网关捕获并按 `on_error` 策略处理（fail_open/fail_closed/fail_fixed）；建议返回 `action="flag"` + 低置信度而不是抛异常
 - **日志**：gRPC 插件建议结构化日志（JSON），便于与网关日志关联（request_id）
 - **安全**：in-process 插件与网关同权限，只安装可信包；sidecar 建议独立账号 + 最小权限 + TLS（见 grpc-integration.md）
-- **版本**：SDK 采用 `major.minor` 兼容约定，插件声明 `z-llm-safety-gateway-sdk>=1.0,<2.0` 即可
+- **版本**：当前 SDK 尚未发布到 PyPI。发布型插件可直接依赖 v0.1.1
+  GitHub Release 中的 SDK wheel；本地开发可使用上面的源码安装方式。未来发布到
+  包索引后再采用常规版本范围。
