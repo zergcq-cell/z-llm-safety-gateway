@@ -17,7 +17,7 @@
 | 源码覆盖率 | 92.85%（门槛 90%） |
 | Ruff | passed |
 | Mypy strict | 88 source files，0 issues |
-| 计划 TC | 28 passed / 3 remote pending / 31 total |
+| 计划 TC | 30 passed / 1 release pending / 31 total |
 | 构建产物 | gateway + SDK，各 1 wheel + 1 sdist |
 | Twine metadata | 4/4 passed |
 | 依赖审计 | No known vulnerabilities found |
@@ -45,8 +45,8 @@ Phase 5 结果：904 passed / 1 skipped，92.85%。Gate 3 后新增 1 个 CI 构
 | Python | 状态 | 说明 |
 |--------|------|------|
 | 3.10 | PASS | 本地完整 pytest/coverage/Ruff/Mypy/build/Docker |
-| 3.11 | PENDING REMOTE | 本机无解释器；Gate 3 后由 CI matrix 验证 |
-| 3.12 | PENDING REMOTE | 本机无解释器；Gate 3 后由 CI matrix 验证，build/release job 使用 3.12 |
+| 3.11 | PASS REMOTE | CI run `32443959381` quality job 通过 |
+| 3.12 | PASS REMOTE | CI run `32443959381` quality job 通过；隔离容器四产物构建通过 |
 
 包元数据已收紧为 `>=3.10,<3.13`，与支持矩阵一致。
 
@@ -123,17 +123,25 @@ vendored v2.9.5 Verify 正文定义 a-k 11 类，但入口宣称 12 类。本 ch
 
 | TC | 远程动作 | 当前状态 |
 |----|----------|----------|
-| TC-GOV-003 | 启用 private vulnerability reporting；创建 `dependencies` label；创建 v0.1.1/v0.2.0 milestones | PENDING |
-| TC-GH-004 | push 后验证 Python 3.10/3.11/3.12 quality、build、audit | PENDING |
+| TC-GOV-003 | 启用 private vulnerability reporting；创建 `dependencies` label；创建 v0.1.1/v0.2.0 milestones | PASS |
+| TC-GH-004 | push 后验证 Python 3.10/3.11/3.12 quality、build、audit | PASS（run `32443959381`） |
 | TC-REL-007 | 创建并 push `v0.1.1` tag；验证 GitHub Release 和四个产物 | PENDING |
 
-这些动作具有外部可见或难撤回状态，严格保留到用户明确确认 Gate 3 后。
+Gate 3 确认后，TC-GOV-003 与 TC-GH-004 已完成；TC-REL-007 保持 PENDING，直至不可变 tag 与 Release 四产物实际验证完成。
 
 ### 8.1 Gate 3 后首次远程 CI 反馈
 
 提交 `c299164` 已成功 push；Dependabot 的 root pip、SDK pip、GitHub Actions 三项更新扫描均成功。CI run `32442183506` 在 Python 3.12 的 pytest 步骤失败并触发 fail-fast，公开检查显示 Ruff/Mypy 已通过。
 
-隔离 Python 3.12 容器按 CI 命令复现为 902 passed / 1 skipped / 2 setup errors：发布契约使用 `build --no-isolation`，而全新环境仅安装了 build frontend、没有 Hatchling backend。严格 RED→GREEN 后，dev extra 增加 `hatchling>=1.25.0`，新增契约先失败再通过；相关测试 3/3、全量本地 905/1、全新 3.12 容器 gateway/SDK 四产物构建全部通过。TC-GH-004 仍保持 PENDING，直至修复提交的远程三版本矩阵全绿。
+隔离 Python 3.12 容器按 CI 命令复现为 902 passed / 1 skipped / 2 setup errors：发布契约使用 `build --no-isolation`，而全新环境仅安装了 build frontend、没有 Hatchling backend。严格 RED→GREEN 后，dev extra 增加 `hatchling>=1.25.0`，新增契约先失败再通过；相关测试 3/3、全量本地 905/1、全新 3.12 容器 gateway/SDK 四产物构建全部通过。修复提交 `4464e26` 的 CI run `32443959381` 随后在 Python 3.10/3.11/3.12 全绿，TC-GH-004 完成。
+
+### 8.2 GitHub 治理闭环
+
+2026-08-22 使用维护者 OAuth 身份 `zergcq-cell` 完成并只读复核：private vulnerability reporting=`true`；`dependencies` 标签颜色 `0366d6`、描述 “Dependency updates”；`v0.2.0` (#1) 与 `v0.1.1` (#2) milestones 均为 open。TC-GOV-003 完成。
+
+### 8.3 STDD 合并与归档
+
+Change 级 canonical proposal 通过 DC-HASH/DC-FIELD 2/2；8 组 code spec 与 8 组 agent spec 已合并到项目 canonical，索引已更新。代码结构 delta 已合并；8 个 Human View capability spec 已新增到 `specs/`。经验扫描没有发现本 change 的 `deposited` 条目，按规则不执行 share。Change 已移动到 `archive/2026-08-20-v0.1.1-release-hardening`，归档后完整回归仍为 905 passed / 1 skipped、coverage 92.85%，Ruff/Mypy 通过。
 
 ## 9. Gate 3 建议
 

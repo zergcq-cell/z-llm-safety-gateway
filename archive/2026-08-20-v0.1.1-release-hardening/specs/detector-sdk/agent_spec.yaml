@@ -1,0 +1,12 @@
+meta:
+  task_id: "detector-sdk"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: code
+  system: "Detector SDK 类型、版本和独立分发"
+  preconditions: ["SDK 现有测试可运行"]
+steps:
+  - {id: CP-SDK-007, description: "严格质量", action: ".venv/bin/mypy sdk/src && .venv/bin/ruff check sdk/src tests/unit/sdk", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-SDK-008, description: "版本一致", action: ".venv/bin/pytest tests/unit/sdk/test_sdk_package.py::test_sdk_has_independent_version -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-SDK-009, description: "独立构建安装", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_sdk_independent_install -q", assertions: [{type: exit_code, expected: 0}]}
+rollback:
+  steps: ["回退 SDK 代码和版本，但不得发布相同版本的不同内容"]

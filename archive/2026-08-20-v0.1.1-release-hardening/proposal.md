@@ -1,5 +1,8 @@
 # v0.1.1 发布后加固与交付闭环
 
+<!-- source_hash: 4b278739d2556f6c -->
+<!-- canonical: canonical/proposals/2026-08-20-v0.1.1-release-hardening.yaml -->
+
 ## Why
 
 v0.1.0 的功能与自动化测试已达到公开测试版水平，但 STDD CLI 缺失导致交付校验不完整，CI 未覆盖示例测试与 SDK 严格类型检查，版本支持口径、构建、依赖安全、容器部署、发布自动化和开源治理仍缺少完整验证证据。

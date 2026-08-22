@@ -1,10 +1,24 @@
+changes:
+- 2026-08-19-detector-readiness-fail-safe
 meta:
-  last_updated: '2026-08-20T15:15:38.145843+00:00'
-  total_changes: 1
+  last_updated: '2026-08-22T20:44:19.757520'
+  total_changes: 2
 modules:
+  .github/dependabot.yml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  .github/workflows/ci.yml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  .github/workflows/release.yml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   DESIGN.md:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  Dockerfile:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   archive/2026-08-19-detector-readiness-fail-safe/.stdd.yaml:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -119,12 +133,36 @@ modules:
   archive/2026-08-19-detector-readiness-fail-safe/test-report.md:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  bin/stdd:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  config/gateway.prod.yaml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  docker-compose.prod.yml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   docs/api-spec.md:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
   docs/configuration.md:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  examples/plugins/python-grpc/Dockerfile:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  examples/plugins/python-grpc/src/acme_grpc_detector/server.py:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  pyproject.toml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  sdk/pyproject.toml:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  sdk/src/z_llm_safety_gateway_sdk/cli.py:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   specs/audit-logger/spec.md:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -179,6 +217,9 @@ modules:
   specs/required-detector-policy/spec.yaml:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/__init__.py:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   src/z_llm_safety_gateway/app.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -218,6 +259,9 @@ modules:
   src/z_llm_safety_gateway/routes/health.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  stdd/cli/:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   tests/integration/test_health_headers.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -239,6 +283,9 @@ modules:
   tests/unit/plugins/grpc/test_client.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/release/:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   tests/unit/routes/test_availability_guard.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -248,11 +295,21 @@ modules:
   tests/unit/routes/test_health.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/stdd/:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
   tests/unit/test_detector_initialization.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
   tests/unit/test_startup_policy.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
-changes:
-- 2026-08-19-detector-readiness-fail-safe
+  tools/benchmark_report.py:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  tools/release_checks.py:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening
+  tools/stdd_backfill.py:
+    changes:
+    - 2026-08-20-v0.1.1-release-hardening

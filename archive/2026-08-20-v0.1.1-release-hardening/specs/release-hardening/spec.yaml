@@ -1,0 +1,65 @@
+meta:
+  capability: "release-hardening"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  created: "2026-08-20T22:38:45+08:00"
+  confidence: high
+requirements:
+  - id: REQ-REL-001
+    description: "v0.1.1 版本与分发产物一致且可安装"
+    scenarios:
+      - id: SC-REL-001
+        confidence: high
+        evidence: "proposal.yaml C7; design.md D6"
+        given: "gateway 与 SDK 的包元数据、模块版本和 CHANGELOG"
+        when: "准备 v0.1.1 发布"
+        then: "gateway 与 SDK 本次发布版本 SHALL 均为 0.1.1"
+        and: ["CHANGELOG SHALL 包含非空 0.1.1 条目", "SDK 文档 SHALL 说明未来独立版本语义"]
+      - id: SC-REL-002
+        confidence: high
+        evidence: "proposal.yaml success_criteria 5; design.md D7"
+        given: "Python 3.12 构建环境"
+        when: "分别构建 gateway 与 SDK"
+        then: "构建 SHALL 生成两个 wheel 与两个 sdist"
+        and: ["全部产物 SHALL 通过 metadata 检查"]
+      - id: SC-REL-003
+        confidence: high
+        evidence: "proposal.yaml success_criteria 5"
+        given: "新建的干净虚拟环境与已构建 wheel"
+        when: "安装 gateway/SDK 并运行 z-safety-gateway、zlg、zlg-sdk --help"
+        then: "安装与三个入口 SHALL 全部退出码为 0"
+  - id: REQ-REL-002
+    description: "生产依赖无未处置的已知漏洞"
+    scenarios:
+      - id: SC-REL-004
+        confidence: high
+        evidence: "proposal.yaml C5; design.md D9"
+        given: "gateway 与 SDK 的已解析生产依赖"
+        when: "执行 pip-audit"
+        then: "审计 SHALL 不报告未豁免漏洞"
+        and: ["任何豁免 SHALL 记录漏洞 ID、理由、影响和到期日"]
+  - id: REQ-REL-003
+    description: "Release workflow 可安全 dry-run 且发布说明可确定性提取"
+    scenarios:
+      - id: SC-REL-005
+        confidence: high
+        evidence: "proposal.yaml C5; design.md D7/D8"
+        given: "workflow_dispatch dry-run 输入"
+        when: "执行 Release workflow"
+        then: "workflow SHALL 构建并验证四个产物"
+        and: ["dry-run SHALL NOT 创建 tag 或 GitHub Release"]
+      - id: SC-REL-006
+        confidence: high
+        evidence: "proposal.yaml success_criteria 8"
+        given: "CHANGELOG 中相邻版本章节"
+        when: "提取 0.1.1 发布说明"
+        then: "输出 SHALL 仅包含 0.1.1 内容且非空"
+  - id: REQ-REL-004
+    description: "Gate 3 后由不可变 tag 驱动公开发布"
+    scenarios:
+      - id: SC-REL-007
+        confidence: low
+        evidence: "proposal.yaml C7; design.md D8"
+        given: "Gate 3 已明确批准、main 已推送且 GitHub 身份可用"
+        when: "创建并推送 v0.1.1 tag"
+        then: "远程 CI SHALL 全绿且 GitHub Release SHALL 创建成功"
+        and: ["Release SHALL 附带 gateway/SDK 的 wheel 与 sdist", "发布 tag SHALL 指向经验证提交"]

@@ -1,0 +1,36 @@
+meta:
+  capability: "production-deployment"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  created: "2026-08-20T22:38:45+08:00"
+  confidence: medium
+requirements:
+  - id: REQ-DEPL-004
+    description: "开发与生产 Compose 都通过 Docker 原生静态校验"
+    scenarios:
+      - id: SC-DEPL-004
+        confidence: high
+        evidence: "proposal.yaml C5; design.md D10"
+        given: "docker-compose.yml、docker-compose.prod.yml 与测试环境变量"
+        when: "分别执行 docker compose config"
+        then: "两个配置 SHALL 退出码为 0"
+        and: ["解析结果 SHALL 不包含未替换的必需变量"]
+  - id: REQ-DEPL-005
+    description: "生产 Compose 保留容量、安全与 sidecar 不变量"
+    scenarios:
+      - id: SC-DEPL-005
+        confidence: medium
+        evidence: "existing production-deployment spec; design.md D10"
+        given: "解析后的 docker-compose.prod.yml"
+        when: "检查 gateway 与 sidecar 服务"
+        then: "gateway SHALL 配置多副本、资源限制、restart 与 healthcheck"
+        and: ["sidecar SHALL 有关联配置、健康检查和资源限制"]
+  - id: REQ-DEPL-006
+    description: "Docker 可用时执行真实健康冒烟，不可用时明确降级"
+    scenarios:
+      - id: SC-DEPL-006
+        confidence: low
+        evidence: "proposal.yaml constraints; design.md D10"
+        given: "可访问的 Docker daemon、所需镜像和测试配置"
+        when: "启动最小 gateway 实例并请求 /health 与 /ready"
+        then: "容器与 /health SHALL healthy，/ready SHALL 符合测试配置预期"
+        and: ["验证后 SHALL 正常停止资源", "daemon 不可用时 SHALL 记录环境限制且不得标记运行冒烟 PASS"]

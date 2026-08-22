@@ -1,0 +1,41 @@
+meta:
+  capability: "github-setup"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  created: "2026-08-20T22:38:45+08:00"
+  confidence: high
+requirements:
+  - id: REQ-GH-004
+    description: "CI 在 Python 3.10、3.11、3.12 上验证项目"
+    scenarios:
+      - id: SC-GH-004
+        confidence: high
+        evidence: "proposal.yaml C4; design.md D5/D7"
+        given: ".github/workflows/ci.yml"
+        when: "解析 quality matrix"
+        then: "矩阵 SHALL 精确包含 Python 3.10、3.11、3.12"
+        and: ["发布构建 SHALL 使用 Python 3.12"]
+  - id: REQ-GH-005
+    description: "CI 覆盖全部项目拥有的 Python 代码并执行 90% 覆盖率门槛"
+    scenarios:
+      - id: SC-GH-005
+        confidence: high
+        evidence: "proposal.yaml C3/C4; design.md D4/D7"
+        given: "网关、SDK、测试和两个示例插件"
+        when: "执行 CI 等价 Ruff、Mypy 和 pytest"
+        then: "Ruff SHALL 包含两个示例插件 tests，Mypy SHALL 包含 sdk/src"
+        and: ["pytest 源代码覆盖率 SHALL 不低于 90%", "所有命令 SHALL exit 0"]
+  - id: REQ-GH-006
+    description: "依赖更新与远程 CI 状态可验证"
+    scenarios:
+      - id: SC-GH-006
+        confidence: high
+        evidence: "proposal.yaml C5"
+        given: ".github/dependabot.yml"
+        when: "解析 updates 配置"
+        then: "Dependabot SHALL 覆盖 root pip、sdk pip 与 GitHub Actions"
+      - id: SC-GH-007
+        confidence: high
+        evidence: "proposal.yaml success_criteria 4/11"
+        given: "v0.1.1 提交已推送到 GitHub"
+        when: "读取该提交的 Actions checks"
+        then: "三个 Python quality job、build 与 audit SHALL 全部成功"

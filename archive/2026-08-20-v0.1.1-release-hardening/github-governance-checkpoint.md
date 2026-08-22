@@ -23,3 +23,15 @@ Gate 3 approval.
 
 GitHub Discussions remains optional for v0.1.1. The issue chooser provides the documented bug
 and feature feedback path; security and conduct incidents use private reporting.
+
+## Completion Evidence (2026-08-22)
+
+- GitHub OAuth identity: `zergcq-cell`, official CLI with `repo` scope.
+- Private vulnerability reporting: enabled and re-read as `true`.
+- `dependencies` label: created with color `0366d6` and description “Dependency updates”.
+- Milestones: `v0.2.0` (#1, open) and `v0.1.1` (#2, open).
+- CI retry run `32443959381`: Python 3.10, 3.11, and 3.12 jobs all completed successfully
+  for commit `4464e26420423cbf83d4189c09bad1786c49f004`.
+
+TC-GOV-003 and TC-GH-004 are complete. TC-REL-007 remains pending until the immutable
+`v0.1.1` tag drives the release workflow and its four assets are verified.

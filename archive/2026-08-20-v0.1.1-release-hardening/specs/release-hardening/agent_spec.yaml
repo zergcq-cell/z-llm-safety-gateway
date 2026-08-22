@@ -1,0 +1,16 @@
+meta:
+  task_id: "release-hardening"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: code
+  system: "版本、构建、依赖审计、dry-run 与 GitHub Release"
+  preconditions: ["Gate 3 前禁止公开发布"]
+steps:
+  - {id: CP-REL-001, description: "版本一致", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_release_versions_and_changelog_are_consistent -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-REL-002, description: "四个产物", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_build_produces_four_valid_distribution_artifacts -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-REL-003, description: "干净安装", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_sdk_independent_install tests/unit/release/test_release_contract.py::test_release_workflow_has_safe_dry_run_and_tag_only_publish -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-REL-004, description: "依赖审计", action: ".venv/bin/pip-audit", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-REL-005, description: "安全 dry-run", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_release_workflow_has_safe_dry_run_and_tag_only_publish -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-REL-006, description: "发布说明", action: ".venv/bin/pytest tests/unit/release/test_release_contract.py::test_release_notes_extraction_stops_at_adjacent_version -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-REL-007, description: "远程发布", action: "verify GitHub Actions and release v0.1.1", assertions: [{type: http_status, url: "https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.1.1", expected: 200}]}
+rollback:
+  steps: ["Gate 3 前仅删除临时构建产物；公开 tag 不重写，发布问题以新补丁修复"]

@@ -41,13 +41,13 @@
 - [x] 5.2 新增 SECURITY.md 与 CODE_OF_CONDUCT.md
 - [x] 5.3 校对 CONTRIBUTING、Issue/PR 模板与 README 入口
 - [x] 5.4 统一 Python/版本/配置文档并实测 Quick Start
-- [ ] 5.5 验证或创建 GitHub labels 与 v0.1.1/v0.2.0 milestones（已只读验证；Gate 3 后写远程）
-- [ ] 5.6 通过 TC-GOV-001～003、TC-DOCS-001～003（本地 6/6；TC-GOV-003 远程部分待 Gate 3）
+- [x] 5.5 验证或创建 GitHub labels 与 v0.1.1/v0.2.0 milestones
+- [x] 5.6 通过 TC-GOV-001～003、TC-DOCS-001～003
 
 ## 6. Verify + Deliver Checkpoint（P0）
 
 - [x] 6.1 全量 pytest/cov、Ruff、Mypy、构建、audit、Compose、benchmark
-- [ ] 6.2 执行多版本/远程可验证项并记录环境证据（本地 3.10 完成；3.11/3.12 与远程 CI 待 Gate 3）
+- [x] 6.2 执行多版本/远程可验证项并记录环境证据（CI run 32443959381 三版本全绿）
 - [x] 6.3 完成 diff review、L3 锚定和 12 类失败模式检查
 - [x] 6.4 生成 test-report 与 design-adjustments，进入 Gate 3
 - [ ] 6.5 Gate 3 后提交、push、创建 v0.1.1 tag 并验证 CI/Release

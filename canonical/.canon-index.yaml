@@ -12,3 +12,15 @@ changes:
     - prometheus-metrics
     - required-detector-policy
     verified: true
+  2026-08-20-v0.1.1-release-hardening:
+    proposal: canonical/proposals/2026-08-20-v0.1.1-release-hardening.yaml
+    capabilities:
+    - detector-sdk
+    - github-setup
+    - open-source-governance
+    - performance-benchmark
+    - production-deployment
+    - project-docs
+    - release-hardening
+    - stdd-toolchain-recovery
+    verified: true

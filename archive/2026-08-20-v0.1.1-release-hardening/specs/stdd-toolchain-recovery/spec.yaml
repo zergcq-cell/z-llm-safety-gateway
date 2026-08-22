@@ -1,0 +1,57 @@
+meta:
+  capability: "stdd-toolchain-recovery"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  created: "2026-08-20T22:38:45+08:00"
+  confidence: high
+requirements:
+  - id: REQ-STDD-001
+    description: "项目离线提供来源可验证且兼容 2.9.x 的 STDD CLI"
+    scenarios:
+      - id: SC-STDD-001
+        confidence: high
+        evidence: "proposal.yaml C1; design.md D1"
+        given: "STDD 官方 v2.9.5 tag 与固定提交 fd9df3104d3588eb145cc84ec551c1803e783c9e"
+        when: "检查 vendored CLI 的 provenance、许可证与来源"
+        then: "项目 SHALL 记录官方 URL、tag、完整 commit 和 MIT 许可证"
+        and: ["恢复过程 SHALL NOT 执行未经审查的远程脚本"]
+      - id: SC-STDD-002
+        confidence: high
+        evidence: "proposal.yaml constraints; design.md D1/D4"
+        given: "固定提交中的 bin/stdd 与 stdd Python 包"
+        when: "比较 vendored 文件清单和内容哈希"
+        then: "未声明为项目 overlay 的文件 SHALL 与固定提交一致"
+        and: ["项目 overlay SHALL 单独列出并接受项目测试"]
+      - id: SC-STDD-003
+        confidence: high
+        evidence: "proposal.yaml success_criteria 1"
+        given: "恢复后的离线仓库和当前 active change"
+        when: "执行 python bin/stdd --help 和 python bin/stdd status"
+        then: "两个命令 SHALL 退出码为 0"
+        and: ["status SHALL 识别当前 change 且不得依赖网络"]
+  - id: REQ-STDD-002
+    description: "上一安全关键 change 的 canonical 与结构索引步骤可确定性补录"
+    scenarios:
+      - id: SC-STDD-004
+        confidence: medium
+        evidence: "proposal.yaml C2; design.md D2"
+        given: "已归档 readiness change 及其 proposal/spec canonical YAML"
+        when: "在临时兼容工作区运行 canon verify 并合并项目 canonical 索引"
+        then: "DC-HASH 与 DC-FIELD SHALL 通过"
+        and: ["archive 原文件 SHALL 不被移动或重写", "项目 canonical 索引 SHALL 引用该 change 的 9 个 capability"]
+      - id: SC-STDD-005
+        confidence: high
+        evidence: "proposal.yaml C2; design.md D2"
+        given: "提交 33437bd 的真实 Git diff"
+        when: "生成 code-structure delta 并执行 structure merge"
+        then: "结构索引 SHALL 包含该提交实际修改的项目模块"
+        and: ["重复执行 SHALL 不产生重复 change 或模块记录"]
+  - id: REQ-STDD-003
+    description: "上一 change 发现的经验进入真实本地生命周期"
+    scenarios:
+      - id: SC-STDD-006
+        confidence: high
+        evidence: "readiness test-report.md section 9; design.md D3"
+        given: "请求级过滤、健康日志脱敏、取消时资源释放三个经验模式"
+        when: "使用 CLI add/list/stats 初始化并查询经验库"
+        then: "三个条目 SHALL 可按 Python/安全网关标签查询"
+        and: ["未满足 occurrence/confidence 阈值的条目 SHALL NOT 被伪造为 deposited 或 shared"]

@@ -1,0 +1,12 @@
+meta:
+  task_id: "open-source-governance"
+  change_id: "2026-08-20-v0.1.1-release-hardening"
+  task_type: documentation
+  system: "安全披露、行为准则与 GitHub 协作治理"
+  preconditions: ["远程状态写入仅在 Gate 3 后"]
+steps:
+  - {id: CP-GOV-001, description: "安全政策", action: ".venv/bin/pytest tests/unit/release/test_governance_contract.py::test_security_policy_defines_private_coordinated_disclosure -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-GOV-002, description: "行为准则", action: ".venv/bin/pytest tests/unit/release/test_governance_contract.py::test_code_of_conduct_is_complete_and_enforceable -q", assertions: [{type: exit_code, expected: 0}]}
+  - {id: CP-GOV-003, description: "贡献与本地入口", action: ".venv/bin/pytest tests/unit/release/test_governance_contract.py::test_contribution_and_feedback_entry_points_are_consistent -q", assertions: [{type: exit_code, expected: 0}]}
+rollback:
+  steps: ["治理文件可在后续提交修订；已公开的社区规则保留历史"]
