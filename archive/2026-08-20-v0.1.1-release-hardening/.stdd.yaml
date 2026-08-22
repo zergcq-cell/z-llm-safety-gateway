@@ -1,5 +1,5 @@
-active_phase: deliver
-active_slice: S6
+active_phase: null
+active_slice: null
 anchoring:
   level: L3
   rationale: 发布、供应链、CI、构建和远程 GitHub Release 的跨系统交付变更
@@ -31,7 +31,7 @@ critical:
   rationale: 错误交付可能产生假绿门禁、不可信构建或错误公开版本
   required_anchoring_level: L3
   safety_critical: false
-current_phase: deliver
+current_phase: completed
 gates:
   gate1_understand: approved
   gate2_spec: approved
@@ -48,8 +48,8 @@ mode_selection: completed
 pattern: thorough
 phase:
   build: completed
-  current: deliver
-  deliver: in_progress
+  current: completed
+  deliver: completed
   slice: completed
   spec: completed
   understand: completed
@@ -168,6 +168,17 @@ phase6:
     private_vulnerability_reporting: enabled
   initial_push_at: '2026-08-21T11:06:00+08:00'
   release_candidate_commit: c2991645e6315a95a0357c16edc7c3ed66e49d86
+  release:
+    completed_at: '2026-08-22T20:54:18+08:00'
+    tag: v0.1.1
+    tag_commit: 3c2af392efd2e003f7e38a6372321c4a2dd9eb32
+    workflow_run: 32574093293
+    workflow_status: passed
+    quality: 3.10/3.11/3.12 all passed
+    build: passed
+    audit: passed
+    github_release: https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.1.1
+    assets: 4/4 uploaded, downloaded, Twine passed, SHA-256 matched
   remote_ci_initial:
     dependabot_updates: 3/3 succeeded
     failing_job: test (3.12)
@@ -179,14 +190,16 @@ phase6:
     python_matrix: 3.10/3.11/3.12 all passed
     run_id: 32443959381
     status: passed
-  status: in_progress
-  tc_status: 30 passed; TC-REL-007 release pending
+  status: completed
+  completed_at: '2026-08-22T20:54:18+08:00'
+  tc_status: 31/31 passed
 phases:
   build:
     status: completed
   deliver:
+    completed_at: '2026-08-22T20:54:18+08:00'
     started_at: '2026-08-21T11:04:01+08:00'
-    status: in_progress
+    status: completed
   slice:
     status: completed
   spec:

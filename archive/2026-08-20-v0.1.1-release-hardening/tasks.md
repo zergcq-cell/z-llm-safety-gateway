@@ -50,4 +50,4 @@
 - [x] 6.2 执行多版本/远程可验证项并记录环境证据（CI run 32443959381 三版本全绿）
 - [x] 6.3 完成 diff review、L3 锚定和 12 类失败模式检查
 - [x] 6.4 生成 test-report 与 design-adjustments，进入 Gate 3
-- [ ] 6.5 Gate 3 后提交、push、创建 v0.1.1 tag 并验证 CI/Release
+- [x] 6.5 Gate 3 后提交、push、创建 v0.1.1 tag 并验证 CI/Release（run 32574093293，四资产通过）

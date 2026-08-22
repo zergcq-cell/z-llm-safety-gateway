@@ -17,7 +17,7 @@
 | 源码覆盖率 | 92.85%（门槛 90%） |
 | Ruff | passed |
 | Mypy strict | 88 source files，0 issues |
-| 计划 TC | 30 passed / 1 release pending / 31 total |
+| 计划 TC | 31 passed / 0 pending / 31 total |
 | 构建产物 | gateway + SDK，各 1 wheel + 1 sdist |
 | Twine metadata | 4/4 passed |
 | 依赖审计 | No known vulnerabilities found |
@@ -119,15 +119,15 @@ vendored v2.9.5 Verify 正文定义 a-k 11 类，但入口宣称 12 类。本 ch
 
 四条均 occurrences=1、lifecycle=discovered。未伪造 occurrence，未执行 verify/deposit/share。
 
-## 8. Gate 3 后待完成
+## 8. Gate 3 后远程验证
 
 | TC | 远程动作 | 当前状态 |
 |----|----------|----------|
 | TC-GOV-003 | 启用 private vulnerability reporting；创建 `dependencies` label；创建 v0.1.1/v0.2.0 milestones | PASS |
 | TC-GH-004 | push 后验证 Python 3.10/3.11/3.12 quality、build、audit | PASS（run `32443959381`） |
-| TC-REL-007 | 创建并 push `v0.1.1` tag；验证 GitHub Release 和四个产物 | PENDING |
+| TC-REL-007 | 创建并 push `v0.1.1` tag；验证 GitHub Release 和四个产物 | PASS（run `32574093293`） |
 
-Gate 3 确认后，TC-GOV-003 与 TC-GH-004 已完成；TC-REL-007 保持 PENDING，直至不可变 tag 与 Release 四产物实际验证完成。
+Gate 3 确认后，TC-GOV-003、TC-GH-004 与 TC-REL-007 均已完成；31/31 计划 TC 全部通过。
 
 ### 8.1 Gate 3 后首次远程 CI 反馈
 
@@ -143,6 +143,17 @@ Gate 3 确认后，TC-GOV-003 与 TC-GH-004 已完成；TC-REL-007 保持 PENDIN
 
 Change 级 canonical proposal 通过 DC-HASH/DC-FIELD 2/2；8 组 code spec 与 8 组 agent spec 已合并到项目 canonical，索引已更新。代码结构 delta 已合并；8 个 Human View capability spec 已新增到 `specs/`。经验扫描没有发现本 change 的 `deposited` 条目，按规则不执行 share。Change 已移动到 `archive/2026-08-20-v0.1.1-release-hardening`，归档后完整回归仍为 905 passed / 1 skipped、coverage 92.85%，Ruff/Mypy 通过。
 
+### 8.4 v0.1.1 Release 完成证据
+
+标签前 main CI run `32573981160` 在 Python 3.10/3.11/3.12 全绿。Annotated tag `v0.1.1` 远程解引用到 `3c2af392efd2e003f7e38a6372321c4a2dd9eb32`；Release run `32574093293` 的 audit、build、三版本 quality 与 release jobs 全部成功。公开 Release 为非草稿、非预发布：<https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.1.1>。
+
+四个上传资产均成功下载并通过 Twine；本地 SHA-256 与 GitHub digest 一致：
+
+- `z_llm_safety_gateway-0.1.1-py3-none-any.whl` — `06bccec5aa57db2f5b2ac7b4119c59c1c4811b24696de9191e3dd2fb160b320c`
+- `z_llm_safety_gateway-0.1.1.tar.gz` — `ff01e68e23aa49e0d4d10672efe97e44658f3c3dbf17775483d42dd14bc47524`
+- `z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl` — `43884ee5ee4ce9f1509cb60c67ad30e3f66a0370b76dfbda924306453daec015`
+- `z_llm_safety_gateway_sdk-0.1.1.tar.gz` — `841aac52cc1014f782705cedf52a51b92e8e2b80bce4a82214cc57d455952f08`
+
 ## 9. Gate 3 建议
 
-Gate 3 已由用户于 2026-08-21 11:04 +08:00 明确确认，Phase 6 Deliver 已启动。按顺序执行：本地提交 → push main → 远程治理补齐 → 验证 CI → 创建并 push tag → 验证 Release 四产物 → 归档 change。
+Gate 3 已由用户于 2026-08-21 11:04 +08:00 明确确认。Phase 6 Deliver 已完成：提交/push、远程治理、三版本 CI、canonical/spec/structure 合并、归档、`v0.1.1` tag、Release workflow 与四产物验证全部闭环。
