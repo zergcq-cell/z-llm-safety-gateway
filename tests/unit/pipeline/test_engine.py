@@ -499,7 +499,7 @@ class TestErrorHandling:
         )
         assert det_a_result.action == "allow"
         assert det_a_result.error is not None
-        assert "boom" in det_a_result.error
+        assert det_a_result.error == "capability_error"
 
     async def test_fail_open_other_detectors_unaffected(self) -> None:
         """fail_open: other detectors continue and are not affected."""
@@ -535,7 +535,7 @@ class TestErrorHandling:
         )
         assert det_a_result.action == "block"
         assert det_a_result.error is not None
-        assert "boom" in det_a_result.error
+        assert det_a_result.error == "capability_error"
 
         # det_b should have been short-circuited (fail_closed → block)
         assert not detectors[1].completed
@@ -552,7 +552,7 @@ class TestErrorHandling:
         result = await engine.run(detectors, [_context()], configs)
 
         det_a_result = result.detector_results[0]
-        assert det_a_result.error == "bad value"
+        assert det_a_result.error == "capability_error"
 
     async def test_fail_open_error_result_has_duration(self) -> None:
         """Error results include duration_ms."""
@@ -599,7 +599,7 @@ class TestTimeoutHandling:
         )
         assert det_a_result.action == "allow"
         assert det_a_result.error is not None
-        assert "timed out" in det_a_result.error.lower()
+        assert det_a_result.error == "node_timeout"
 
     async def test_timeout_fail_closed(self) -> None:
         """Timeout with fail_closed → block."""
@@ -618,7 +618,7 @@ class TestTimeoutHandling:
         det_a_result = result.detector_results[0]
         assert det_a_result.action == "block"
         assert det_a_result.error is not None
-        assert "timed out" in det_a_result.error.lower()
+        assert det_a_result.error == "node_timeout"
 
     async def test_timeout_duration_recorded(self) -> None:
         """Timeout result includes duration_ms reflecting wait time."""
@@ -803,7 +803,11 @@ class TestCircuitBreakerIntegration:
         assert result.final_action == "allow"
         assert len(result.detector_results) == 1
         assert result.detector_results[0].action == "allow"
-        assert result.detector_results[0].error is not None
+        assert result.detector_results[0].error == "circuit_open"
+        assert result.flow_evidence is not None
+        assert result.flow_evidence.nodes[0].status.value == "skipped"
+        assert result.flow_evidence.nodes[0].reason_code == "circuit_open"
+        assert result.flow_evidence.nodes[0].degraded is True
 
     async def test_open_breaker_fail_closed_blocks(self) -> None:
         """Open breaker with fail_closed → block."""

@@ -1,0 +1,86 @@
+meta:
+  capability: "node-evidence-chain"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-NEC-001
+    description: "每个 Flow 和 Node 产生版本化、确定排序的核心证据"
+    scenarios:
+      - id: SC-NEC-001
+        confidence: high
+        evidence: "proposal C5/C9; success_criteria 9/10; principle 4"
+        given: "任意 Node 执行并产生安全结果"
+        when: "Runtime 完成或中止 Flow"
+        then: "NodeEvidence SHALL 包含 Flow/Node/Capability 身份与版本、策略、状态、reason、耗时和结果摘要"
+        and:
+          - "FlowEvidence SHALL 包含 execution_id、stage、终态和 final signal"
+          - "核心字段 SHALL 不依赖插件任意 details"
+      - id: SC-NEC-002
+        confidence: high
+        evidence: "proposal C2/C5; design D2/D10"
+        given: "并发 Node 和嵌套 Flow 以非确定顺序完成"
+        when: "证据链被序列化"
+        then: "证据 SHALL 按定义顺序确定输出"
+        and:
+          - "子 Flow 证据 SHALL 引用 parent_execution_id"
+          - "相同输入与配置 SHALL 产生相同结构顺序"
+  - id: REQ-NEC-002
+    description: "全部终态、部分执行与降级都有可辨识证据"
+    scenarios:
+      - id: SC-NEC-003
+        confidence: high
+        evidence: "proposal C5; success_criteria 8/10"
+        given: "Node 分别成功、异常、超时、跳过、取消，或部分 item 完成后取消"
+        when: "构建 NodeEvidence"
+        then: "status SHALL 分别为 succeeded、failed、timed_out、skipped、cancelled 或 partial"
+        and:
+          - "degraded SHALL 为独立布尔语义"
+          - "每个非成功状态 SHALL 有稳定 reason_code"
+          - "调用总数和各终态计数 SHALL 可核对"
+  - id: REQ-NEC-003
+    description: "证据默认最小化、脱敏且有硬大小边界"
+    scenarios:
+      - id: SC-NEC-004
+        confidence: high
+        evidence: "proposal constraints; success_criteria 11; EXP-2026-0002"
+        given: "内容、modified_content、Detector details/message、密钥、endpoint 和含秘密异常"
+        when: "生成并持久化证据"
+        then: "外部证据 SHALL NOT 包含任何上述原值"
+        and:
+          - "异常 SHALL 映射为稳定 reason_code"
+          - "内容仅允许现有 content_hash/length 独立字段"
+          - "指标与 span SHALL NOT 包含原始动态文本"
+      - id: SC-NEC-005
+        confidence: medium
+        evidence: "proposal success_criteria 11/12; design D5/D10"
+        given: "可选 evidence_summary 或 signals 超过字段/总量限制"
+        when: "证据收集器施加 256KB 上界"
+        then: "核心 NodeEvidence SHALL 被保留，可选摘要 SHALL 被有信号地截断或拒绝"
+        and:
+          - "details_truncated SHALL 为 true"
+          - "evidence_rejected reason SHALL 可观测"
+          - "Runtime SHALL NOT 静默删除整个 NodeEvidence"
+  - id: REQ-NEC-004
+    description: "流式聚合与证据持久化失败均显式可见"
+    scenarios:
+      - id: SC-NEC-006
+        confidence: medium
+        evidence: "proposal C7/C9; streaming audit anchor; design D11"
+        given: "滑动窗口产生多次 output Flow 执行"
+        when: "运行时产证并由审计层持久化"
+        then: "每次执行 SHALL 先产生 NodeEvidence，默认审计 SHALL 按稳定维度有界聚合"
+        and:
+          - "聚合 SHALL 保留计数、滚动摘要和触发窗口索引"
+          - "post-audit SHALL 作为独立完整 FlowEvidence"
+          - "聚合 SHALL NOT 改变 SSE 行为"
+      - id: SC-NEC-007
+        confidence: medium
+        evidence: "proposal C9; audit nonblocking anchor; principle 2/4"
+        given: "Flow 决策完成但 evidence sink 写入失败"
+        when: "持久化证据"
+        then: "安全决定 SHALL 保持不变且 FlowEvidence SHALL 标记 evidence_persisted=false"
+        and:
+          - "系统 SHALL 记录稳定 warning 和 metric"
+          - "失败 SHALL NOT 被报告为持久化成功"
+          - "内存中的核心证据 SHALL 仍返回调用方"

@@ -1,0 +1,66 @@
+meta:
+  capability: "audit-logger"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-AUD-701
+    description: "审计记录以加法字段关联 Flow 与 Node 证据"
+    scenarios:
+      - id: SC-AUD-701
+        confidence: high
+        evidence: "proposal C9; success_criteria 9/10; design D10/D11"
+        given: "一次 input 或 output Flow 完成"
+        when: "构造 AuditEntry"
+        then: "审计 SHALL 增加 flow_id、flow_version、flow_execution_id、flow_status 和 node_evidence"
+        and:
+          - "现有 request/detector/final_action 字段 SHALL 保持"
+          - "node_evidence 顺序 SHALL 确定"
+          - "schema 扩展 SHALL 为加法兼容"
+      - id: SC-AUD-702
+        confidence: high
+        evidence: "proposal C4/C5/C9; degraded anchors"
+        given: "Flow 出现 fail_open、fail_closed、stop、timeout、skip 或 cancellation"
+        when: "审计结果"
+        then: "审计 SHALL 记录实际策略、稳定 reason、degraded 与 evidence_persisted 状态"
+        and:
+          - "fail-open allow SHALL NOT 伪装成完整安全执行"
+          - "fail-closed admission SHALL 在 Provider 前留下证据"
+          - "cancelled Node SHALL 可与未配置 Node 区分"
+  - id: REQ-AUD-702
+    description: "审计证据与内容存储策略分离并默认保护数据"
+    scenarios:
+      - id: SC-AUD-703
+        confidence: high
+        evidence: "proposal constraints; success_criteria 11; principle 4"
+        given: "audit.store_content 分别为 false/true，输入含秘密、PII、modified_content 与恶意 exception"
+        when: "写 JSONL/stdout 审计"
+        then: "node_evidence SHALL 始终不含原文、修改后内容、密钥、endpoint 或原始异常"
+        and:
+          - "store_content=false SHALL 维持无 plaintext"
+          - "store_content=true SHALL 仅在既有 content 字段按 sanitizer 存储"
+          - "reason_code SHALL 为稳定枚举"
+  - id: REQ-AUD-703
+    description: "流式证据和 sink 故障采用显式有界持久化"
+    scenarios:
+      - id: SC-AUD-704
+        confidence: medium
+        evidence: "proposal C7/C9; streaming audit anchors; design D11"
+        given: "长 streaming response 产生多个 window FlowEvidence"
+        when: "StreamingEvidenceAccumulator 写最终审计"
+        then: "审计 SHALL 按 flow/node/action/reason 有界聚合并记录执行计数与触发窗口"
+        and:
+          - "默认 SHALL NOT 展开全部 allow window"
+          - "post_audit SHALL 单独保存完整摘要"
+          - "聚合大小 SHALL 受 256KB 总证据预算约束"
+      - id: SC-AUD-705
+        confidence: medium
+        evidence: "proposal C9; existing audit nonblocking behavior; design D11"
+        given: "file/stdout evidence sink 抛出异常"
+        when: "AuditLogger.record 被调用"
+        then: "业务安全结果 SHALL 不变且持久化失败 SHALL 显式可观测"
+        and:
+          - "FlowEvidence SHALL 标记 evidence_persisted=false"
+          - "warning SHALL 使用稳定 error_type"
+          - "Prometheus failure counter SHALL 增加"
+          - "AuditLogger SHALL NOT 抛出原始 sink exception"

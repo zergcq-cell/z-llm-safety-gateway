@@ -1,0 +1,35 @@
+meta:
+  task_id: "observability"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway observability"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-OBS-701 Prometheus 提供有界 Flow 与 Node 指标且禁用时零影响"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/observability/test_flow_observability.py::test_tc_obs_701"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-OBS-702 Prometheus 提供有界 Flow 与 Node 指标且禁用时零影响"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/observability/test_flow_observability.py::test_tc_obs_702"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-OBS-703 Tracing 保留 Flow、Node 与嵌套调用关系且不记录内容"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/observability/test_flow_observability.py::test_tc_obs_703"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-OBS-704 所有可观测标签与属性受到显式基数和隐私约束"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/observability/test_flow_observability.py::test_tc_obs_704"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

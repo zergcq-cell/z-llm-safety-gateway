@@ -1,0 +1,365 @@
+active_phase: null
+active_slice: null
+anchoring:
+  level: L3
+  rationale: 安全关键的核心执行契约、失败策略、兼容边界与逐节点证据链变更
+  reference_changes:
+  - 2026-08-11-v0.0.2-pipeline-detectors
+  - 2026-08-14-v0.0.5-plugin-ecosystem
+  - 2026-08-19-detector-readiness-fail-safe
+  - 2026-08-20-v0.1.1-release-hardening
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  canonical_code_specs: canonical/specs/code
+  design_adjustments_md: design-adjustments.md
+  design_adjustments_yaml: design-adjustments.yaml
+  design_md: design.md
+  human_specs: specs
+  phase_context_md: phase-context.md
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-22-v0.2.0-flow-foundation.yaml
+  slices_md: slices.md
+  tasks_md: tasks.md
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+change_id: 2026-08-22-v0.2.0-flow-foundation
+complexity: H
+complexity_score: 17
+confirmed_at:
+  gate1_understand: '2026-08-22T21:43:28+08:00'
+  gate2_spec: '2026-08-22T22:19:04+08:00'
+  gate3_verify: '2026-08-23T07:50:50+08:00'
+critical:
+  cross_system: true
+  financial: false
+  is_critical: true
+  rationale: 错误实现可能改变安全决策、静默降级、泄漏敏感证据或破坏公共兼容契约
+  required_anchoring_level: L3
+  safety_critical: true
+current_phase: completed
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+long_range:
+  authorization: 全自动长程模式，确认全部授权
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  max_iterations: 10
+  mode: full_auto
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-22T22:22:25+08:00'
+mode: thorough
+mode_selection: completed
+pattern: thorough
+phase:
+  build: completed
+  current: completed
+  deliver: completed
+  slice: completed
+  spec: completed
+  understand: completed
+  verify: completed
+phase2:
+  canonical_tracks:
+    agent: 12
+    code: 12
+  capabilities: 12
+  completed_at: '2026-08-22T22:19:04+08:00'
+  confidence:
+    high: 46
+    low: 0
+    medium: 15
+  principle_check: completed
+  priority:
+    P0: 54
+    P1: 6
+    P2: 1
+  requirements: 38
+  scenarios: 61
+  test_cases: 61
+phase3:
+  cli_dependency_cycles: 0
+  cli_dependency_edges: 0
+  completed_at: '2026-08-22T22:27:23+08:00'
+  execution_order:
+  - S1
+  - S2
+  - S3
+  - S4
+  - S5
+  - S6
+  - S7
+  - S8
+  - S9
+  - S10
+  - S11
+  - S12
+  - S13
+  - S14
+  manual_dependency_cycles: 0
+  requirements: 38
+  slices: 14
+  test_cases: 61
+phase4:
+  baseline:
+    mypy: 84 source files, 0 issues
+    pytest: 899 passed, 1 skipped
+    ruff: passed
+    sandbox_note: 11 gRPC setup errors under restricted loopback; escalated full run
+      passed
+  context_budget:
+    decision: continue
+    rationale: 用户交互轮次远低于重置阈值，且 phase-context 已更新
+  experiences_loaded:
+    discovered_guardrails: 5
+    verified_or_settled: 0
+  slices_completed:
+    S1:
+      full_regression: 907 passed, 1 skipped
+      mypy: passed
+      new_test_functions: 6
+      new_tests: 8
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.flow'
+      ruff: passed
+      status: done
+      targeted_tests: 8 passed
+      tc_coverage: 6/6
+      verified_at: '2026-08-22T22:34:44+08:00'
+    S10:
+      mypy: passed
+      new_tests: 4
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.pipeline.snapshot'
+      regression: 944 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 95 passed (HTTP/SSE/audit/stream/post-audit paths)
+      tc_coverage: 4/4
+      verified_at: '2026-08-22T23:42:23+08:00'
+    S11:
+      mypy: passed
+      new_tests: 5
+      red: AuditEntry Flow fields/method and AuditLogger flow_evidence argument missing
+      regression: 949 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 54 passed (audit/post-audit/Pipeline/admission)
+      tc_coverage: 5/5
+      verified_at: '2026-08-22T23:48:49+08:00'
+    S12:
+      mypy: passed
+      new_tests: 2
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.audit.streaming_evidence'
+      regression: 951 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 68 passed (streaming/audit/post-audit)
+      tc_coverage: 2/2
+      verified_at: '2026-08-22T23:52:11+08:00'
+    S13:
+      mypy: passed
+      new_tests: 5
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.observability.flow'
+      regression: 956 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 36 passed (observability/runtime/degradation)
+      tc_coverage: 5/5
+      verified_at: '2026-08-22T23:55:35+08:00'
+    S14:
+      benchmark: P99 0.15ms; throughput 8461 req/s; pending Flow tasks 0
+      checkpoint_ast: 61/61
+      checkpoint_collect: 61/61 exact nodes; 74 collected cases
+      diff_check: passed
+      full_regression: 980 passed, 1 skipped (loopback-enabled environment)
+      mypy: 99 source files, 0 issues
+      new_test_functions: 2
+      new_tests: 2
+      red: TC-PE-003 throughput 4040 req/s below 7128; mutated config reused stale
+        cached plan
+      ruff: passed
+      sandbox_regression: 962 passed, 1 skipped; 2 environment-only gRPC loopback
+        setup errors
+      status: done
+      targeted_tests: 74 passed (61 canonical exact checkpoints; parametrized expansion)
+      tc_coverage: 1/1
+      verified_at: '2026-08-23T00:15:17+08:00'
+    S2:
+      full_regression: 913 passed, 1 skipped
+      mypy: passed
+      new_tests: 6
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.flow.policy'
+      ruff: passed
+      status: done
+      targeted_tests: 6 passed
+      tc_coverage: 6/6
+      verified_at: '2026-08-22T22:43:27+08:00'
+    S3:
+      full_regression: 923 passed, 1 skipped
+      mypy: passed
+      new_test_functions: 5
+      new_tests: 10
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.flow.evidence'
+      ruff: passed
+      status: done
+      targeted_tests: 10 passed
+      tc_coverage: 5/5
+      verified_at: '2026-08-22T22:47:36+08:00'
+    S4:
+      environment_constraint: repeat loopback escalation rejected by platform usage
+        limit
+      mypy: passed
+      new_tests: 6
+      pending_flow_tasks: 0
+      pre_slice_full_baseline: 899 passed, 1 skipped including gRPC
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.flow.runtime'
+      regression: 913 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 6 passed
+      tc_coverage: 6/6
+      verified_at: '2026-08-22T22:54:31+08:00'
+    S5:
+      mypy: passed
+      new_test_functions: 3
+      new_tests: 9
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.flow.detector_adapter'
+      regression: 922 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 9 passed
+      tc_coverage: 3/3
+      verified_at: '2026-08-22T23:03:34+08:00'
+    S6:
+      mypy: passed
+      new_tests: 5
+      red: 'ImportError: DetectorCapabilityCoordinator missing'
+      regression: 927 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 5 passed
+      tc_coverage: 5/5
+      test_anchor_correction: removed nonexistent GetDetectorInfo from expected existing
+        proto
+      verified_at: '2026-08-22T23:07:47+08:00'
+    S7:
+      mypy: passed
+      new_tests: 4
+      red: 'ImportError: FlowRuntimeConfig missing'
+      regression: 931 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 4 passed
+      tc_coverage: 4/4
+      verified_at: '2026-08-22T23:18:57+08:00'
+    S8:
+      mypy: passed
+      new_tests: 4
+      red: 'ModuleNotFoundError: z_llm_safety_gateway.flow.legacy'
+      regression: 935 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      status: done
+      targeted_tests: 4 passed
+      tc_coverage: 4/4
+      verified_at: '2026-08-22T23:23:23+08:00'
+    S9:
+      mypy: passed
+      new_tests: 5
+      red: flow_reducer missing; then FlowRuntime.execute calls=0
+      regression: 940 passed, 1 skipped (loopback gRPC files excluded by sandbox)
+      ruff: passed
+      runtime_compat_fix: Python 3.10 asyncio.TimeoutError classified as timed_out
+      status: done
+      targeted_tests: 57 passed (S9 + existing Pipeline/Runtime)
+      tc_coverage: 5/5
+      verified_at: '2026-08-22T23:34:44+08:00'
+  status: completed
+phase5:
+  canonical:
+    agent_specs: 12/12 passed; pipeline performance checkpoint passed on retry
+    collected: 61 primary nodes, 74 expanded cases
+    executed: 74/74 passed
+    primary_ast: 61/61
+  confirmed_at: '2026-08-23T07:50:50+08:00'
+  design_adjustments:
+    requires_re_build: false
+    requires_re_spec: false
+    total: 3
+  gate3: approved
+  mandatory_steps:
+    step0_review: completed
+    step1_quality: completed
+    step2_diff_review: completed
+    step3_5_experiences: completed (6 added, 5 reused, 13 total)
+    step3_failure_modes: completed (12/12)
+    step4_design_adjustments: completed (3)
+    step5_test_report: completed
+  performance:
+    minimum_throughput_rps: 7128
+    p99_ms: 0.15
+    pending_flow_tasks: 0
+    throughput_rps: 8461
+  python_matrix:
+    3.10.20: passed
+    '3.11': skipped_interpreter_unavailable
+    '3.12': skipped_interpreter_unavailable
+  quality:
+    coverage: 93% (5521 statements, 368 missed)
+    diff_check: passed
+    focused: 122 passed
+    full_loopback: 1011 passed, 1 skipped, 0 failed
+    mypy: 99 source files, 0 issues
+    restricted_sandbox: 998 passed, 1 skipped, 0 failed, 13 gRPC loopback setup errors
+    ruff: passed
+  review:
+    discovered: C0 H3 M5 L4
+    remaining_environment_limits: M1 L3
+    unresolved_product_findings: C0 H0 M0 L0
+  status: completed
+  test_report: test-report.md
+phase6:
+  archive: archive/2026-08-22-v0.2.0-flow-foundation
+  canonical_merge: completed
+  code_structure_merge: completed
+  completed_at: '2026-08-23T08:01:10+08:00'
+  experience_upload: skipped (6 discovered; 0 deposited)
+  gateway_version: 0.2.0
+  human_spec_merge: completed
+  principle_check: completed
+  sdk_version: 0.1.1
+  status: completed
+  verification:
+    coverage: 93.33%
+    diff_check: passed
+    full_loopback: 1011 passed, 1 skipped, 0 failed
+    mypy: 99 source files, 0 issues
+    release_contracts: 36 passed
+    ruff: passed
+phases:
+  build:
+    completed_at: '2026-08-23T00:15:17+08:00'
+    status: completed
+  deliver:
+    completed_at: '2026-08-23T08:01:10+08:00'
+    status: completed
+  slice:
+    completed_at: '2026-08-22T22:27:23+08:00'
+    status: completed
+  spec:
+    confirmed_at: '2026-08-22T22:19:04+08:00'
+    status: completed
+  understand:
+    confirmed_at: '2026-08-22T21:43:28+08:00'
+    status: completed
+  verify:
+    confirmed_at: '2026-08-23T07:50:50+08:00'
+    gate3_ready: true
+    gate3_status: approved
+    status: completed
+    verification_complete: true
+score_confidence: preliminary
+status: archived
+task_type: code
+title: v0.2.0 Flow Foundation

@@ -349,7 +349,7 @@ def test_detector_duration_ms_populated() -> None:
 # TC-AUDIT-007: DetectorAuditRecord error populated (SC-AUDIT-007)
 # --------------------------------------------------------------------------- #
 def test_detector_error_populated() -> None:
-    """TC-AUDIT-007: DetectorAuditRecord.error takes DetectionResult.error."""
+    """TC-AUDIT-007: audit exports a stable error code, never raw diagnostics."""
     # Error case
     error_result = _make_result(
         name="external_detector",
@@ -369,7 +369,7 @@ def test_detector_error_populated() -> None:
         final_risk_level="low",
         detector_results=[error_result],
     )
-    assert entry.detectors[0].error == "Connection refused"
+    assert entry.detectors[0].error == "capability_error"
     assert entry.detectors[0].error is not None
 
     # Success case: error is None

@@ -43,6 +43,15 @@
 - {{ g }}
 {% endfor %}
 
+## Project Principle Check
+
+1. **Plugin / Flow**：{{ principle_check.plugin_flow }}
+2. **显式策略 / 失败**：{{ principle_check.explicit_policy_failure }}
+3. **透明边界 / 稳定契约**：{{ principle_check.transparent_contracts }}
+4. **证据 / 数据保护**：{{ principle_check.evidence_data_protection }}
+
+**原则取舍或偏离**：{{ principle_check.tradeoffs_or_departures }}
+
 ## Success Criteria
 
 {% for s in success_criteria %}

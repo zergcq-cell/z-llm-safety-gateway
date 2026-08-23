@@ -20,9 +20,36 @@ nested ``config`` block.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
+
+from z_llm_safety_gateway.flow.contracts import (
+    CapabilityDescriptor,
+    CapabilityNodeDefinition,
+    ContractId,
+    FlowContractError,
+    FlowContractRegistry,
+    FlowDefinition,
+)
+from z_llm_safety_gateway.flow.policy import (
+    NodePolicyConfig,
+    PolicyConflictError,
+    PolicyDefaults,
+    PolicySource,
+    ResolvedNodePolicy,
+    TimeoutPolicyConfig,
+    resolve_node_policy,
+)
 
 
 class ServerConfig(BaseModel):
@@ -478,6 +505,8 @@ class PipelineConfig(BaseModel):
     flag_escalation: FlagEscalationConfig | None = None
     streaming: StreamingConfig = StreamingConfig()
     output_detection: OutputDetectionConfig = OutputDetectionConfig()
+    input_flow: FlowStageReference | None = None
+    output_flow: FlowStageReference | None = None
     detectors: DetectorsConfig | list[dict[str, Any]] = Field(
         default_factory=DetectorsConfig
     )
@@ -524,6 +553,68 @@ class PipelineConfig(BaseModel):
                     ]
 
         return data
+
+
+class FlowStageReference(BaseModel):
+    """Exact Flow identity selected for one pipeline stage."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    flow_id: ContractId
+    version: str
+
+
+class FlowRuntimeConfig(BaseModel):
+    """Hard resource bounds for the in-process Flow Runtime."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    max_depth: int = Field(default=8, ge=1, le=8)
+    max_nodes: int = Field(default=256, ge=1, le=256)
+    max_concurrency: int = Field(default=64, ge=1, le=64)
+    default_timeout: float = Field(default=30.0, gt=0, le=120)
+    absolute_timeout: float = Field(default=120.0, gt=0, le=120)
+    max_evidence_size: int = Field(
+        default=256 * 1024,
+        ge=256 * 1024,
+        le=256 * 1024,
+    )
+
+    @model_validator(mode="after")
+    def _validate_timeout_bounds(self) -> FlowRuntimeConfig:
+        if self.default_timeout > self.absolute_timeout:
+            raise ValueError("flow_timeout_conflict")
+        return self
+
+
+class CapabilityBindingConfig(BaseModel):
+    """Protected implementation binding for an explicitly configured Capability."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    capability_id: ContractId
+    detector_name: ContractId
+    type: str = ""
+    config: dict[str, Any] = Field(default_factory=dict, repr=False)
+    circuit_breaker: CircuitBreakerConfig | None = None
+
+    @model_validator(mode="after")
+    def _validate_detector_identity(self) -> CapabilityBindingConfig:
+        if self.capability_id != f"detector.{self.detector_name}":
+            raise ValueError("capability_binding_identity_mismatch")
+        return self
+
+    def detector_config(self) -> DetectorConfig:
+        """Return the legacy implementation declaration without execution policy."""
+        return DetectorConfig(
+            name=self.detector_name,
+            type=self.type,
+            config=dict(self.config),
+            circuit_breaker=self.circuit_breaker,
+        )
+
+
+PipelineConfig.model_rebuild()
 
 
 class FileConfig(BaseModel):
@@ -622,6 +713,12 @@ class ObservabilityConfig(BaseModel):
 class GatewayConfig(BaseModel):
     """Root configuration model for the z LLM Safety Gateway."""
 
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    _resolved_flow_policies: dict[
+        tuple[str, str, str], ResolvedNodePolicy
+    ] = PrivateAttr(default_factory=dict)
+
     server: ServerConfig
     providers: list[ProviderConfig]
     routing: RoutingConfig
@@ -631,6 +728,100 @@ class GatewayConfig(BaseModel):
     logging: LoggingConfig = LoggingConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
     model_cache: ModelCacheConfig = ModelCacheConfig()
+    flow_runtime: FlowRuntimeConfig = FlowRuntimeConfig()
+    capabilities: tuple[CapabilityBindingConfig, ...] = ()
+    flows: tuple[FlowDefinition, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_conflicting_flow_sources(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        pipeline = data.get("pipeline")
+        explicit_detectors = isinstance(pipeline, dict) and "detectors" in pipeline
+        if "flows" in data and explicit_detectors:
+            raise ValueError("conflicting_flow_sources")
+        return data
+
+    @model_validator(mode="after")
+    def _validate_flow_configuration(self) -> GatewayConfig:
+        descriptors: dict[str, CapabilityDescriptor] = {}
+        binding_ids = [binding.capability_id for binding in self.capabilities]
+        if len(binding_ids) != len(set(binding_ids)):
+            raise ValueError("duplicate_capability_binding")
+        for flow in self.flows:
+            if flow.reducer_capability_id not in {None, "detector-result-reducer"}:
+                raise ValueError(
+                    "reducer_capability_not_found: "
+                    f"flow_id={flow.flow_id}"
+                )
+            for node in flow.nodes:
+                if not isinstance(node, CapabilityNodeDefinition):
+                    continue
+                descriptor = CapabilityDescriptor(
+                    contract_version="1.0",
+                    capability_id=node.capability_id,
+                    implementation_version="configured",
+                    input_schema=node.input_schema,
+                    output_schema=node.output_schema,
+                )
+                existing = descriptors.get(node.capability_id)
+                if existing is not None and existing != descriptor:
+                    raise ValueError(
+                        f"capability_schema_conflict: capability_id={node.capability_id}"
+                    )
+                descriptors[node.capability_id] = descriptor
+
+        unknown_bindings = set(binding_ids) - set(descriptors)
+        if unknown_bindings:
+            raise ValueError("unused_capability_binding")
+
+        try:
+            registry = FlowContractRegistry(
+                capabilities=tuple(descriptors.values()),
+                flows=self.flows,
+                max_depth=self.flow_runtime.max_depth,
+                max_nodes=self.flow_runtime.max_nodes,
+            )
+            for reference in (self.pipeline.input_flow, self.pipeline.output_flow):
+                if reference is not None:
+                    registry.get_flow(reference.flow_id, reference.version)
+        except FlowContractError as exc:
+            raise ValueError(str(exc)) from exc
+
+        defaults = PolicyDefaults(
+            timeout=TimeoutPolicyConfig(
+                seconds=self.flow_runtime.default_timeout,
+                action="fail_open",
+            )
+        )
+        resolved: dict[tuple[str, str, str], ResolvedNodePolicy] = {}
+        for flow in self.flows:
+            for node in flow.nodes:
+                try:
+                    resolved[(flow.flow_id, flow.version, node.node_id)] = resolve_node_policy(
+                        NodePolicyConfig.model_validate(dict(node.policy)),
+                        defaults=defaults,
+                        source=PolicySource.EXPLICIT,
+                        flow_id=flow.flow_id,
+                        node_id=node.node_id,
+                    )
+                except PolicyConflictError as exc:
+                    raise ValueError(str(exc)) from exc
+        if self.flows and not (
+            self.pipeline.input_flow is not None
+            or self.pipeline.output_flow is not None
+        ):
+            raise ValueError("explicit_flow_stage_reference_required")
+        self._resolved_flow_policies = resolved
+        return self
+
+    @property
+    def resolved_flow_policies(
+        self,
+    ) -> Mapping[tuple[str, str, str], ResolvedNodePolicy]:
+        """Return an immutable view of startup-resolved Node policies."""
+        return MappingProxyType(dict(self._resolved_flow_policies))
 
 
 # --------------------------------------------------------------------------- #

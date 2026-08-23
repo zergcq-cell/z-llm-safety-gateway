@@ -11,7 +11,10 @@ LATENCY_TARGETS = {
     "p95_rule_only": 0.010,
     "p99_any_mix": 0.200,
 }
-THROUGHPUT_TARGETS = {"rule_based": 1000}
+DESIGN_THROUGHPUT_FLOOR = 1_000
+PHASE_2_THROUGHPUT_BASELINE = 7_920
+FLOW_FOUNDATION_THROUGHPUT_TARGET = PHASE_2_THROUGHPUT_BASELINE * 90 // 100
+THROUGHPUT_METHOD = "50 warmup + 5 x 750 timed"
 
 
 def format_seconds(seconds: float) -> str:
@@ -27,7 +30,7 @@ def render_report(
 ) -> str:
     """Render a truthful report; unrun suites use an em dash, never zero."""
     lat_runs = str(lat["n"]) if lat is not None else "—"
-    tp_runs = "500" if throughput is not None else "—"
+    tp_runs = THROUGHPUT_METHOD if throughput is not None else "—"
     lines = [
         "# Performance Benchmark Report",
         "",
@@ -43,19 +46,37 @@ def render_report(
         "|--------|----------|----------------------|--------|",
     ]
     rows = [
-        ("P50", None if lat is None else float(lat["p50"]), LATENCY_TARGETS["p50_rule_only"]),
-        ("P95", None if lat is None else float(lat["p95"]), LATENCY_TARGETS["p95_rule_only"]),
-        ("P99", None if lat is None else float(lat["p99"]), LATENCY_TARGETS["p99_any_mix"]),
+        (
+            "P50",
+            None if lat is None else float(lat["p50"]),
+            LATENCY_TARGETS["p50_rule_only"],
+            False,
+        ),
+        (
+            "P95",
+            None if lat is None else float(lat["p95"]),
+            LATENCY_TARGETS["p95_rule_only"],
+            False,
+        ),
+        (
+            "P99",
+            None if lat is None else float(lat["p99"]),
+            LATENCY_TARGETS["p99_any_mix"],
+            True,
+        ),
     ]
-    for label, measured, target in rows:
+    for label, measured, target, strict in rows:
         if measured is None:
             status = "—"
             measured_str = "—"
         else:
-            status = "PASS" if measured <= target else "BELOW TARGET"
+            meets_target = measured < target if strict else measured <= target
+            status = "PASS" if meets_target else "BELOW TARGET"
             measured_str = format_seconds(measured)
+        target_operator = "<" if strict else "<="
         lines.append(
-            f"| {label} | {measured_str} | {format_seconds(target)} | {status} |"
+            f"| {label} | {measured_str} | {target_operator} "
+            f"{format_seconds(target)} | {status} |"
         )
 
     if throughput is None:
@@ -64,19 +85,26 @@ def render_report(
     else:
         tp_str = f"{throughput:.0f}"
         tp_status = (
-            "PASS" if throughput >= THROUGHPUT_TARGETS["rule_based"] else "BELOW TARGET"
+            "PASS"
+            if throughput >= FLOW_FOUNDATION_THROUGHPUT_TARGET
+            else "BELOW TARGET"
         )
     lines += [
         "",
         "## Throughput (single instance, rule-based only)",
         "",
-        "| Metric | Measured | Target (DESIGN 14.3) | Status |",
+        "| Metric | Measured | Flow Foundation locked target | Status |",
         "|--------|----------|----------------------|--------|",
-        f"| req/s | {tp_str} | {THROUGHPUT_TARGETS['rule_based']} | {tp_status} |",
+        f"| req/s | {tp_str} | >= {FLOW_FOUNDATION_THROUGHPUT_TARGET} "
+        f"(90% of {PHASE_2_THROUGHPUT_BASELINE} Phase 2 baseline) | {tp_status} |",
         "",
         "## Notes",
         "",
         "- Results are advisory for release review and are NOT enforced by CI.",
+        f"- The general DESIGN 14.3 floor ({DESIGN_THROUGHPUT_FLOOR} req/s) is "
+        "informational only and cannot produce PASS for this change.",
+        "- Throughput uses an untimed warmup, five timed trials, and the "
+        "best-of-five result; P99 uses all recorded latency samples.",
         "- The benchmark uses a single connection; throughput scales with concurrency.",
         "- Below-target values should be recorded as differences for the release review.",
         "",

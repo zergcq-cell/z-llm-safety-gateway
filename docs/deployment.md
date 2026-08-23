@@ -1,6 +1,6 @@
 # Deployment Guide
 
-> 适用版本：v0.1.1
+> 适用版本：Gateway v0.2.0
 
 ## 1. Docker 部署（推荐）
 
@@ -32,11 +32,11 @@ docker compose -f docker-compose.prod.yml up -d --build --scale gateway=2
 ## 2. 构建自定义镜像
 
 ```bash
-docker build -t z-safety-gateway:0.1.1 .
+docker build -t z-safety-gateway:0.2.0 .
 docker run -d -p 8080:8080 \
   -v $(pwd)/config/gateway.yaml:/app/config/gateway.yaml:ro \
   -e OPENAI_API_KEY=sk-... \
-  z-safety-gateway:0.1.1
+  z-safety-gateway:0.2.0
 ```
 
 ## 3. 生产建议
@@ -45,7 +45,8 @@ docker run -d -p 8080:8080 \
 
 - 开启 `security.auth`（API key）
 - 启用 TLS（`security.tls` 或前置反向代理如 Nginx/ALB 终止 TLS）
-- 网关与 gRPC sidecar 间建议启用 mTLS（v0.2.0 路线图提供原生支持；当前可用 sidecar 侧自校验）
+- 网关与 gRPC sidecar 间建议启用 mTLS（原生双向证书支持仍在后续路线图；当前可用
+  sidecar 侧自校验）
 
 ### 3.2 资源与容量
 

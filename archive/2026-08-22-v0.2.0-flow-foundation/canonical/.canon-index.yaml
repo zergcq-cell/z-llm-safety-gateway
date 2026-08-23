@@ -1,0 +1,31 @@
+version: "2.9"
+proposals:
+  2026-08-22-v0.2.0-flow-foundation: "proposals/2026-08-22-v0.2.0-flow-foundation.yaml"
+designs: {}
+specs:
+  code:
+    audit-logger: specs/code/audit-logger.yaml
+    config-system: specs/code/config-system.yaml
+    default-detector-flow: specs/code/default-detector-flow.yaml
+    degraded-safety-visibility: specs/code/degraded-safety-visibility.yaml
+    detector-capability-adapter: specs/code/detector-capability-adapter.yaml
+    detector-framework: specs/code/detector-framework.yaml
+    flow-contracts: specs/code/flow-contracts.yaml
+    flow-policy: specs/code/flow-policy.yaml
+    flow-runtime: specs/code/flow-runtime.yaml
+    node-evidence-chain: specs/code/node-evidence-chain.yaml
+    observability: specs/code/observability.yaml
+    pipeline-engine: specs/code/pipeline-engine.yaml
+  agent:
+    audit-logger: specs/agent/audit-logger.yaml
+    config-system: specs/agent/config-system.yaml
+    default-detector-flow: specs/agent/default-detector-flow.yaml
+    degraded-safety-visibility: specs/agent/degraded-safety-visibility.yaml
+    detector-capability-adapter: specs/agent/detector-capability-adapter.yaml
+    detector-framework: specs/agent/detector-framework.yaml
+    flow-contracts: specs/agent/flow-contracts.yaml
+    flow-policy: specs/agent/flow-policy.yaml
+    flow-runtime: specs/agent/flow-runtime.yaml
+    node-evidence-chain: specs/agent/node-evidence-chain.yaml
+    observability: specs/agent/observability.yaml
+    pipeline-engine: specs/agent/pipeline-engine.yaml

@@ -1,4 +1,4 @@
-"""Compose deployment invariants for the v0.1.1 release."""
+"""Compose deployment invariants for the v0.2.0 gateway release."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_production_compose_preserves_capacity_and_sidecar_invariants() -> None:
     gateway = compose["services"]["gateway"]
     sidecar = compose["services"]["acme-guard"]
 
-    assert gateway["image"] == "z-safety-gateway:0.1.1"
+    assert gateway["image"] == "z-safety-gateway:0.2.0"
     assert gateway["deploy"]["replicas"] >= 2
     assert set(gateway["deploy"]["resources"]["limits"]) >= {"cpus", "memory"}
     assert set(gateway["deploy"]["resources"]["reservations"]) >= {"cpus", "memory"}

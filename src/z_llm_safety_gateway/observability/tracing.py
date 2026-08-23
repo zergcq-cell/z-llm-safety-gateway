@@ -138,12 +138,12 @@ def trace_request(
 ) -> Any:
     """Create the root ``gateway.request`` span.
 
-    The span carries ``request_id`` / ``model`` / ``direction`` attributes.
+    Request identifiers are deliberately excluded from span attributes.
     """
+    del request_id
     return get_tracer().start_as_current_span(
         "gateway.request",
         attributes={
-            "request_id": request_id,
             "model": model,
             "direction": direction,
         },

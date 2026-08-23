@@ -11,5 +11,7 @@ project:
   language: python
   name: z_llm_safety_gateway
   python_version: '3.12'
+  principles_file: "PRINCIPLES.md"
+  principles_check_required: true
   source_dir: "src"
-stdd_version: '2.9.3'
+stdd_version: '2.9.5'

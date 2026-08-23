@@ -1,0 +1,78 @@
+meta:
+  capability: "flow-policy"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-FP-001
+    description: "所有执行策略在启动时解析为显式不可变快照"
+    scenarios:
+      - id: SC-FP-001
+        confidence: high
+        evidence: "proposal.yaml C4; principle 2; design D4"
+        given: "新 Flow 或旧 detector YAML 省略部分策略字段"
+        when: "配置规范化完成"
+        then: "每个 Node SHALL 具有显式 timeout、failure、degradation、stop 与 availability 策略"
+        and:
+          - "默认来源 SHALL 可追踪为 explicit、legacy 或 default"
+          - "执行期 SHALL NOT 再猜测缺失默认值"
+          - "策略快照 SHALL 进入 NodeEvidence"
+  - id: REQ-FP-002
+    description: "异常与节点超时分别遵循显式 fallback"
+    scenarios:
+      - id: SC-FP-002
+        confidence: high
+        evidence: "proposal success_criteria 8; legacy on_error; design D4"
+        given: "Capability 抛出普通异常且 failure.action 分别为 fail_open/fail_closed"
+        when: "Runtime 捕获异常"
+        then: "目标 adapter SHALL 生成对应 fail-open 或 fail-closed fallback 结果"
+        and:
+          - "fail_open SHALL 标记 degraded 并继续"
+          - "fail_closed SHALL 发出停止所需 signal"
+          - "原始异常 SHALL NOT 进入外部证据"
+      - id: SC-FP-003
+        confidence: high
+        evidence: "proposal C4; pipeline-engine REQ-009; design D4"
+        given: "Capability 超过 Node timeout 且 timeout.action 已配置"
+        when: "Node deadline 到期"
+        then: "Runtime SHALL 取消调用并应用 timeout.action"
+        and:
+          - "timeout SHALL 与普通 exception 使用不同 reason code"
+          - "on_timeout SHALL NOT 被 on_error 静默替代"
+          - "实际等待时长 SHALL 进入证据"
+  - id: REQ-FP-003
+    description: "不可用与熔断降级遵循独立显式策略"
+    scenarios:
+      - id: SC-FP-004
+        confidence: high
+        evidence: "proposal C4/C9; readiness anchors; design D4/D7"
+        given: "Capability 在 request snapshot 中 unavailable 或 circuit open"
+        when: "Runtime 解析 Node"
+        then: "Runtime SHALL 分别应用 on_unavailable 或 on_circuit_open"
+        and:
+          - "Capability SHALL NOT 被调用"
+          - "fail_open SHALL 产生 skipped+degraded 证据"
+          - "fail_closed SHALL 在 Provider 前阻断适用请求"
+          - "circuit fallback SHALL 保留现有配置语义"
+  - id: REQ-FP-004
+    description: "Flow deadline 与矛盾策略被确定处理"
+    scenarios:
+      - id: SC-FP-005
+        confidence: medium
+        evidence: "proposal C4; output sync_timeout anchor; design D4/D5"
+        given: "Flow deadline 到期时部分 Node 已完成、部分 pending"
+        when: "Runtime 收敛 Flow"
+        then: "已完成结果 SHALL 保留，pending Node SHALL 分别按自身 on_timeout 生成结果"
+        and:
+          - "父 deadline SHALL 覆盖更晚的子 deadline"
+          - "最终 reducer SHALL 在全部 timeout fallback 收敛后执行"
+          - "FlowEvidence SHALL 标记 timed_out"
+      - id: SC-FP-006
+        confidence: high
+        evidence: "proposal C4/C8; principle 2; readiness config anchors"
+        given: "required=true 配合 fail_open、非正 timeout、未知 action、空 stop signals 或互相矛盾策略"
+        when: "启动验证策略"
+        then: "配置 SHALL 被拒绝并给出稳定 policy_conflict 诊断"
+        and:
+          - "错误 SHALL 定位 Flow 和 Node ID"
+          - "运行时 SHALL NOT 修正或忽略矛盾配置"

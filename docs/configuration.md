@@ -1,7 +1,75 @@
 # Configuration Reference
 
-> 适用版本：v0.1.1
+> 适用版本：Gateway v0.2.0（兼容 v0.1.1 legacy 配置）
 > 配置加载顺序：YAML 文件（支持 `${VAR}` 环境变量插值）→ 默认值
+
+## Flow Foundation（v0.2.0）
+
+新 Flow 配置使用严格 schema；未知字段、版本不兼容、引用缺失、循环、资源超限或策略冲突会在启动阶段失败。显式 `flows` 不可与显式 `pipeline.detectors` 同时配置。以下示例由真实 `GatewayConfig` 模型在测试中解析：
+
+<!-- FLOW_CONFIG_EXAMPLE_START -->
+```yaml
+server:
+  host: 127.0.0.1
+  port: 8080
+providers:
+  - name: local
+    type: openai_compatible
+    base_url: http://localhost:11434/v1
+    api_key: ""
+routing:
+  rules:
+    - pattern: "*"
+      provider: local
+flow_runtime:
+  max_depth: 8
+  max_nodes: 256
+  max_concurrency: 64
+  default_timeout: 30
+  absolute_timeout: 120
+  max_evidence_size: 262144
+capabilities:
+  - capability_id: detector.prompt_injection
+    detector_name: prompt_injection
+    config:
+      block_threshold: 0.85
+      flag_threshold: 0.50
+flows:
+  - contract_version: "1.0"
+    flow_id: input-safety
+    version: 1.0.0
+    input_schema: safety.text.v1
+    output_schema: safety.detector-result.v1
+    reducer_capability_id: detector-result-reducer
+    nodes:
+      - kind: capability
+        contract_version: "1.0"
+        node_id: prompt-injection
+        capability_id: detector.prompt_injection
+        input_schema: safety.text.v1
+        output_schema: safety.detector-result.v1
+        policy:
+          timeout:
+            seconds: 5
+            action: fail_closed
+          failure:
+            action: fail_closed
+          availability:
+            required: true
+            on_unavailable: fail_closed
+            on_circuit_open: fail_closed
+          degradation:
+            allowed: true
+            emit_evidence: true
+            emit_metrics: true
+          stop:
+            signals: [safety.block]
+pipeline:
+  input_flow:
+    flow_id: input-safety
+    version: 1.0.0
+```
+<!-- FLOW_CONFIG_EXAMPLE_END -->
 
 ## 顶层结构
 
@@ -9,11 +77,37 @@
 server:          # HTTP 服务
 providers:       # 上游 LLM 提供商
 routing:         # 模型路由规则
+flow_runtime:    # Flow 执行与证据硬限制（v0.2.0）
+capabilities:    # 显式 Flow 的实现绑定/私有配置（v0.2.0，可选）
+flows:           # 显式版本化 Flow 定义（v0.2.0，可选）
 pipeline:        # 安全检测管线
 security:        # 认证/限流/TLS/超时
 observability:   # 指标/追踪
 audit:           # 审计日志（顶层块）
 ```
+
+`pipeline.input_flow` / `pipeline.output_flow` 选择精确的 `flow_id + version`。
+显式 `flows` 至少需要一个阶段引用；当前版本只装配 `detector.<name>` 能力与
+`detector-result-reducer`，未知能力或 reducer 会在启动时明确拒绝。
+需要 detector 私有配置时，在独立的 `capabilities` 中绑定实现；Flow Node
+继续只负责组合与执行策略。`config` 可承载 ML、entry-point 或 gRPC 参数，
+不会进入 Flow/Node 证据：
+
+```yaml
+capabilities:
+  - capability_id: detector.acme_guard
+    detector_name: acme_guard
+    type: grpc
+    config:
+      endpoint: 127.0.0.1:50051
+      api_key: ${ACME_GUARD_API_KEY}
+```
+
+`flow_runtime.max_evidence_size` 在 v0.2.0 固定为 `262144` 字节；更小的值
+无法保证最大合法 Flow 的核心 Node 终态完整可表示，因此会在启动时拒绝。
+当最大合法图的可选摘要、signal 与长身份压缩后仍超限时，每个 Node
+的完整 stop-signal tuple 会以确定性 SHA-256 指纹表示；Node 终态、status、
+reason、策略 action 和 source 均保留，并显式标记证据已压缩。
 
 ## server
 

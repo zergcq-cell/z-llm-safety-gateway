@@ -1,0 +1,42 @@
+meta:
+  capability: "pipeline-engine"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-PE-001
+    description: "PipelineEngine 作为兼容 facade 委托 Flow Runtime"
+    scenarios:
+      - id: SC-PE-001
+        confidence: high
+        evidence: "proposal modified pipeline-engine; success_criteria 3/6; design D9"
+        given: "现有调用方使用 PipelineEngine constructor、run(detectors, contexts, configs) 和 PipelineResult"
+        when: "升级到 v0.2.0"
+        then: "公开 Python 签名和 PipelineResult 字段 SHALL 保持可用且语义不变"
+        and:
+          - "short_circuit_on 与 flag_escalation 参数 SHALL 继续生效"
+          - "无 detector/context SHALL 保持 allow"
+          - "现有 pipeline 单元测试 SHALL 无行为改写通过"
+      - id: SC-PE-002
+        confidence: high
+        evidence: "proposal C7; design D9"
+        given: "PipelineEngine facade 收到一次 run 调用"
+        when: "facade 构建或取得默认 Flow runner"
+        then: "每个 Detector/context 对 SHALL 仅执行一次并由 FlowRuntime 产生结果"
+        and:
+          - "facade SHALL NOT 再运行第二套 asyncio 调度"
+          - "pipeline_duration_ms SHALL 覆盖 Flow 聚合完成"
+          - "错误和 timeout SHALL 仅由 resolved policy 处理一次"
+  - id: REQ-PE-002
+    description: "Flow 适配保持性能目标且无任务泄漏"
+    scenarios:
+      - id: SC-PE-003
+        confidence: medium
+        evidence: "proposal success_criteria 12/13; benchmark 2026-08-21; design D14"
+        given: "标准 rule-based benchmark 基线 P99=0.16ms、throughput=7920 req/s"
+        when: "运行同环境 Flow 版本 benchmark 与任务泄漏检查"
+        then: "P99 SHALL 低于 200ms 且 throughput SHALL 不低于基线的 90%"
+        and:
+          - "测试结束 pending Flow tasks SHALL 为 0"
+          - "差异 SHALL 写入 benchmark report"
+          - "禁用 observability 时 SHALL 无 exporter 开销"

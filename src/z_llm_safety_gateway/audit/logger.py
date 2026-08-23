@@ -19,8 +19,22 @@ from pathlib import Path
 
 from z_llm_safety_gateway.audit.models import AuditEntry, DetectorLifecycleEvent
 from z_llm_safety_gateway.audit.sanitizer import sanitize_content
+from z_llm_safety_gateway.flow.evidence import FlowEvidence
+from z_llm_safety_gateway.observability import metrics as observability_metrics
 
 logger = logging.getLogger("z_llm_safety_gateway.audit")
+
+
+class _AuditSinkWriteError(Exception):
+    """Stable internal signal for a file-handler write failure."""
+
+
+class _AuditTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
+    """Surface handler-internal I/O failures to ``AuditLogger.record``."""
+
+    def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802
+        del record
+        raise _AuditSinkWriteError("audit_sink_write_failed") from None
 
 
 def compute_content_hash(content: str) -> str:
@@ -77,7 +91,7 @@ class AuditLogger:
             return None
 
         when = "midnight" if rotation == "daily" else rotation
-        handler = logging.handlers.TimedRotatingFileHandler(
+        handler = _AuditTimedRotatingFileHandler(
             filename=str(directory / "audit.log"),
             when=when,
             backupCount=self._retention_days,
@@ -86,7 +100,12 @@ class AuditLogger:
         handler.setFormatter(logging.Formatter("%(message)s"))
         return handler
 
-    def record(self, entry: AuditEntry | DetectorLifecycleEvent) -> None:
+    def record(
+        self,
+        entry: AuditEntry | DetectorLifecycleEvent,
+        *,
+        flow_evidence: FlowEvidence | None = None,
+    ) -> FlowEvidence | None:
         """Write an audit entry to the configured output channels.
 
         If ``store_content`` is disabled, content is dropped (hash only).
@@ -94,17 +113,33 @@ class AuditLogger:
         Failures are logged as warnings and never raise.
         """
         if not self._enabled:
-            return
+            return flow_evidence
 
-        data = entry.to_json_line()
-        if isinstance(entry, AuditEntry) and entry.content is not None:
-            if not self._store_content:
-                data.pop("content", None)
-            else:
-                data["content"] = sanitize_content(entry.content, self._sanitize_logs)
+        if isinstance(entry, AuditEntry) and flow_evidence is None:
+            flow_evidence = entry.attached_flow_evidence
+        if isinstance(entry, AuditEntry) and flow_evidence is not None:
+            entry.with_flow_evidence(flow_evidence)
 
-        line = json.dumps(data, ensure_ascii=False)
+        def render_line() -> str:
+            data = entry.to_json_line()
+            if isinstance(entry, AuditEntry) and entry.content is not None:
+                if not self._store_content:
+                    data.pop("content", None)
+                else:
+                    data["content"] = sanitize_content(
+                        entry.content, self._sanitize_logs
+                    )
+            return json.dumps(data, ensure_ascii=False)
 
+        line = render_line()
+
+        persistence_failed = False
+        if self._file_enabled and self._file_handler is None:
+            persistence_failed = True
+            self._record_persistence_failure("file")
+        if not self._file_enabled and not self._stdout_enabled:
+            persistence_failed = True
+            self._record_persistence_failure("no_sink")
         try:
             if self._file_handler is not None:
                 self._file_handler.emit(
@@ -118,14 +153,42 @@ class AuditLogger:
                         exc_info=None,
                     )
                 )
-        except Exception:  # pragma: no cover - defensive
-            logger.warning("audit_file_write_failed", exc_info=True)
+        except Exception:  # pragma: no cover - exercised with a failure stub
+            persistence_failed = True
+            self._record_persistence_failure("file")
+
+        if persistence_failed and isinstance(entry, AuditEntry):
+            entry.evidence_persisted = False
+            line = render_line()
 
         if self._stdout_enabled:
             try:
                 print(line)
             except Exception:  # pragma: no cover - defensive
-                logger.warning("audit_stdout_write_failed", exc_info=True)
+                persistence_failed = True
+                self._record_persistence_failure("stdout")
+
+        if persistence_failed and flow_evidence is not None:
+            unpersisted = flow_evidence.model_copy(
+                update={"evidence_persisted": False}
+            )
+            if isinstance(entry, AuditEntry):
+                entry.with_flow_evidence(unpersisted)
+            return unpersisted
+        return flow_evidence
+
+    @staticmethod
+    def _record_persistence_failure(sink: str) -> None:
+        error_type = "sink_error"
+        logger.warning(
+            "audit_evidence_persist_failed sink=%s error_type=%s",
+            sink,
+            error_type,
+        )
+        observability_metrics.record_evidence_persistence_failure(
+            sink,
+            error_type,
+        )
 
     def flush(self) -> None:
         """Flush the file handler (if any)."""

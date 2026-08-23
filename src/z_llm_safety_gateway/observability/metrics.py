@@ -123,6 +123,36 @@ class MetricsRegistry:
             ["direction", "detector_name"],
             registry=self._registry,
         )
+        self.evidence_persistence_failures = Counter(
+            "safety_evidence_persistence_failures_total",
+            "Flow evidence persistence failures",
+            ["sink", "error_type"],
+            registry=self._registry,
+        )
+        self.flow_executions = Counter(
+            "safety_flow_executions_total",
+            "Flow execution terminal states",
+            ["flow_id", "direction", "status"],
+            registry=self._registry,
+        )
+        self.flow_duration = Histogram(
+            "safety_flow_duration_seconds",
+            "Flow execution duration",
+            ["flow_id", "direction", "status"],
+            registry=self._registry,
+        )
+        self.flow_node_executions = Counter(
+            "safety_flow_node_executions_total",
+            "Flow Node execution terminal states",
+            ["flow_id", "direction", "node_id", "status", "reason_code"],
+            registry=self._registry,
+        )
+        self.observability_sanitizations = Counter(
+            "safety_observability_sanitizations_total",
+            "Rejected observability attributes",
+            ["field", "reason"],
+            registry=self._registry,
+        )
 
         # --- Provider metrics (DESIGN 12.5) ---
         self.provider_requests = Counter(
@@ -347,6 +377,67 @@ def record_degraded_request(direction: str, detector_name: str) -> None:
         direction=direction,
         detector_name=detector_name,
     ).inc()
+
+
+def record_evidence_persistence_failure(sink: str, error_type: str) -> None:
+    """Increment the bounded evidence sink failure counter."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.evidence_persistence_failures.labels(
+        sink=sink,
+        error_type=error_type,
+    ).inc()
+
+
+def record_flow_execution(
+    flow_id: str,
+    direction: str,
+    status: str,
+    duration_seconds: float,
+) -> None:
+    """Record one bounded Flow terminal state and duration."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.flow_executions.labels(
+        flow_id=flow_id,
+        direction=direction,
+        status=status,
+    ).inc()
+    reg.flow_duration.labels(
+        flow_id=flow_id,
+        direction=direction,
+        status=status,
+    ).observe(duration_seconds)
+
+
+def record_flow_node(
+    flow_id: str,
+    direction: str,
+    node_id: str,
+    status: str,
+    reason_code: str,
+) -> None:
+    """Record one bounded Node terminal state."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.flow_node_executions.labels(
+        flow_id=flow_id,
+        direction=direction,
+        node_id=node_id,
+        status=status,
+        reason_code=reason_code,
+    ).inc()
+
+
+def record_observability_sanitization(field: str, reason: str) -> None:
+    """Signal that an unsafe dynamic observability value was rejected."""
+    reg = _registry
+    if reg is None:
+        return
+    reg.observability_sanitizations.labels(field=field, reason=reason).inc()
 
 
 def record_provider_request(

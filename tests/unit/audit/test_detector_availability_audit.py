@@ -335,6 +335,60 @@ def test_fail_open_request_audit_contains_availability(
     }
 
 
+def test_fail_open_skip_evidence_is_merged_with_healthy_runtime_evidence(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    capture = CaptureAudit()
+    monkeypatch.setattr("z_llm_safety_gateway.app.AuditLogger", lambda **kwargs: capture)
+    path = tmp_path / "healthy-and-degraded.yaml"
+    path.write_text(
+        """
+server: {host: 127.0.0.1, port: 8080}
+providers:
+  - {name: local, type: openai_compatible, base_url: http://localhost:11434/v1}
+routing: {rules: [{pattern: "*", provider: local}]}
+pipeline:
+  detectors:
+    input: [{name: prompt_injection}]
+    output: []
+audit: {enabled: true, stdout: false, file: {enabled: false}}
+"""
+    )
+    from z_llm_safety_gateway.app import create_app
+
+    app = create_app(str(path))
+    app.state.router = Router()
+    statuses = app.state.detector_status_registry
+    statuses.register(
+        direction="input",
+        name="guard",
+        detector_type="builtin",
+        required=False,
+        on_error="fail_open",
+        timeout_seconds=1.0,
+    )
+    statuses.transition(
+        "input",
+        "guard",
+        DetectorState.UNAVAILABLE,
+        reason_code=DetectorReasonCode.INITIALIZATION_ERROR,
+    )
+
+    response = TestClient(app).post(
+        "/v1/chat/completions",
+        json={"model": "test", "messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    assert response.status_code == 200
+    entry = next(item for item in capture.entries if isinstance(item, AuditEntry))
+    statuses_by_node = {node.node_id: node.status.value for node in entry.node_evidence}
+    assert any(status == "succeeded" for status in statuses_by_node.values())
+    assert any(
+        node_id.startswith("availability-") and status == "skipped"
+        for node_id, status in statuses_by_node.items()
+    )
+
+
 def test_fail_closed_503_records_request_audit(
     tmp_path: Path, monkeypatch: Any
 ) -> None:

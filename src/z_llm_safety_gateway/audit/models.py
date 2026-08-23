@@ -9,7 +9,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
+
+from z_llm_safety_gateway.audit.streaming_evidence import StreamingEvidenceSummary
+from z_llm_safety_gateway.flow.evidence import FlowEvidence, NodeEvidence
 
 
 def _utcnow() -> str:
@@ -94,12 +97,37 @@ class AuditEntry(BaseModel):
     async_detection: str | None = None  # "pending" | "completed"
     safety_degraded: bool = False
     detector_availability: list[DetectorAvailabilityRecord] = Field(default_factory=list)
+    # Additive v0.2.0 Flow evidence fields. Existing consumers may ignore them.
+    flow_id: str | None = None
+    flow_version: str | None = None
+    flow_execution_id: str | None = None
+    flow_status: str | None = None
+    node_evidence: list[NodeEvidence] = Field(default_factory=list)
+    evidence_persisted: bool = True
+    streaming_evidence: StreamingEvidenceSummary | None = None
     # Content (only serialized when store_content=True)
     content: str | None = None
+    _attached_flow_evidence: FlowEvidence | None = PrivateAttr(default=None)
+
+    def with_flow_evidence(self, evidence: FlowEvidence) -> AuditEntry:
+        """Attach a deterministic, payload-free Flow evidence snapshot in place."""
+        self._attached_flow_evidence = evidence
+        self.flow_id = evidence.flow_id
+        self.flow_version = evidence.flow_version
+        self.flow_execution_id = evidence.execution_id
+        self.flow_status = evidence.status.value
+        self.node_evidence = list(evidence.nodes)
+        self.evidence_persisted = evidence.evidence_persisted
+        return self
+
+    @property
+    def attached_flow_evidence(self) -> FlowEvidence | None:
+        """Return the source evidence without adding it to the audit schema."""
+        return self._attached_flow_evidence
 
     def to_json_line(self) -> dict[str, Any]:
         """Serialize the entry to a dict for JSON-line output (excluding content)."""
-        data = self.model_dump(exclude={"content"})
+        data = self.model_dump(mode="json", exclude={"content"})
         if self.content is not None:
             data["content"] = self.content
         return data

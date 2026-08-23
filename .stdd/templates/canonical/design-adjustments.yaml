@@ -16,5 +16,6 @@ adjustments:
     original: ""              # 原始设计/实现
     adjusted: ""              # 调整后的设计/实现
     reason: ""                # 调整原因
+    principle_impact: ""      # 逐项复核 PRINCIPLES.md；说明新的取舍或偏离
     affected_capabilities: [] # 受影响的 capability
     resolved_in_phase: ""     # 在哪个 Phase 解决的

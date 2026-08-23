@@ -1,0 +1,80 @@
+meta:
+  capability: "flow-runtime"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-FR-001
+    description: "Runtime 有界并行执行节点与 item，输出顺序确定"
+    scenarios:
+      - id: SC-FR-001
+        confidence: high
+        evidence: "proposal.yaml C3; design D2/D5"
+        given: "多个 Node 与多个有序 item，max_concurrency=64"
+        when: "FlowRuntime.execute 被调用"
+        then: "Runtime SHALL 在不超过 64 个并发调用的前提下并行执行 Node/item"
+        and:
+          - "结果 SHALL 按 Node 配置顺序再按 item 顺序排列"
+          - "实际完成顺序 SHALL NOT 改变聚合输入"
+          - "Runtime SHALL 延迟创建调用而非一次创建无界 Task"
+      - id: SC-FR-002
+        confidence: medium
+        evidence: "proposal.yaml C3; legacy pipeline empty behavior"
+        given: "Flow 没有 Node 或 FlowInput 没有 item"
+        when: "Runtime 执行 Flow"
+        then: "Flow SHALL 确定性完成且不调用 Capability"
+        and:
+          - "结果 reducer SHALL 收到空结果集合"
+          - "FlowEvidence SHALL 记录 completed 而非静默跳过"
+  - id: REQ-FR-002
+    description: "Stop policy 取消 pending 调用并保留完整终态"
+    scenarios:
+      - id: SC-FR-003
+        confidence: high
+        evidence: "proposal.yaml C3/C4; success_criteria 8/12; design D4"
+        given: "并行 Node 中一个结果发出 stop policy 匹配的 signal"
+        when: "Runtime 观察到该结果"
+        then: "Runtime SHALL 立即停止 Flow 并取消全部 pending 调用"
+        and:
+          - "已完成结果 SHALL 被保留"
+          - "每个 pending Node SHALL 产生 cancelled 或 partial 证据"
+          - "Runtime SHALL NOT 等待被取消调用正常完成"
+          - "最终 reducer SHALL 收到停止触发结果"
+  - id: REQ-FR-003
+    description: "嵌套 Flow 复用相同执行、限制与证据语义"
+    scenarios:
+      - id: SC-FR-004
+        confidence: high
+        evidence: "proposal.yaml C2; success_criteria 2; principle 1"
+        given: "父 Flow 包含一个合法的 NestedFlowNode"
+        when: "父 Flow 执行该 Node"
+        then: "子 Flow SHALL 在相同 request snapshot 下执行并返回版本化结果"
+        and:
+          - "子 Flow timeout SHALL 受父 deadline 上界约束"
+          - "父 NodeEvidence SHALL 引用 child execution"
+          - "子证据 SHALL 保留 parent_execution_id"
+          - "子 Flow 的 stop SHALL 先收敛为子结果再由父策略处理"
+  - id: REQ-FR-004
+    description: "取消、deadline 与硬限制均产生确定行为"
+    scenarios:
+      - id: SC-FR-005
+        confidence: high
+        evidence: "EXP-2026-0003; proposal success_criteria 12; design D13"
+        given: "外层请求取消正在执行的 Flow，Capability 持有本地资源"
+        when: "Runtime 收到 asyncio.CancelledError"
+        then: "Runtime SHALL 在 finally 中执行有界清理后重新抛出 CancelledError"
+        and:
+          - "Runtime SHALL NOT 合成 allow 或 block"
+          - "所有子任务 SHALL 被取消并 await"
+          - "清理异常 SHALL 记录稳定 reason code 而不吞掉取消"
+      - id: SC-FR-006
+        confidence: medium
+        evidence: "proposal constraints; success_criteria 12; design D5"
+        given: "Flow 超过 depth=8、expanded_nodes=256、timeout=120s 上界或执行达到 deadline"
+        when: "配置验证或运行时限制触发"
+        then: "静态超限 SHALL 启动失败，动态 deadline SHALL 有界取消 pending 调用"
+        and:
+          - "max_concurrency SHALL 固定限制同时运行调用"
+          - "已完成 Node 结果 SHALL 保留"
+          - "pending Node SHALL 按其 on_timeout 策略收敛"
+          - "限制原因 SHALL 进入 FlowEvidence"

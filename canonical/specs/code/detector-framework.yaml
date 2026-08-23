@@ -1,0 +1,42 @@
+meta:
+  capability: "detector-framework"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DF-701
+    description: "四类 Detector 通过统一 Capability lifecycle 协调器参与 Flow"
+    scenarios:
+      - id: SC-DF-701
+        confidence: high
+        evidence: "proposal C6; detector-framework anchors; design D8/D13"
+        given: "built-in、ML、in-process plugin 和 gRPC sidecar 配置"
+        when: "应用初始化 Capability registry 与默认 Flow"
+        then: "四类 Detector SHALL 经同一 adapter/lifecycle/status 路径注册"
+        and:
+          - "initialize SHALL 在首次 invoke 前且仅一次"
+          - "health 与 shutdown SHALL 委托现有 Detector 合约"
+          - "初始化失败 SHALL 保持 required/on_error 矩阵"
+      - id: SC-DF-702
+        confidence: high
+        evidence: "proposal C7; EXP-2026-0001; design D7/D8"
+        given: "同一请求的 Detector 在 snapshot 中 healthy、unavailable 或 unhealthy"
+        when: "多个 Flow 阶段解析对应 Capability"
+        then: "所有阶段 SHALL 使用 snapshot 中同一状态并保持 app 隔离"
+        and:
+          - "unavailable SHALL 不调用 detect"
+          - "恢复 SHALL 只影响后续请求 snapshot"
+          - "同名 input/output 实例 SHALL 保持方向身份"
+  - id: REQ-DF-702
+    description: "Detector SDK 与插件发现契约保持不变"
+    scenarios:
+      - id: SC-DF-703
+        confidence: high
+        evidence: "proposal success_criteria 7; non_goals; plugin ecosystem anchors"
+        given: "SDK 0.1.x 包、entry point 插件和 gRPC DetectorService v1"
+        when: "在 Flow Foundation 版本运行现有 SDK、示例与插件测试"
+        then: "全部公开接口与发现协议 SHALL 无破坏性变化"
+        and:
+          - "entry point group SHALL 不变"
+          - "gRPC proto SHALL 不变"
+          - "现有插件 SHALL NOT 依赖 gateway flow 包"

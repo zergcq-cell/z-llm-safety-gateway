@@ -1,0 +1,77 @@
+meta:
+  capability: "config-system"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-CFG-001
+    description: "配置系统解析严格的新 Flow schema 与 stage 引用"
+    scenarios:
+      - id: SC-CFG-001
+        confidence: medium
+        evidence: "proposal C1/C8; design D1/D6"
+        given: "gateway YAML 含 flow_runtime、flows、pipeline.input_flow/output_flow"
+        when: "load_config 解析配置"
+        then: "配置 SHALL 生成严格类型的 FlowRuntimeConfig、FlowDefinition 和 NodeDefinition"
+        and:
+          - "stage ref SHALL 精确解析已定义 Flow ID"
+          - "Node kind SHALL 使用 discriminated union"
+          - "所有缺省策略 SHALL 在规范化结果中显式存在"
+      - id: SC-CFG-002
+        confidence: high
+        evidence: "proposal C8; success_criteria 5; design D6"
+        given: "原始 YAML 同时显式包含 flows 与 pipeline.detectors"
+        when: "配置加载器检查原始键存在性"
+        then: "启动 SHALL 失败并报告 conflicting_flow_sources"
+        and:
+          - "Pydantic 默认空 detectors SHALL NOT 误报冲突"
+          - "系统 SHALL NOT 选择静默优先级"
+  - id: REQ-CFG-002
+    description: "旧 YAML 保持加载并编译为等价 Flow"
+    scenarios:
+      - id: SC-CFG-003
+        confidence: high
+        evidence: "proposal success_criteria 4; legacy config specs; design D6"
+        given: "v0.1.x/v0.2-style flat或input/output detector YAML 且无 flows"
+        when: "load_config 完成"
+        then: "配置 SHALL 继续加载并进入 LegacyDetectorFlowCompiler"
+        and:
+          - "legacy threshold 正规化 SHALL 保持"
+          - "required/on_error/circuit breaker SHALL 保持"
+          - "不要求新增 flow_runtime 字段"
+      - id: SC-CFG-004
+        confidence: high
+        evidence: "proposal C4/C8; design D4/D6"
+        given: "旧配置省略 timeout、required、priority、on_error 和 short_circuit_on"
+        when: "编译 resolved Flow"
+        then: "resolved policy SHALL 分别使用现有默认值并标记 source=legacy_default"
+        and:
+          - "Detector timeout SHALL 继承 security.timeout.detector"
+          - "output sync deadline SHALL 继承 sync_timeout"
+          - "默认 short circuit SHALL 仅匹配 block"
+  - id: REQ-CFG-003
+    description: "跨 Flow 验证在启动阶段拒绝不安全或不确定配置"
+    scenarios:
+      - id: SC-CFG-005
+        confidence: high
+        evidence: "proposal C2/C4/C8; success_criteria 1/2/12; design D1/D4/D5"
+        given: "配置含未知 ref、重复 ID、循环、超限、版本不兼容、schema 不匹配或 policy conflict"
+        when: "validate_config 执行图与策略验证"
+        then: "网关 SHALL 在创建 Provider 或接受流量前拒绝配置"
+        and:
+          - "错误 SHALL 使用稳定 code 与 Flow/Node 定位"
+          - "配置异常 SHALL NOT 包含 secret values"
+          - "所有错误顺序 SHALL 确定"
+  - id: REQ-CFG-004
+    description: "安全配置文档示例由真实运行时模型反向验证"
+    scenarios:
+      - id: SC-CFG-006
+        confidence: high
+        evidence: "EXP-2026-0005; proposal compatibility; design D6"
+        given: "README、DESIGN 和 configuration 文档中的 legacy/new Flow YAML 示例"
+        when: "文档契约测试提取并调用 load_config/Pydantic"
+        then: "每个示例 SHALL 成功解析为预期结构或作为明确 invalid 示例失败"
+        and:
+          - "关键策略字段 SHALL 出现在正确层级"
+          - "未知安全字段 SHALL NOT 被静默忽略"
+          - "示例 SHALL NOT 需要真实密钥"

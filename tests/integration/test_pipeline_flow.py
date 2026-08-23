@@ -142,7 +142,7 @@ def test_complete_flow_allow_path(client_with_detectors: TestClient) -> None:
     AND the X-Safety-Action header is "allow"
     AND the X-Safety-Risk-Level header is NOT set (action is allow)
     """
-    respx.post("https://api.openai.com/v1/chat/completions").respond(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").respond(
         status_code=200,
         json={
             "id": "chatcmpl-009",
@@ -165,6 +165,7 @@ def test_complete_flow_allow_path(client_with_detectors: TestClient) -> None:
 
     assert response.headers["x-safety-action"] == "allow"
     assert "x-safety-risk-level" not in response.headers
+    assert provider_route.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +185,7 @@ def test_no_detectors_passthrough(client_no_detectors: TestClient) -> None:
     AND the X-Safety-Action header is "allow" (default)
     AND the X-Safety-Risk-Level header is NOT set
     """
-    respx.post("https://api.openai.com/v1/chat/completions").respond(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").respond(
         status_code=200,
         json={
             "id": "chatcmpl-010",
@@ -207,6 +208,7 @@ def test_no_detectors_passthrough(client_no_detectors: TestClient) -> None:
 
     assert response.headers["x-safety-action"] == "allow"
     assert "x-safety-risk-level" not in response.headers
+    assert provider_route.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +228,7 @@ def test_safety_extension_contains_all_fields(
         detector_name, category, risk_level, confidence, message, direction
     AND each field has the correct type
     """
-    respx.post("https://api.openai.com/v1/chat/completions").respond(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").respond(
         status_code=200,
         json={"id": "x", "choices": [{"message": {"role": "assistant", "content": "Hi"}}]},
     )
@@ -242,6 +244,7 @@ def test_safety_extension_contains_all_fields(
     )
 
     assert response.status_code == 400
+    assert provider_route.call_count == 0
     body = response.json()
     safety: dict[str, Any] = body["error"]["safety"]
 

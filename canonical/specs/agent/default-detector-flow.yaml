@@ -1,0 +1,53 @@
+meta:
+  task_id: "default-detector-flow"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway default-detector-flow"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-DDF-001 旧 detector YAML 被确定性编译为 input/output 默认 Flow"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-DDF-002 旧 detector YAML 被确定性编译为 input/output 默认 Flow"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-DDF-003 默认 reducer 与 stop policy 保持 Pipeline 结果语义"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-DDF-004 默认 reducer 与 stop policy 保持 Pipeline 结果语义"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_004"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-005
+    description: "SC-DDF-005 所有 detector 执行路径共享请求级 Flow snapshot"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_005"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-006
+    description: "SC-DDF-006 所有 detector 执行路径共享请求级 Flow snapshot"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_006 tests/integration/test_pipeline_flow.py::test_complete_flow_allow_path tests/unit/routes/test_availability_guard.py::test_output_fail_closed_preflight_blocks_every_response_mode tests/integration/test_streaming.py::test_streaming_returns_sse_chunks tests/integration/test_streaming.py::test_buffer_mode_safe_replay tests/integration/test_streaming.py::test_async_output_detection_returns_immediately tests/integration/test_streaming.py::test_post_audit_recall_sse_event"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-007
+    description: "SC-DDF-007 Detector 聚合作为可注册 reducer capability 而非通用核心分支"
+    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_007"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

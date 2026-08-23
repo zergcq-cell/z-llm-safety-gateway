@@ -1,0 +1,191 @@
+# proposal.yaml — Canonical 格式（YAML-first, V2.9）
+
+meta:
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  title: "v0.2.0 Flow Foundation"
+  created: "2026-08-22T21:43:28+08:00"
+  status: confirmed
+
+why:
+  problem: >
+    现有 detector pipeline 已具备并行执行、短路、超时、fail_open/fail_closed、熔断和
+    结果聚合能力，但这些行为耦合在 PipelineEngine、HTTP 路由、流式处理和配置适配路径中，
+    尚不存在统一、版本化的 Flow、Node 与 Capability 契约。新能力因此容易依赖 detector
+    或具体执行实现；策略默认值分散；审计也无法完整解释节点跳过、取消、超时与降级。
+  motivation: >
+    v0.2.0 需要建立可长期演进的最小 Flow 运行时基础，把领域能力留在插件中，把组合、
+    顺序、停止和降级收敛到 Flow，并在不破坏 HTTP、Detector SDK 与既有 YAML 的前提下，
+    让每一次安全决定具有逐节点、可脱敏审计的证据链。
+
+what_changes:
+  - id: C1
+    description: "定义带版本标识和兼容规则的 Flow、Node、Capability 契约"
+    type: new
+  - id: C2
+    description: "Node 支持绑定 Capability 或嵌套 Flow；嵌套执行遵循相同输入、输出、生命周期、策略和证据契约，并设置有界深度"
+    type: new
+  - id: C3
+    description: "建立最小 Flow Runtime，负责加载、验证、上下文传播、并行执行、停止与取消、结果聚合及证据收集"
+    type: new
+  - id: C4
+    description: "将 timeout、stop、failure、degradation 建模为显式策略；默认值文档化，矛盾策略在启动阶段拒绝"
+    type: new
+  - id: C5
+    description: "为每个节点产生结构化证据，覆盖执行、成功、跳过、停止、取消、超时、失败和降级"
+    type: new
+  - id: C6
+    description: "通过适配层把现有 Detector 暴露为 Capability，不改变 Detector SDK 的公开接口、导入路径或生命周期"
+    type: modified
+  - id: C7
+    description: "将 input、sync output、async output、streaming window 和 post-audit detector 执行入口适配到默认 Flow，保持既有结果优先级、修改顺序、短路和失败语义"
+    type: modified
+  - id: C8
+    description: "现有 YAML 自动规范化为等价默认 Flow；新旧定义冲突时明确拒绝，不采用静默优先级"
+    type: modified
+  - id: C9
+    description: "审计与可观测性增加 Flow、Node、Capability、策略及降级证据，同时默认只保存哈希、长度和脱敏摘要"
+    type: modified
+  - id: C10
+    description: "保持当前 HTTP 状态码、响应体、响应头、SSE 事件以及 Provider 透传语义"
+    type: modified
+
+capabilities:
+  new:
+    - name: flow-contracts
+      description: "版本化 Flow、Node、Capability 输入、输出、生命周期及兼容性契约"
+    - name: flow-runtime
+      description: "加载并执行 Flow，提供上下文传播、并行调度、嵌套、停止、取消和聚合"
+    - name: flow-policy
+      description: "显式表示 timeout、stop、failure 与 degradation 的行为和默认值"
+    - name: node-evidence-chain
+      description: "逐节点记录执行状态、策略、结果来源、耗时和降级原因"
+    - name: detector-capability-adapter
+      description: "在不改变 Detector SDK 的前提下，将现有检测器适配为 Capability"
+    - name: default-detector-flow
+      description: "复现当前 detector pipeline 的默认 Flow"
+  modified:
+    - name: pipeline-engine
+      description: "成为默认 Flow 的兼容执行适配层，保持现有聚合与短路语义"
+    - name: config-system
+      description: "支持 Flow 配置和旧 YAML 到默认 Flow 的确定性规范化"
+    - name: detector-framework
+      description: "通过适配器参与 Capability 执行，不改变 Detector 合约"
+    - name: audit-logger
+      description: "增加 Flow/Node/Capability 证据及策略信息"
+    - name: degraded-safety-visibility
+      description: "从 detector 级降级扩展为逐节点、逐 Flow 可解释降级"
+    - name: observability
+      description: "增加有界、低基数的 Flow 和节点执行信号"
+
+impact:
+  code:
+    - "预计影响契约模型、Flow Runtime、pipeline、配置加载与校验、应用装配、同步与流式执行、审计、指标、追踪及 SDK 兼容测试"
+    - "预计修改或新增 20 个以上文件，约 1000 行以上实现与测试"
+  configuration:
+    - "新增可选 Flow 配置结构和契约版本字段"
+    - "现有 pipeline、detectors、threshold、priority、required、on_error、timeout 与 circuit breaker 配置继续有效"
+    - "旧配置确定性规范化为默认 Flow；冲突定义、无效版本、循环嵌套和矛盾策略在启动阶段失败"
+  infrastructure:
+    - "不新增外部基础设施或服务依赖"
+    - "不要求 Kubernetes、Redis、数据库或独立控制面"
+
+constraints:
+  - "严格遵循 STDD 与 RED→GREEN→REFACTOR"
+  - "Flow Runtime 核心只包含通用运行机制，不吸收 detector 领域逻辑"
+  - "旧 YAML 不要求迁移；默认行为不得因内部改用 Flow 而变化"
+  - "Detector SDK 0.1.x 的公开接口、导入路径和生命周期保持兼容"
+  - "HTTP、SSE 和 Provider 边界保持透明"
+  - "Flow 深度、节点数量、执行时间和证据大小必须有界"
+  - "证据默认不得保存原始 prompt、completion、密钥或插件私有配置"
+  - "用户现有未提交改动必须保留，不得覆盖"
+
+stakeholders:
+  - "网关部署与安全策略维护者"
+  - "应用和平台团队"
+  - "Detector SDK 与第三方插件开发者"
+  - "审计、可观测性和事件响应人员"
+  - "后续 Flow/Capability 开发者"
+
+risk_areas:
+  - capability: flow-runtime
+    risk: "内部替换可能造成现有 pipeline 行为漂移"
+    mitigation: "以旧实现为行为锚点，建立输入、输出、流式及失败矩阵对照测试"
+  - capability: flow-policy
+    risk: "旧配置默认值映射错误可能改变 fail-open/fail-closed 行为"
+    mitigation: "规范化结果确定且可检查；矛盾配置启动失败"
+  - capability: flow-runtime
+    risk: "短路或超时可能遗留任务、丢失证据或产生竞态"
+    mitigation: "要求结构化并发清理、确定性终态和取消路径测试"
+  - capability: node-evidence-chain
+    risk: "证据可能泄露敏感内容、造成审计膨胀或指标高基数"
+    mitigation: "采用字段白名单、脱敏、大小上限和稳定低基数标签"
+  - capability: flow-contracts
+    risk: "契约过早固化可能限制未来扩展"
+    mitigation: "采用显式版本和兼容策略；未知 major version 拒绝，兼容 minor version 按规则处理"
+  - capability: config-system
+    risk: "新旧配置并存可能产生双重事实来源"
+    mitigation: "冲突时明确拒绝，不静默选择"
+
+non_goals:
+  - "不实现 Kubernetes、Operator、Redis 或分布式 Flow 调度"
+  - "不新增 Provider 或 Provider failover"
+  - "不实现 UI、可视化编排器或远程控制面"
+  - "不新增大量检测器"
+  - "不改变 Detector SDK 的公开接口"
+  - "不把整个 HTTP/Provider 生命周期重写为通用节点"
+  - "不实现通用 retry、补偿、任意动态分支或复杂 join；仅保留版本化扩展点"
+  - "不实现热加载、配置热更新或跨进程 Flow 状态持久化"
+
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: true
+
+anchoring:
+  level: L3
+  reference_changes:
+    - "2026-08-11-v0.0.2-pipeline-detectors"
+    - "2026-08-14-v0.0.5-plugin-ecosystem"
+    - "2026-08-19-detector-readiness-fail-safe"
+    - "2026-08-20-v0.1.1-release-hardening"
+  anchor_implementations:
+    - "src/z_llm_safety_gateway/pipeline/engine.py"
+    - "sdk/src/z_llm_safety_gateway_sdk/"
+    - "src/z_llm_safety_gateway/config/models.py"
+    - "src/z_llm_safety_gateway/audit/"
+
+principle_check:
+  plugin_flow: >
+    Detector 领域逻辑继续位于内置或第三方插件；组合、顺序、停止和降级属于 Flow；
+    核心仅提供契约、运行时、上下文、聚合和观测机制。
+  explicit_policy_failure: >
+    timeout、stop、failure、degradation 及其默认值均进入显式策略；跳过、取消、失败和
+    降级均产生证据；矛盾配置尽早拒绝。
+  transparent_contracts: >
+    保持 HTTP、SSE、Provider、Detector SDK 和旧 YAML 行为兼容；通过超时、节点数、
+    嵌套深度和证据大小限制资源成本。
+  evidence_data_protection: >
+    每个安全结果可追溯到 Flow、节点、Capability 版本、策略和证据；默认只记录脱敏
+    元数据、哈希和长度，不采集原始内容。
+  tradeoffs_or_departures: >
+    为控制范围并保障兼容，v0.2.0 首先将安全检测执行 Flow 化，不把 HTTP 与 Provider
+    全链路全部重构为节点。契约为 retry、branch 和 join 保留版本化扩展点，但本次只实现
+    当前行为所需的并行、聚合、停止、取消、失败与降级。这是分阶段落地，不允许新的领域
+    逻辑继续进入核心。
+
+success_criteria:
+  - "Flow、Node、Capability 均携带可验证的契约版本；不支持的 major version 在启动阶段被明确拒绝"
+  - "Capability Node 和嵌套 Flow Node 使用统一的输入、输出、生命周期、策略和证据契约；循环或超限嵌套被拒绝"
+  - "所有现有 detector 执行入口均通过默认 Flow 运行，且结果动作、风险等级、修改顺序、短路和失败行为与当前基线一致"
+  - "现有 YAML 配置无需修改即可加载，并规范化为确定性的默认 Flow"
+  - "新旧配置发生冲突时启动失败并给出明确诊断，不存在静默覆盖"
+  - "现有 HTTP 状态码、响应结构、响应头、SSE 事件和 Provider 透传契约测试全部通过"
+  - "Detector SDK 0.1.x 的导入、生命周期、结果模型和现有示例插件测试全部通过"
+  - "timeout、stop、failure、degradation 策略具有文档化默认值，并覆盖成功、超时、异常、取消、跳过、fail-open、fail-closed 和熔断降级测试"
+  - "每个节点产生包含 Flow/Node/Capability 身份与版本、适用策略、状态、耗时、结果或失败原因的证据"
+  - "allow、block、flag、modify、fallback 和 degradation 均可从证据链解释"
+  - "默认审计证据不包含原始请求、响应、密钥或插件私有配置，并受大小上限约束"
+  - "Flow 执行时间、节点数和嵌套深度有明确上限，取消后不存在遗留任务"
+  - "全量 pytest、Ruff、Mypy 与性能回归检查通过，覆盖率不下降"

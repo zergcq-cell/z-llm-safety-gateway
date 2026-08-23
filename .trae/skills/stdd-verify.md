@@ -1,11 +1,6 @@
 ---
 name: stdd-verify
-description: "STDD Phase 5: 质量验证 — 运行测试、覆盖率、lint 等质量检查"
-stdd_version: "2.9.3"
----
----
-name: stdd-verify
-description: "STDD Phase 5: 质量验证 — 全量检查 + 11类失败模式 + E2E + 覆盖率诊断"
+description: "STDD Phase 5: 质量验证 — 全量检查 + 12类失败模式 + E2E + 覆盖率诊断"
 stdd_version: "2.9.5"
 ---
 # STDD Phase 5: VERIFY — 质量验证
@@ -28,12 +23,12 @@ Verify 阶段的以下 7 个 Step 全部是强制步骤，**不可跳过任何�
 | Step 0 | 多路并行技术评审（3 代理） | 3 个代理均返回审查结果 |
 | Step 1 | 全量质量检查 | pytest + coverage + lint 全部执行 |
 | Step 2 | Diff 审查 | 逐文件检查所有变更 |
-| Step 3 | 十一类失败模式检查 (a-k) | 11 项全部检查完成 |
+| Step 3 | 十二类失败模式检查 (a-l) | 12 项全部检查完成 |
 | Step 3.5 | 经验库自动记录/更新 | 失败模式已记录到 .stdd/experiences/ |
 | Step 4 | 汇总设计调整 | design-adjustments.md 已生成（或确认无需调整） |
 | Step 5 | 生成测试报告 | test-report.md 已写入 |
 
-**Gate 3 前置条件**：上述 6 步全部完成后，才能进入 Gate 3 用户确认。
+**Gate 3 前置条件**：上述 7 个强制条目全部完成后，才能进入 Gate 3 用户确认。
 
 ## 阶段目标
 
@@ -71,7 +66,7 @@ Verify 阶段的以下 7 个 Step 全部是强制步骤，**不可跳过任何�
 
 | # | 中文 | English |
 |---|------|---------|
-| 1 | **Steps 0-5 全部执行** — 长程模式跳过的是授权交互，不是流程步骤。6 个 Step 一个不能少 | **ALL Steps 0-5 MUST execute** — long-range skips authorization, NOT steps. All 6 steps mandatory |
+| 1 | **Steps 0-5 及 Step 3.5 全部执行** — 长程模式跳过的是授权交互，不是流程步骤。7 个强制条目一个不能少 | **ALL Steps 0-5 plus Step 3.5 MUST execute** — long-range skips authorization, NOT steps. All 7 mandatory entries must run |
 | 2 | **失败模式检查全量执行** — 12 类检查（含 (l) 锚定缺失）必须全部执行，不得用占位符代替 | **ALL 12 failure modes MUST be checked** — no placeholder "pass" for unexecuted checks |
 | 3 | **Gate 3 报告必须如实** — 不得美化、不得省略缺口、不得用 PASS 代替 SKIPPED | **Gate 3 report MUST be truthful** — no glossing over gaps, no PASS for SKIPPED checks |
 | 4 | **TC 覆盖率必须报告** — Gate 3 必须展示 test-plan TC 与实际测试的对比 | **TC coverage MUST be reported** — Gate 3 must show planned vs actual TC comparison |
@@ -82,7 +77,7 @@ Verify 阶段的以下 7 个 Step 全部是强制步骤，**不可跳过任何�
 ### 运行协议
 
 1. **无交互原则**：Steps 0-5 全部自动执行，不使用 AskUserQuestion，不等待用户回复
-2. **强制步骤**：Step 0-5 共 6 个步骤**必须全部执行**，不可跳过任何一步
+2. **强制步骤**：Step 0-5 及 Step 3.5 共 7 个强制条目**必须全部执行**，不可跳过任何一项
 3. **自动降级检测**：每步操作后检查是否触发降级条件：
    - 连续 3 次修复失败
    - 通过率 < 95%
@@ -388,11 +383,22 @@ L 级问题：仅在 test-report 的附录中列出，不阻塞。
   - 不一致 → 标记为 bug 或契约变更，需在 test-report 中记录
 - 原则：API 契约不能靠两个 capability 的 spec 各自定义了相同的"概念字段名"就认为一致。必须做静态或运行时交叉验证
 
+**(l) 锚定缺失** — 需求、设计或实现失去已声明基线与参考变更
+
+- 检查：proposal 的 anchoring level、reference changes 和 anchor implementations 是否真实存在，并在 design、tasks、测试与最终 diff 中保持可追溯？
+- 典型信号：
+  - L2/L3 change 声明了参考变更，但引用目录、spec 或基线实现已不存在
+  - 设计声称保持旧行为，却没有把旧测试、公开契约或基准作为验证 oracle
+  - 实现偏离锚点但未记录到 pending/design adjustments
+- 检查方法：逐项解析 proposal 的 anchoring 字段，验证路径/符号存在；将每个关键锚点映射到至少一个设计决策、任务切片和自动化测试。
+- 严重性：关键行为缺少锚点或引用不存在为 high；非关键追溯不完整为 medium。
+- 经验 category：`anchoring_gap`。
+
 ---
 
 #### Step 3 分支：非代码类 Change 替代检查清单（V2.5 non-code-change-support）
 
-**触发条件**：执行 Step 3 前，先检查 change 目录的文件类型。IF change 目录不包含 `*.py`, `*.go`, `*.java`, `*.rs`, `*.ts` 文件，THEN 使用以下 5 项替代检查，ELSE 使用上述 11 类失败模式检查。
+**触发条件**：执行 Step 3 前，先检查 change 目录的文件类型。IF change 目录不包含 `*.py`, `*.go`, `*.java`, `*.rs`, `*.ts` 文件，THEN 使用以下 5 项替代检查，ELSE 使用上述 12 类失败模式检查。
 
 **替代检查 (a) 链接有效性**：
 - 检查所有外部引用（CDN、图片 URL、href 链接）是否可达
@@ -418,10 +424,10 @@ L 级问题：仅在 test-report 的附录中列出，不阻塞。
 
 ### Step 3.5: 自动记录/更新经验
 
-在完成十一类失败模式检查后，将本次发现的失败模式记录到项目经验库，供后续 BUILD 阶段复用：
+在完成十二类失败模式检查后，将本次发现的失败模式记录到项目经验库，供后续 BUILD 阶段复用：
 
 1. 对 Step 3 中每个**命中的失败模式**，构造经验条目：
-   - `category`：对应 11 类失败模式的 snake_case 别名（如 `cascading_errors`, `contract_gap`）
+   - `category`：对应 12 类失败模式的 snake_case 别名（如 `cascading_errors`, `contract_gap`, `anchoring_gap`）
    - `pattern`：具体错误模式描述（≤80 字，清晰陈述而非冗长叙述）
    - `root_cause`：AI 产生此错误的根本原因推测
    - `detection_trigger`：什么信号可以检测到此模式（如 "async 超时测试不稳定"）
@@ -484,7 +490,8 @@ L 级问题：仅在 test-report 的附录中列出，不阻塞。
 5. **功能/测试覆盖对照**：功能-实现-测试三方对照
 6. **设计调整说明**：引用 design-adjustments.md（如有）
 7. **修复确认记录**：Phase 5 迭代中发现并修复的问题
-8. **结论**：总体评估 + 质量信号汇总表 + 部署建议
+8. **项目原则复核**：对照 `PRINCIPLES.md`，用实际 diff、测试和审查证据逐项验证
+9. **结论**：总体评估 + 质量信号汇总表 + 部署建议
 
 ---
 
@@ -494,8 +501,9 @@ L 级问题：仅在 test-report 的附录中列出，不阻塞。
 - 全量测试通过（排除已知环境问题）
 - Lint 通过
 - Diff 审查无新问题
-- 十一类失败模式无命中
+- 十二类失败模式无命中
 - design-adjustments.md 已生成（如有调整）
+- `PRINCIPLES.md` 四项原则已逐项复核，任何取舍或偏离均有批准记录
 - test-report.md 已生成
 
 **硬上限停止**：
@@ -556,7 +564,7 @@ L 级问题：仅在 test-report 的附录中列出，不阻塞。
   ✅ Step 0: 多路并行技术评审 — 已完成
   ✅ Step 1: 全量质量检查 — 已完成
   ✅ Step 2: Diff 审查 — 已完成
-  ✅ Step 3: 十一类失败模式检查 (a-k) — 已完成
+  ✅ Step 3: 十二类失败模式检查 (a-l) — 已完成
   ✅ Step 3.5: 经验库更新 — 已完成
   ✅ Step 4: 汇总设计调整 — 已完成 / N/A（无需调整）
   ✅ Step 5: 生成测试报告 — 已完成
@@ -595,7 +603,7 @@ L 级问题：仅在 test-report 的附录中列出，不阻塞。
 - 覆盖率诊断已生成，低覆盖文件已标注
 - 功能覆盖表与 test-plan.md 的执行矩阵一致
 - 设计调整（如有）已完整记录
-- 十一类失败模式检查全部完成（含新增 f/g/h/i 四项）
+- 十二类失败模式检查全部完成（含 (l) 锚定缺失）
 
 ## 下一阶段
 

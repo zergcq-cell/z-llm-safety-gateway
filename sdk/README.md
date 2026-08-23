@@ -67,5 +67,5 @@ See the main repository's [Plugin Development](../docs/plugin-development.md) gu
 
 ## Versioning
 
-The gateway and SDK are both released as 0.1.1 for this coordinated patch. They retain
-independent version histories and are not required to use matching versions in future releases.
+The gateway and SDK have independent version histories. Gateway v0.2.0 remains compatible with
+the SDK v0.1.1 contract, so this Flow Foundation release does not require an SDK version bump.

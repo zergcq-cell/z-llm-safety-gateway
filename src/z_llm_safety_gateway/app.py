@@ -59,6 +59,119 @@ from z_llm_safety_gateway.routes.models import router as models_router
 logger = structlog.get_logger()
 
 
+def _explicit_flow_detector_configs(
+    config: Any,
+    *,
+    direction: Literal["input", "output"],
+) -> dict[str, dict[str, Any]]:
+    """Compile detector lifecycle settings from an explicitly selected Flow."""
+    from z_llm_safety_gateway.flow.contracts import (
+        CapabilityNodeDefinition,
+        FlowNodeDefinition,
+    )
+
+    reference = (
+        config.pipeline.input_flow
+        if direction == "input"
+        else config.pipeline.output_flow
+    )
+    if reference is None:
+        return {}
+    flows = {(flow.flow_id, flow.version): flow for flow in config.flows}
+    configs: dict[str, dict[str, Any]] = {}
+    bindings = {binding.capability_id: binding for binding in config.capabilities}
+    active: set[tuple[str, str]] = set()
+
+    def collect(flow_id: str, version: str) -> None:
+        key = (flow_id, version)
+        if key in active:
+            return
+        active.add(key)
+        flow = flows[key]
+        for node in flow.nodes:
+            if isinstance(node, FlowNodeDefinition):
+                collect(node.flow_id, node.flow_version)
+                continue
+            if not isinstance(node, CapabilityNodeDefinition):
+                continue
+            if not node.capability_id.startswith("detector."):
+                raise ValueError(
+                    "unsupported_runtime_capability: "
+                    f"capability_id={node.capability_id}"
+                )
+            name = node.capability_id.removeprefix("detector.")
+            policy = config.resolved_flow_policies[
+                (flow.flow_id, flow.version, node.node_id)
+            ]
+            binding = bindings.get(node.capability_id)
+            implementation: dict[str, Any] = {}
+            if binding is not None:
+                implementation = _extract_detector_configs(
+                    [binding.detector_config()],
+                    default_timeout_seconds=config.security.timeout.detector_seconds,
+                )[name]
+            existing = configs.get(name)
+            candidate = {
+                **implementation,
+                "priority": node.priority,
+                "required": policy.availability.required,
+                "on_error": policy.availability.on_unavailable,
+                "timeout_seconds": policy.timeout.seconds,
+            }
+            candidate.setdefault("block_threshold", 1.0)
+            candidate.setdefault("flag_threshold", 1.0)
+            if existing is not None and existing != candidate:
+                raise ValueError(
+                    f"capability_lifecycle_conflict: capability_id={node.capability_id}"
+                )
+            configs[name] = candidate
+
+    collect(reference.flow_id, reference.version)
+    return configs
+
+
+def _explicit_flow_detector_policies(
+    config: Any,
+    *,
+    direction: Literal["input", "output"],
+) -> dict[str, Any]:
+    """Map selected Flow detector identities to their resolved policies."""
+    from z_llm_safety_gateway.flow.contracts import (
+        CapabilityNodeDefinition,
+        FlowNodeDefinition,
+    )
+
+    reference = (
+        config.pipeline.input_flow
+        if direction == "input"
+        else config.pipeline.output_flow
+    )
+    if reference is None:
+        return {}
+    flows = {(flow.flow_id, flow.version): flow for flow in config.flows}
+    policies: dict[str, Any] = {}
+    active: set[tuple[str, str]] = set()
+
+    def collect(flow_id: str, version: str) -> None:
+        key = (flow_id, version)
+        if key in active:
+            return
+        active.add(key)
+        flow = flows[key]
+        for node in flow.nodes:
+            if isinstance(node, FlowNodeDefinition):
+                collect(node.flow_id, node.flow_version)
+            elif isinstance(node, CapabilityNodeDefinition):
+                policies[node.capability_id.removeprefix("detector.")] = (
+                    config.resolved_flow_policies[
+                        (flow.flow_id, flow.version, node.node_id)
+                    ]
+                )
+
+    collect(reference.flow_id, reference.version)
+    return policies
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifecycle: startup and graceful shutdown.
@@ -462,14 +575,18 @@ def create_app(config_path: str) -> FastAPI:
     detectors_cfg = config.pipeline.detectors
     assert isinstance(detectors_cfg, DetectorsConfig)
 
-    input_configs = _extract_detector_configs(
-        detectors_cfg.input,
-        default_timeout_seconds=config.security.timeout.detector_seconds,
-    )
-    output_configs = _extract_detector_configs(
-        detectors_cfg.output,
-        default_timeout_seconds=config.security.timeout.detector_seconds,
-    )
+    if config.flows:
+        input_configs = _explicit_flow_detector_configs(config, direction="input")
+        output_configs = _explicit_flow_detector_configs(config, direction="output")
+    else:
+        input_configs = _extract_detector_configs(
+            detectors_cfg.input,
+            default_timeout_seconds=config.security.timeout.detector_seconds,
+        )
+        output_configs = _extract_detector_configs(
+            detectors_cfg.output,
+            default_timeout_seconds=config.security.timeout.detector_seconds,
+        )
 
     # Initialize detectors eagerly (asyncio.run works because create_app
     # is called outside of a running event loop).
@@ -500,6 +617,19 @@ def create_app(config_path: str) -> FastAPI:
     engine = PipelineEngine(
         short_circuit_on=short_circuit_on,
         flag_escalation=flag_escalation_rule,
+        flows=config.flows,
+        input_flow=(
+            (config.pipeline.input_flow.flow_id, config.pipeline.input_flow.version)
+            if config.pipeline.input_flow is not None
+            else None
+        ),
+        output_flow=(
+            (config.pipeline.output_flow.flow_id, config.pipeline.output_flow.version)
+            if config.pipeline.output_flow is not None
+            else None
+        ),
+        resolved_policies=config.resolved_flow_policies,
+        runtime_options=config.flow_runtime.model_dump(),
     )
 
     app.state.input_detectors = input_detectors
@@ -507,6 +637,26 @@ def create_app(config_path: str) -> FastAPI:
     app.state.input_detector_configs = input_configs
     app.state.output_detector_configs = output_configs
     app.state.pipeline_engine = engine
+    app.state.input_flow_identity = (
+        (config.pipeline.input_flow.flow_id, config.pipeline.input_flow.version)
+        if config.pipeline.input_flow is not None
+        else None
+    )
+    app.state.output_flow_identity = (
+        (config.pipeline.output_flow.flow_id, config.pipeline.output_flow.version)
+        if config.pipeline.output_flow is not None
+        else None
+    )
+    app.state.input_detector_policies = (
+        _explicit_flow_detector_policies(config, direction="input")
+        if config.flows
+        else {}
+    )
+    app.state.output_detector_policies = (
+        _explicit_flow_detector_policies(config, direction="output")
+        if config.flows
+        else {}
+    )
 
     logger.info(
         "pipeline_initialized",
@@ -639,10 +789,23 @@ def create_app(config_path: str) -> FastAPI:
         availability = getattr(request.state, "detector_availability", [])
         audit_cfg = getattr(request.app.state, "audit_config", None)
         audit_logger = getattr(request.app.state, "audit_logger", None)
+        evidence_by_direction = {
+            direction: next(
+                (
+                    item
+                    for item in reversed(
+                        getattr(request.state, "flow_evidence", ())
+                    )
+                    if item.direction == direction
+                ),
+                None,
+            )
+            for direction in exc.affected_directions
+        }
         if audit_cfg is not None and audit_cfg.enabled and audit_logger is not None:
             for direction in exc.affected_directions:
-                audit_logger.record(
-                    AuditEntry(
+                flow_evidence = evidence_by_direction[direction]
+                entry = AuditEntry(
                         request_id=getattr(request.state, "request_id", ""),
                         direction=cast(Literal["input", "output"], direction),
                         model=getattr(request.state, "safety_model", None),
@@ -651,7 +814,26 @@ def create_app(config_path: str) -> FastAPI:
                         safety_degraded=True,
                         detector_availability=availability,
                     )
-                )
+                if flow_evidence is not None:
+                    entry.with_flow_evidence(flow_evidence)
+                persisted = audit_logger.record(entry)
+                if persisted is not None:
+                    evidence = list(getattr(request.state, "flow_evidence", ()))
+                    for index, current in enumerate(evidence):
+                        if (
+                            current.direction,
+                            current.stage,
+                            current.execution_id,
+                        ) == (
+                            persisted.direction,
+                            persisted.stage,
+                            persisted.execution_id,
+                        ):
+                            evidence[index] = persisted
+                            break
+                    else:
+                        evidence.append(persisted)
+                    request.state.flow_evidence = evidence
         logger.warning(
             "safety_request_unavailable",
             affected_directions=exc.affected_directions,

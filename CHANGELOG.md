@@ -11,6 +11,24 @@
 
 暂无。
 
+## [0.2.0] - 2026-08-23
+
+### Flow Foundation
+
+- 建立版本化 Flow、Node 与 Capability 契约，并支持嵌套 Flow、显式生命周期及有界执行。
+- 将既有 detector pipeline 适配为默认 Flow，保持 PipelineEngine、Detector SDK、entry
+  point 与 gRPC detector 契约兼容。
+- 为 timeout、stop、error、unavailable 与 circuit-open 提供显式失败和降级策略；配置冲突
+  在启动期拒绝。
+- 增加逐节点证据链、Flow 审计字段、流式有界证据聚合，以及低基数 metrics 和脱敏 trace。
+
+### 兼容性与质量
+
+- 保持既有 HTTP/SSE、Provider 代理和 legacy YAML 行为；本版本不新增 Provider、K8s、
+  Redis、UI 或额外检测器集合。
+- Gateway 发布版本提升到 0.2.0；独立 Detector SDK 保持 0.1.1。
+- 完整回归 1011 passed / 1 skipped，覆盖率 93%；61 个 canonical checkpoint 全部通过。
+
 ## [0.1.1] - 2026-08-21
 
 ### 安全与可靠性

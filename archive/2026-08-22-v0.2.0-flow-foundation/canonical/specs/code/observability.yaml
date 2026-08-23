@@ -1,0 +1,55 @@
+meta:
+  capability: "observability"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-OBS-701
+    description: "Prometheus 提供有界 Flow 与 Node 指标且禁用时零影响"
+    scenarios:
+      - id: SC-OBS-701
+        confidence: high
+        evidence: "proposal C9; modified observability; design D12"
+        given: "metrics enabled 且 Flow/Node 分别成功、失败、超时、取消或降级"
+        when: "记录执行并抓取 /metrics"
+        then: "flow execution/duration 与 node execution 指标 SHALL 使用 flow_id、direction、node_id、status、reason_code 的稳定标签"
+        and:
+          - "指标 SHALL 反映实际计数"
+          - "Capability version SHALL NOT 用作 metric label"
+          - "node_id 基数 SHALL 受 max_nodes 限制"
+      - id: SC-OBS-702
+        confidence: high
+        evidence: "proposal compatibility; existing metrics disabled specs"
+        given: "observability.metrics.enabled=false"
+        when: "执行所有 Flow metric helper"
+        then: "helper SHALL 为 no-op 且 SHALL NOT 改变 Flow 决策、证据或抛出异常"
+        and:
+          - "不得注册重复 collector"
+          - "禁用模式 SHALL 不创建高成本 label 数据"
+  - id: REQ-OBS-702
+    description: "Tracing 保留 Flow、Node 与嵌套调用关系且不记录内容"
+    scenarios:
+      - id: SC-OBS-703
+        confidence: medium
+        evidence: "proposal C2/C9; opentelemetry anchors; design D12"
+        given: "tracing enabled 且父 Flow 含 Capability 与 NestedFlowNode，部分 Node 被取消"
+        when: "执行请求并导出 spans"
+        then: "trace SHALL 形成 request→flow→node→nested-flow 层级并标记真实终态"
+        and:
+          - "span SHALL 包含 Flow/Node/Capability identity 与 version"
+          - "cancelled/timeout SHALL 设稳定 status/reason"
+          - "span SHALL NOT 包含 payload、异常正文或 user_id"
+  - id: REQ-OBS-703
+    description: "所有可观测标签与属性受到显式基数和隐私约束"
+    scenarios:
+      - id: SC-OBS-704
+        confidence: high
+        evidence: "proposal constraints; success_criteria 11/12; design D12"
+        given: "恶意 ID、动态异常、请求 ID、用户 ID、endpoint 和大 evidence summary"
+        when: "日志、metric 和 span 属性生成"
+        then: "可观测边界 SHALL 拒绝或清理超长/敏感动态值"
+        and:
+          - "metric labels SHALL 仅来自验证后的配置 ID 与枚举"
+          - "request/user IDs SHALL NOT 进入 metrics"
+          - "日志与 spans SHALL 使用稳定 reason_code"
+          - "超限 SHALL 有 observable sanitization signal"

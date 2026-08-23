@@ -1,0 +1,47 @@
+meta:
+  task_id: "flow-policy"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway flow-policy"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-FP-001 所有执行策略在启动时解析为显式不可变快照"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_policy.py::test_tc_fp_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-FP-002 异常与节点超时分别遵循显式 fallback"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_policy.py::test_tc_fp_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-FP-003 异常与节点超时分别遵循显式 fallback"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_policy.py::test_tc_fp_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-FP-004 不可用与熔断降级遵循独立显式策略"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_policy.py::test_tc_fp_004"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-005
+    description: "SC-FP-005 Flow deadline 与矛盾策略被确定处理"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_policy.py::test_tc_fp_005"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-006
+    description: "SC-FP-006 Flow deadline 与矛盾策略被确定处理"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_policy.py::test_tc_fp_006"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

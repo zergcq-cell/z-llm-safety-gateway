@@ -392,7 +392,7 @@ def test_tracing_span_structure_and_attributes(fake_otel: FakeOTEL) -> None:
 
     GIVEN tracing enabled and a request spanning detection and provider calls
     WHEN trace_request / trace_detector / trace_provider are used
-    THEN a gateway.request root span carries request_id/model/direction
+    THEN a gateway.request root span carries model/direction but not request_id
     AND detector.* and provider.call child spans carry their attributes.
     """
     with observability_tracing.trace_request("req-1", "gpt-4", "input"):
@@ -407,7 +407,7 @@ def test_tracing_span_structure_and_attributes(fake_otel: FakeOTEL) -> None:
     root = starts[0]
     assert root.name == "gateway.request"
     assert root.depth == 0
-    assert root.attributes["request_id"] == "req-1"
+    assert "request_id" not in root.attributes
     assert root.attributes["model"] == "gpt-4"
     assert root.attributes["direction"] == "input"
 

@@ -1,0 +1,43 @@
+meta:
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-23T01:20:00+08:00"
+  total_adjustments: 3
+  requires_re_spec: false
+  requires_re_build: false
+
+adjustments:
+  - id: ADJ-001
+    category: design_change
+    original: "显式 flows 与 pipeline.detectors 互斥，但 Phase 2 未定义 gRPC、ML 和 entry-point detector 私有实现配置的独立来源。"
+    adjusted: "新增顶层 capabilities 绑定区；capability_id 与 detector_name 严格对应，私有 config 不参与 Flow 顺序且 repr 隐藏，Flow policy 仍是唯一执行策略来源。"
+    reason: "否则显式 Flow 只能实例化无需私有配置的内置 detector，无法兑现现有四类 Detector 兼容承诺。"
+    principle_impact: "强化 Plugin/Flow 分离、显式失败、稳定绑定契约与秘密默认保护；未引入新的领域逻辑到 Flow core。"
+    affected_capabilities:
+      - config-system
+      - detector-capability-adapter
+      - detector-framework
+      - default-detector-flow
+    resolved_in_phase: "VERIFY"
+
+  - id: ADJ-002
+    category: boundary_discovery
+    original: "max_evidence_size 是 256 KiB 默认/上限，但未明确合法配置的最小值是否必须容纳 256 个核心 Node 终态。"
+    adjusted: "v0.2.0 将 max_evidence_size 固定为 256 KiB；完整 FlowEvidence 先移除可选摘要和 signals，再确定性哈希长身份；极端合法图中完整 stop-signal tuple 以指纹表示。保留最多 256 个 Node 终态、其他策略事实/source、status 与 reason；streaming 外层 envelope 也须在同一预算内。"
+    reason: "较小的合法预算会在安全决定完成后因核心 envelope 无法表示而抛错；256×32 个最长 stop signals 以原文重复记录时也超出信息容量。启动期拒绝非 256 KiB 预算，运行期对变长策略做显式指纹压缩。"
+    principle_impact: "资源成本保持有界、失败在启动期显式、核心 Node 终态不静默删除，且长身份/策略指纹不可逆。"
+    affected_capabilities:
+      - config-system
+      - node-evidence-chain
+      - flow-runtime
+      - audit-logger
+    resolved_in_phase: "VERIFY"
+
+  - id: ADJ-003
+    category: test_change
+    original: "TC-PE-003 使用单轮亚秒级吞吐测量，并在 coverage trace 开启时也与非插桩 Phase 2 基线比较。"
+    adjusted: "无 trace 时执行五轮容量测量并采用 best-of-five 抵御宿主调度暂停；P99 保留全部样本；coverage 运行只作覆盖诊断，正式门仍为 7,128 req/s、P99 < 200 ms、pending task=0。"
+    reason: "coverage line tracing 和单次宿主调度暂停会系统性污染短路径微基准，但不代表产品吞吐回归。"
+    principle_impact: "不改变性能门，只使测量环境与锁定基线可比并显式记录测量限制。"
+    affected_capabilities:
+      - pipeline-engine
+    resolved_in_phase: "VERIFY"

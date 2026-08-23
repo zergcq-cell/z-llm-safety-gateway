@@ -39,7 +39,7 @@ def _anchors(path: Path) -> set[str]:
 
 
 def test_release_version_and_python_support_are_consistent() -> None:
-    """TC-DOCS-001: public surfaces use v0.1.1 and Python 3.10–3.12."""
+    """TC-DOCS-001: gateway surfaces use v0.2.0 and Python 3.10–3.12."""
     for relative in (
         "README.md",
         "docs/getting-started.md",
@@ -47,7 +47,7 @@ def test_release_version_and_python_support_are_consistent() -> None:
         "docs/deployment.md",
         "config/gateway.yaml",
     ):
-        assert "v0.1.1" in (ROOT / relative).read_text(encoding="utf-8")
+        assert "v0.2.0" in (ROOT / relative).read_text(encoding="utf-8")
 
     combined = "\n".join(
         (ROOT / relative).read_text(encoding="utf-8")
@@ -129,7 +129,9 @@ def test_plugin_docs_describe_available_release_and_tls_capabilities() -> None:
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in files)
     for path in files:
-        assert "适用版本：v0.1.1" in path.read_text(encoding="utf-8")
+        contents = path.read_text(encoding="utf-8")
+        assert "Gateway v0.2.0" in contents
+        assert "SDK v0.1.1" in contents
     assert "pip install z-llm-safety-gateway-sdk" not in combined
     assert "pip install z-llm-safety-gateway[grpc]" not in combined
     assert "启用双向信任" not in combined

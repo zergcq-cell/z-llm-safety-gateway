@@ -14,3 +14,19 @@
 | SC-AUDIT-602 | fatal startup 事件持久化；审计关闭时日志兜底 |
 | SC-AUDIT-603 | fail-open 请求记录确定排序的 availability |
 | SC-AUDIT-604 | 不保存秘密、endpoint 或异常正文 |
+
+
+<!-- 合并自 2026-08-22-v0.2.0-flow-foundation -->
+# Capability: audit-logger
+
+## ADDED / MODIFIED Requirements
+
+- **REQ-AUD-701**：审计记录以加法字段关联 Flow 与 Node 证据（2 scenarios）
+- **REQ-AUD-702**：审计证据与内容存储策略分离并默认保护数据（1 scenarios）
+- **REQ-AUD-703**：流式证据和 sink 故障采用显式有界持久化（2 scenarios）
+
+## Verification
+
+- Canonical spec: `canonical/specs/code/audit-logger.yaml`
+- Agent checkpoints: `canonical/specs/agent/audit-logger.yaml`
+- Test cases: 5

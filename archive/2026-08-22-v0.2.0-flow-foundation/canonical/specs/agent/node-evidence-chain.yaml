@@ -1,0 +1,53 @@
+meta:
+  task_id: "node-evidence-chain"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway node-evidence-chain"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-NEC-001 每个 Flow 和 Node 产生版本化、确定排序的核心证据"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-NEC-002 每个 Flow 和 Node 产生版本化、确定排序的核心证据"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-NEC-003 全部终态、部分执行与降级都有可辨识证据"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-NEC-004 证据默认最小化、脱敏且有硬大小边界"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_004"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-005
+    description: "SC-NEC-005 证据默认最小化、脱敏且有硬大小边界"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_005"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-006
+    description: "SC-NEC-006 流式聚合与证据持久化失败均显式可见"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_006"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-007
+    description: "SC-NEC-007 流式聚合与证据持久化失败均显式可见"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_evidence.py::test_tc_nec_007"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

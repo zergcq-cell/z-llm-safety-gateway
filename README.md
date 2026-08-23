@@ -2,6 +2,11 @@
 
 Open-source, modular LLM content safety gateway that acts as a transparent proxy between applications and LLM providers, performing real-time content safety detection and filtering.
 
+> **Project constitution:** Every design and change is governed by the four
+> [Project Principles](PRINCIPLES.md): plugin capabilities and Flow execution, explicit policy and
+> visible failure, transparent boundaries and stable contracts, and evidence with privacy by
+> default.
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 ## Features
@@ -15,8 +20,9 @@ Open-source, modular LLM content safety gateway that acts as a transparent proxy
 
 ## Quick Start
 
-The v0.1.1 packages are not yet published to PyPI. Install from the repository source. Python
-3.10–3.12 is supported; Python 3.12 is recommended for a new environment.
+The v0.2.0 gateway and v0.1.1 Detector SDK are not yet published to PyPI. Install from the
+repository source. Python 3.10–3.12 is supported; Python 3.12 is recommended for a new
+environment.
 
 ```bash
 # 1. Clone and create an isolated environment
@@ -54,6 +60,7 @@ OPENAI_API_KEY=sk-replace-with-a-real-provider-key docker compose up -d --build
 
 | Guide | Description |
 |-------|-------------|
+| [Project Principles](PRINCIPLES.md) | The four governing principles for every design and change |
 | [Getting Started](docs/getting-started.md) | Install, minimal config, first request |
 | [Configuration](docs/configuration.md) | All config blocks with examples |
 | [API Specification](docs/api-spec.md) | Endpoints, request/response, error formats |
@@ -81,7 +88,7 @@ zlg-sdk new my-detector --type python     # scaffold a detector project
 
 ## Project Status
 
-Current source version: **v0.1.1**, a public-test patch release. See
+Current gateway source version: **v0.2.0**, the Flow Foundation public-test release. See
 [DESIGN.md](DESIGN.md) for architecture and roadmap.
 
 Supported Python versions: **3.10–3.12**; **3.12 is recommended** for releases and new

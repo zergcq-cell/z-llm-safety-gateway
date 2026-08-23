@@ -51,7 +51,7 @@ stdd_version: "2.9.5"
 - **what_changes**：变更列表（每项标注 type: new/modified/removed）
 - **capabilities**：new + modified
 - **constraints / stakeholders / risk_areas / non_goals**
-- **critical / anchoring / success_criteria**
+- **critical / anchoring / principle_check / success_criteria**
 
 然后执行 `python bin/stdd canon generate <change>` 从 YAML 渲染 proposal.md（Human View）。
 
@@ -64,6 +64,7 @@ stdd_version: "2.9.5"
    - What Changes：每项是否具体可执行？
    - Capabilities：是否正确区分了 Modified 和 New？
    - Impact：是否评估了代码/配置/基础设施影响？
+   - Project Principle Check：是否逐项回答 `PRINCIPLES.md`，并记录原则取舍或偏离？
    - Success Criteria：每个条件是否可验证（能明确用是/否回答）？
 
 2. **清晰度检查**：

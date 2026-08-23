@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from z_llm_safety_gateway.flow.evidence import FlowEvidence
 from z_llm_safety_gateway.models import find_result_by_action
 from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
 
@@ -43,6 +44,7 @@ class PostAuditOutcome:
     reason: str | None = None
     recall_needed: bool = False
     detector_results: list[Any] = field(default_factory=list)
+    flow_evidence: FlowEvidence | None = None
 
 
 class PostAuditRunner:
@@ -113,4 +115,5 @@ class PostAuditRunner:
             reason=trigger.message if trigger else None,
             recall_needed=recall_needed,
             detector_results=result.detector_results,
+            flow_evidence=result.flow_evidence,
         )

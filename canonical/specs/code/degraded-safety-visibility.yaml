@@ -1,0 +1,43 @@
+meta:
+  capability: "degraded-safety-visibility"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DSV-701
+    description: "请求级 Flow snapshot 在全部阶段一致暴露 fail-open 降级"
+    scenarios:
+      - id: SC-DSV-701
+        confidence: high
+        evidence: "proposal C7/C9; EXP-2026-0001; existing DSV specs"
+        given: "optional fail_open Capability 在请求入口 unavailable/unhealthy"
+        when: "请求经过 input、provider、sync/async/streaming/post-audit 阶段"
+        then: "请求 SHALL 继续且该 Capability SHALL 在所有适用阶段保持 skipped+degraded"
+        and:
+          - "每个跳过 SHALL 有 NodeEvidence"
+          - "request audit SHALL 标记 safety_degraded"
+          - "metrics SHALL 每请求/节点确定计数"
+          - "后续恢复 SHALL 不改变当前 snapshot"
+      - id: SC-DSV-702
+        confidence: high
+        evidence: "proposal C4/C7; required policy anchors; design D7"
+        given: "required 或 fail_closed Capability 在 input/output Flow snapshot 中不可用"
+        when: "聊天请求通过 Flow admission"
+        then: "网关 SHALL 在任何 Provider 调用前返回既有 503 safety_unavailable"
+        and:
+          - "admission SHALL 生成对应 Flow/Node evidence"
+          - "affected direction 与 detector 排序 SHALL 确定"
+          - "HTTP body/header SHALL 保持兼容"
+  - id: REQ-DSV-702
+    description: "每种降级原因和适用策略均可解释且不泄密"
+    scenarios:
+      - id: SC-DSV-703
+        confidence: high
+        evidence: "proposal C4/C5/C9; principle 2/4; EXP-2026-0002"
+        given: "节点因 unavailable、unhealthy、circuit_open、timeout、capability_error 或 sink_error 降级"
+        when: "API、日志、审计、metric 与 trace 发出信号"
+        then: "每条信号 SHALL 使用稳定 bounded reason_code 并关联 effective policy"
+        and:
+          - "原始异常和 endpoint SHALL NOT 外泄"
+          - "不同原因 SHALL NOT 全部折叠为 generic error"
+          - "任何 skip SHALL NOT 无 degraded 标记"

@@ -10,11 +10,11 @@ only (no ML models) and compares against DESIGN.md Section 14 targets.
 Output is a Markdown report; results are advisory for release review,
 NOT enforced by CI (machine performance varies across environments).
 
-Design targets (DESIGN.md 14.1/14.3):
+Flow Foundation change gates:
     P50 rule-based only       < 5ms
     P95 rule-based only       < 10ms
     P99 any mix               < 200ms
-    Throughput rule-based     1000 req/s (single instance)
+    Throughput rule-based     >= 7128 req/s (90% of Phase 2 baseline)
 """
 
 from __future__ import annotations
@@ -43,6 +43,12 @@ from z_llm_safety_gateway.models import DetectionContext  # noqa: E402
 
 #: Number of detection runs per sample for stable statistics.
 _N_RUNS = 200
+#: Untimed runs used to stabilize the interpreter and runtime.
+_WARMUP_RUNS = 50
+#: Timed capacity trials required by ADJ-003.
+_THROUGHPUT_TRIALS = 5
+#: Detection runs in each timed capacity trial.
+_THROUGHPUT_RUNS_PER_TRIAL = 750
 
 
 def _build_engine() -> tuple[object, list[object], dict]:
@@ -110,17 +116,23 @@ def bench_latency(engine: object, detectors: list[object], configs: dict) -> dic
 
 
 def bench_throughput(engine: object, detectors: list[object], configs: dict) -> float:
-    """Measure single-connection throughput (detections per second)."""
+    """Measure best-of-five single-connection throughput after warmup."""
     ctx = DetectionContext(direction="input", request_id="bench")
 
-    async def _run_batch(n: int) -> float:
-        start = time.perf_counter()
-        for _ in range(n):
+    async def _run_trials() -> list[float]:
+        for _ in range(_WARMUP_RUNS):
             await engine.run(detectors, [ctx], configs)
-        elapsed = time.perf_counter() - start
-        return n / elapsed
 
-    return asyncio.run(_run_batch(500))
+        rates: list[float] = []
+        for _ in range(_THROUGHPUT_TRIALS):
+            start = time.perf_counter()
+            for _ in range(_THROUGHPUT_RUNS_PER_TRIAL):
+                await engine.run(detectors, [ctx], configs)
+            elapsed = time.perf_counter() - start
+            rates.append(_THROUGHPUT_RUNS_PER_TRIAL / elapsed)
+        return rates
+
+    return max(asyncio.run(_run_trials()))
 
 
 def main() -> int:

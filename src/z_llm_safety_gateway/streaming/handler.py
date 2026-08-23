@@ -23,6 +23,10 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from z_llm_safety_gateway.audit.streaming_evidence import (
+    StreamingEvidenceAccumulator,
+    StreamingEvidenceSummary,
+)
 from z_llm_safety_gateway.models import DetectionContext, DetectionResult, find_result_by_action
 from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
 from z_llm_safety_gateway.streaming.memory import StreamingMemory
@@ -128,6 +132,7 @@ class StreamingHandler:
         self._output_risk_level: str = "low"
         self._window_count: int = 0
         self._detector_results: list[DetectionResult] = []
+        self._evidence = StreamingEvidenceAccumulator()
 
     @property
     def blocked(self) -> bool:
@@ -163,6 +168,16 @@ class StreamingHandler:
     def detector_results(self) -> list[DetectionResult]:
         """Return detector results collected from sliding-window detection."""
         return self._detector_results
+
+    @property
+    def evidence_summary(self) -> StreamingEvidenceSummary:
+        """Return the bounded aggregate of all completed window executions."""
+        return self._evidence.summary()
+
+    def set_post_audit_evidence(self, evidence: Any) -> None:
+        """Attach the independent post-audit Flow evidence when available."""
+        if evidence is not None:
+            self._evidence.set_post_audit(evidence)
 
     async def process_chunk(self, chunk: str) -> AsyncIterator[str]:
         """Process a single provider chunk and yield client events.
@@ -240,6 +255,11 @@ class StreamingHandler:
             result: PipelineResult = await self._engine.run(
                 self._detectors, [self._make_context(content)], self._configs
             )
+            if result.flow_evidence is not None:
+                self._evidence.record_window(
+                    result.flow_evidence,
+                    window_index=self._window_count - 1,
+                )
 
             # Update output-side state (B-05).
             self._update_output_state(result)

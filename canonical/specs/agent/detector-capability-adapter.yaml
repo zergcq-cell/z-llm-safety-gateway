@@ -1,0 +1,41 @@
+meta:
+  task_id: "detector-capability-adapter"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway detector-capability-adapter"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-DCA-001 Detector 被映射为版本化 Capability descriptor"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_detector_adapter.py::test_tc_dca_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-DCA-002 Adapter 精确保留 Detector 输入、结果和修改语义"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_detector_adapter.py::test_tc_dca_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-DCA-003 Adapter 精确保留 Detector 输入、结果和修改语义"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_detector_adapter.py::test_tc_dca_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-DCA-004 Adapter 复用既有 lifecycle/status 且正确传播错误与取消"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_detector_adapter.py::test_tc_dca_004"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-005
+    description: "SC-DCA-005 Adapter 复用既有 lifecycle/status 且正确传播错误与取消"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_detector_adapter.py::test_tc_dca_005"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

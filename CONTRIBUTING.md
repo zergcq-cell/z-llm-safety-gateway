@@ -6,6 +6,10 @@ GitHub **Fork + Pull Request** workflow (DESIGN.md §19.2).
 Python 3.10–3.12 is supported. Python 3.12 is recommended for a new development
 environment and is used for release builds.
 
+Before proposing or implementing a change, read the four [Project Principles](PRINCIPLES.md).
+Every proposal and pull request must consider each principle explicitly. If principles are in
+tension, document the trade-off; do not introduce a silent exception.
+
 ## Development Setup
 
 ```bash
@@ -23,6 +27,9 @@ This repository uses STDD for code changes: Understand → Spec → Slice → Bu
 Deliver. Discuss the requirement and acceptance criteria before implementation, add a failing
 test first, then make the minimum implementation pass. Maintainers track active changes under
 `changes/`; run `python bin/stdd --help` to inspect the project toolchain.
+
+The Understand, Spec, and Verify phases must include the Required Principle Check from
+`PRINCIPLES.md`. “Not applicable” requires a short explanation.
 
 Documentation-only corrections still need link and consistency checks, but do not need to invent
 behavioral tests.

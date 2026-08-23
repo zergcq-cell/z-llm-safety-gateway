@@ -4,6 +4,10 @@
 > **Date**: 2026-08-10
 > **License**: Apache 2.0
 > **Status**: Design Phase
+>
+> **Governing constraint**: This design and every future architecture decision MUST satisfy the
+> four [Project Principles](PRINCIPLES.md). Any deliberate tension or departure must be recorded
+> explicitly and approved; it must never be introduced silently.
 
 ---
 
@@ -28,8 +32,9 @@
 17. [Testing Strategy](#17-testing-strategy)
 18. [Development Roadmap](#18-development-roadmap)
 19. [Open Source Governance](#19-open-source-governance)
-20. [Appendix A: Decision Summary](#appendix-a-decision-summary)
-21. [Appendix B: Open Questions & Future Decisions](#appendix-b-open-questions--future-decisions)
+20. [Flow Foundation](#20-flow-foundation-v020)
+- [Appendix A: Decision Summary](#appendix-a-decision-summary)
+- [Appendix B: Open Questions & Future Decisions](#appendix-b-open-questions--future-decisions)
 
 ---
 
@@ -2997,6 +3002,116 @@ GitHub Actions pipeline:
 | Plugin compatibility | Each plugin declares compatible gateway version range |
 | Security disclosure | Plugin security vulnerabilities are the plugin vendor's responsibility; gateway project discloses gateway-level vulnerabilities |
 | Plugin review | Open-source plugins can request review (voluntary); commercial plugins are not reviewed by the gateway project |
+
+---
+
+## 20. Flow Foundation (v0.2.0)
+
+### 20.1 Versioned contracts and boundaries
+
+Safety execution is expressed as versioned `FlowDefinition`, Capability Node,
+Nested Flow Node, and `CapabilityDescriptor` contracts. v0.2.0 accepts
+`contract_version: "1.0"` only and rejects unsupported versions, unknown fields,
+duplicate IDs, missing references, schema mismatches, cycles, depth over 8, and
+expanded graphs over 256 Nodes at startup.
+
+The domain-neutral `flow/` core owns contract validation, policy resolution,
+bounded scheduling, context propagation, stop/cancel convergence, reducer
+dispatch, evidence, and observability projection. Detector actions, thresholds,
+modification order, risk precedence, and failure fallbacks remain in the
+Detector adapter and `detector-result-reducer`; they are not hard-coded into the
+Runtime. Importing the `flow` package does not import Detector or pipeline domain
+modules.
+
+### 20.2 Configuration and compatibility
+
+Configuration adds optional `flow_runtime`, `flows`, protected `capabilities`
+implementation bindings, and exact
+`pipeline.input_flow` / `pipeline.output_flow` references. Explicit Flow mode
+requires at least one stage reference and currently binds `detector.<name>`
+Capabilities plus the `detector-result-reducer`. Unknown runtime Capabilities or
+reducers fail startup. Explicit `flows` and explicit legacy `pipeline.detectors`
+cannot coexist, avoiding a silent precedence rule.
+
+`capabilities` supplies Detector implementation type and private configuration
+without expressing order or policy. Binding IDs must match
+`detector.<detector_name>`; duplicates and unused bindings fail startup, and
+private configuration is excluded from evidence and object representations.
+
+Legacy YAML remains valid and is deterministically normalized into
+`legacy-input-detector-flow` and `legacy-output-detector-flow`. The public
+`PipelineEngine` constructor, `run(detectors, contexts, configs)` call, and
+`PipelineResult` remain available, but scheduling occurs exactly once through
+the Flow Runtime. Input, synchronous/asynchronous output, sliding-window,
+buffer, and post-audit paths use one immutable request snapshot. HTTP status,
+OpenAI-compatible bodies, headers, Provider calls, and SSE chunk/event ordering
+remain compatible.
+
+### 20.3 Explicit policy and bounded execution
+
+Every Node resolves a complete timeout, failure, availability, degradation, and
+stop policy at startup, with `explicit`, `legacy`, `legacy_default`, or `default`
+source recorded. Capability error, Node timeout, unavailable, and circuit-open
+are distinct stable failure kinds. `fail_open` and `fail_closed` are applied by
+the resolved policy; skips and degradations are never reported as successful
+Node execution.
+
+Runtime defaults and hard maxima are: depth 8, expanded Nodes 256, concurrency
+64, default Node timeout 30 seconds, absolute Flow timeout 120 seconds, and
+complete serialized Flow evidence 256 KiB. v0.2.0 fixes the evidence budget at
+256 KiB so every legal 256-Node core envelope is representable at runtime; a
+different value fails startup. The absolute deadline includes the
+reducer. Stop, timeout, and caller cancellation cancel and await pending work;
+no Flow helper task may remain after convergence.
+
+### 20.4 Evidence, audit, metrics, and tracing
+
+Each configured Node has a deterministic `NodeEvidence` terminal record with
+Flow/Node/Capability identity and version, effective policy, status, stable
+reason, duration, item counts, bounded signals, and an allowlisted optional
+summary. `FlowEvidence` adds execution/parent identity, stage, terminal status,
+final signals, and persistence state. Healthy runtime evidence and fail-open
+availability skip evidence are merged rather than one replacing the other.
+
+The complete Flow envelope is budgeted: optional summaries and signals are
+removed first and long identities are replaced by stable non-reversible hashes
+only if necessary. At the extreme legal 256-Node boundary, a complete long
+stop-signal tuple may be represented by its deterministic SHA-256 fingerprint;
+all Node terminal records, status, reason, other policy facts, and policy
+sources remain. Streaming windows are persisted through bounded aggregation.
+The post-audit Flow remains an independently attached execution; its duplicate
+inside the streaming summary is compacted with space reserved for the outer
+envelope, or explicitly omitted if its irreducible core cannot fit.
+
+Audit extensions are additive. Raw prompt/completion, modified content,
+Detector details/message, endpoint, secret, and exception text are excluded
+from Flow evidence and exported detector errors use stable reason codes. Audit
+sink failure sets `evidence_persisted=false` and emits a stable warning and
+counter without changing the safety decision. Metrics use bounded configured
+IDs and enums only. Traces exclude request/user IDs, payload, endpoint, and raw
+exceptions; arbitrary plugin implementation versions are emitted only as a
+SHA-256 hash.
+
+New metrics:
+
+- `safety_flow_executions_total` and Flow duration
+- `safety_flow_node_executions_total`
+- degraded request and observability sanitization counters
+- `safety_evidence_persistence_failures_total`
+
+### 20.5 Flow Foundation principle check
+
+1. Domain behavior remains in detector plugins/adapters/reducer; composition is
+   Flow-owned and the core remains a runtime mechanism.
+2. Defaults, failures, bypasses, degradation, evidence rejection, and sink
+   failure are explicit and observable.
+3. HTTP/SSE, Provider, Detector SDK, entry point, gRPC proto, legacy YAML, and
+   Pipeline facade contracts are preserved, with bounded time and resources.
+4. Every allow/block/flag/modify/fallback/degradation is tied to Flow/Node
+   evidence while raw content and dynamic private diagnostics remain excluded.
+
+The deliberate compatibility tightening is limited to invalid/contradictory or
+resource-unbounded configurations, which now fail explicitly at startup.
 
 ---
 

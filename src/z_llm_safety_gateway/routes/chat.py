@@ -47,10 +47,20 @@ from z_llm_safety_gateway.exceptions import (
     SafetyBlockError,
     SafetyUnavailableError,
 )
+from z_llm_safety_gateway.flow.evidence import (
+    FlowEvidence,
+    FlowStatus,
+    bound_flow_evidence,
+)
 from z_llm_safety_gateway.language import detect_language, detect_language_for_messages
 from z_llm_safety_gateway.models import DetectionContext, DetectionResult, find_result_by_action
 from z_llm_safety_gateway.observability import metrics as observability_metrics
 from z_llm_safety_gateway.pipeline.engine import PipelineResult
+from z_llm_safety_gateway.pipeline.snapshot import (
+    FlowExecutionSnapshot,
+    FlowStageSnapshot,
+    capture_flow_execution_snapshot,
+)
 from z_llm_safety_gateway.post_audit.audit import PostAuditRunner
 from z_llm_safety_gateway.providers.base import ProviderError
 from z_llm_safety_gateway.providers.router import ModelRouter
@@ -129,27 +139,48 @@ def _filter_available_detectors(
 def _enforce_detector_availability(request: Request) -> None:
     """Apply fail-closed admission and capture the fail-open request snapshot."""
     registry = getattr(request.app.state, "detector_status_registry", None)
-    if registry is None:
-        request.state.safety_degraded = False
-        request.state.detector_availability = []
-        return
-
-    issues = registry.issues()
-    strict_issues = [status for status in issues if status.is_strict]
-    request.state.safety_degraded = bool(issues)
+    statuses = registry.snapshot() if registry is not None else ()
+    snapshot = capture_flow_execution_snapshot(
+        request_id=getattr(request.state, "request_id", ""),
+        statuses=statuses,
+        input_detectors=getattr(request.app.state, "input_detectors", ()),
+        output_detectors=getattr(request.app.state, "output_detectors", ()),
+        input_detector_configs=getattr(
+            request.app.state, "input_detector_configs", {}
+        ),
+        output_detector_configs=getattr(
+            request.app.state, "output_detector_configs", {}
+        ),
+        max_evidence_size=getattr(
+            getattr(getattr(request.app.state, "config", None), "flow_runtime", None),
+            "max_evidence_size",
+            256 * 1024,
+        ),
+        input_flow_identity=getattr(
+            request.app.state, "input_flow_identity", None
+        ),
+        output_flow_identity=getattr(
+            request.app.state, "output_flow_identity", None
+        ),
+        input_detector_policies=getattr(
+            request.app.state, "input_detector_policies", {}
+        ),
+        output_detector_policies=getattr(
+            request.app.state, "output_detector_policies", {}
+        ),
+    )
+    request.state.flow_snapshot = snapshot
+    request.state.flow_evidence = []
+    issues = snapshot.issues
+    strict_issues = snapshot.strict_issues
+    request.state.safety_degraded = snapshot.degraded
     request.state.detector_availability = [
         status.to_availability_dict() for status in issues
     ]
-    request.state.input_detectors = _filter_available_detectors(
-        request,
-        "input",
-        getattr(request.app.state, "input_detectors", []),
-    )
-    request.state.output_detectors = _filter_available_detectors(
-        request,
-        "output",
-        getattr(request.app.state, "output_detectors", []),
-    )
+    request.state.input_detectors = list(snapshot.input_detectors)
+    request.state.output_detectors = list(snapshot.output_detectors)
+    _record_snapshot_stage(request, "input", "admission")
+    _record_snapshot_stage(request, "output", "admission")
     if strict_issues:
         request.state.safety_action = "block"
         request.state.safety_risk_level = "high"
@@ -164,6 +195,27 @@ def _enforce_detector_availability(request: Request) -> None:
         )
 
 
+def _record_snapshot_stage(
+    request: Request,
+    direction: Literal["input", "output"],
+    stage: str,
+) -> FlowStageSnapshot | None:
+    """Derive one stage from the request snapshot and retain skip evidence."""
+    snapshot: FlowExecutionSnapshot | None = getattr(
+        request.state, "flow_snapshot", None
+    )
+    if snapshot is None:
+        return None
+    view = snapshot.stage(direction, stage)
+    if view.evidence.nodes:
+        evidence = getattr(request.state, "flow_evidence", None)
+        if evidence is None:
+            evidence = []
+            request.state.flow_evidence = evidence
+        evidence.append(view.evidence)
+    return view
+
+
 def _availability_audit_fields(request: Request) -> dict[str, Any]:
     """Return request-scoped availability fields for every audit direction."""
     return {
@@ -172,6 +224,16 @@ def _availability_audit_fields(request: Request) -> dict[str, Any]:
             request.state, "detector_availability", []
         ),
     }
+
+
+def _stage_flow_enabled(
+    request: Request,
+    direction: Literal["input", "output"],
+    detectors: Any,
+    engine: Any,
+) -> bool:
+    identity = getattr(request.app.state, f"{direction}_flow_identity", None)
+    return engine is not None and (bool(detectors) or identity is not None)
 
 
 def _higher_risk(a: str | None, b: str | None) -> str | None:
@@ -198,6 +260,7 @@ def _build_audit_entry(
     total_duration_ms: float = 0.0,
     user_id: str | None = None,
     applied_modify: bool | None = None,
+    flow_evidence: FlowEvidence | None = None,
     **extra: Any,
 ) -> AuditEntry:
     """Build an AuditEntry from pipeline results.
@@ -242,12 +305,12 @@ def _build_audit_entry(
                 confidence=r.confidence,
                 risk_level=r.risk_level,
                 duration_ms=r.duration_ms,
-                error=r.error,
+                error=_stable_detector_error(r),
                 applied=applied,
             )
         )
 
-    return AuditEntry(
+    entry = AuditEntry(
         request_id=request_id,
         direction=direction,
         user_id=user_id,
@@ -264,6 +327,108 @@ def _build_audit_entry(
         streaming=streaming,
         **extra,
     )
+    return entry.with_flow_evidence(flow_evidence) if flow_evidence is not None else entry
+
+
+def _latest_flow_evidence(
+    request: Request,
+    direction: Literal["input", "output"],
+) -> FlowEvidence | None:
+    evidence = getattr(request.state, "flow_evidence", ())
+    return next(
+        (item for item in reversed(evidence) if item.direction == direction),
+        None,
+    )
+
+
+def _stable_detector_error(result: DetectionResult) -> str | None:
+    """Map detector diagnostics to a payload-free external audit reason."""
+    if result.error is None:
+        return None
+    if result.category == "circuit_breaker":
+        return "circuit_open"
+    if "timeout" in result.error.lower() or "timed out" in result.error.lower():
+        return "node_timeout"
+    return "capability_error"
+
+
+def _combined_flow_evidence(
+    request: Request,
+    direction: Literal["input", "output"],
+    primary: FlowEvidence | None,
+) -> FlowEvidence | None:
+    """Retain runtime evidence and request-snapshot skip evidence together."""
+    supplemental = _latest_flow_evidence(request, direction)
+    if primary is None:
+        return supplemental
+    if supplemental is None or not supplemental.nodes:
+        return primary
+    offset = len(primary.nodes)
+    availability_nodes = tuple(
+        node.model_copy(
+            update={
+                "flow_id": primary.flow_id,
+                "flow_version": primary.flow_version,
+                "execution_id": primary.execution_id,
+                "node_id": f"availability-{node.node_id}"[:256],
+                "definition_index": offset + index,
+            }
+        )
+        for index, node in enumerate(supplemental.nodes)
+    )
+    config = getattr(request.app.state, "config", None)
+    max_evidence_size = (
+        config.flow_runtime.max_evidence_size
+        if config is not None
+        else 256 * 1024
+    )
+    return bound_flow_evidence(
+        primary.model_copy(
+            update={
+                "status": (
+                    FlowStatus.PARTIAL
+                    if primary.status is FlowStatus.COMPLETED
+                    else primary.status
+                ),
+                "reason_code": (
+                    "capability_unavailable"
+                    if primary.status is FlowStatus.COMPLETED
+                    else primary.reason_code
+                ),
+                "nodes": (*primary.nodes, *availability_nodes),
+                "details_truncated": (
+                    primary.details_truncated or supplemental.details_truncated
+                ),
+            }
+        ),
+        max_evidence_size=max_evidence_size,
+    )
+
+
+def _record_request_audit(
+    request: Request,
+    audit_logger: AuditLogger,
+    entry: AuditEntry,
+) -> FlowEvidence | None:
+    """Persist an entry and retain the truthful persistence state for the request."""
+    persisted = audit_logger.record(entry)
+    if persisted is None:
+        return None
+
+    evidence = list(getattr(request.state, "flow_evidence", ()))
+    identity = (
+        persisted.direction,
+        persisted.stage,
+        persisted.execution_id,
+    )
+    for index, current in enumerate(evidence):
+        if (current.direction, current.stage, current.execution_id) == identity:
+            evidence[index] = persisted
+            break
+    else:
+        evidence.append(persisted)
+    request.state.flow_evidence = evidence
+    return persisted
 
 
 def _get_sync_timeout(request: Request) -> float:
@@ -353,20 +518,34 @@ def _build_streaming_response(
     detection, recall signals, and audit logging.
     """
     streaming_config = getattr(request.app.state, "streaming_config", None)
-    output_detectors: list[Any] = getattr(
-        request.state,
-        "output_detectors",
-        getattr(request.app.state, "output_detectors", []),
+    snapshot: FlowExecutionSnapshot | None = getattr(
+        request.state, "flow_snapshot", None
     )
-    output_detector_configs: dict[str, dict[str, Any]] = getattr(
-        request.app.state, "output_detector_configs", {}
+    output_detectors: tuple[Any, ...] = (
+        snapshot.output_detectors
+        if snapshot is not None
+        else tuple(
+            getattr(
+                request.state,
+                "output_detectors",
+                getattr(request.app.state, "output_detectors", []),
+            )
+        )
+    )
+    output_detector_configs = (
+        snapshot.output_detector_configs
+        if snapshot is not None
+        else getattr(request.app.state, "output_detector_configs", {})
     )
     post_audit_runner: PostAuditRunner | None = None
-    if engine is not None and output_detectors:
+    if _stage_flow_enabled(request, "output", output_detectors, engine):
         post_audit_runner = PostAuditRunner(
             engine=engine,
-            output_detectors=output_detectors,
-            detector_configs=output_detector_configs,
+            output_detectors=list(output_detectors),
+            detector_configs={
+                name: dict(config)
+                for name, config in output_detector_configs.items()
+            },
         )
     streaming_webhook: WebhookRecall | None = getattr(
         request.app.state, "streaming_webhook_recall", None
@@ -378,7 +557,9 @@ def _build_streaming_response(
         headers["X-Request-ID"] = request_id
     headers["X-Safety-Action"] = getattr(request.state, "safety_action", "allow")
 
-    has_detection = bool(output_detectors) and engine is not None
+    has_detection = _stage_flow_enabled(
+        request, "output", output_detectors, engine
+    )
     is_buffer = (
         streaming_config is not None
         and streaming_config.mode == "buffer"
@@ -387,6 +568,9 @@ def _build_streaming_response(
 
     async def _generate() -> AsyncIterator[str]:
         stream_start = time.monotonic()
+        _record_snapshot_stage(request, "output", "streaming")
+        if streaming_config is not None and streaming_config.post_audit:
+            _record_snapshot_stage(request, "output", "post-audit")
 
         # --- No output detectors: transparent passthrough (backward compat) ---
         if not has_detection:
@@ -403,6 +587,15 @@ def _build_streaming_response(
 
         # --- Buffer mode (SC-010, SC-011) ---
         if is_buffer:
+            buffer_stage = _record_snapshot_stage(request, "output", "buffer")
+            stage_detectors = (
+                buffer_stage.detectors if buffer_stage is not None else output_detectors
+            )
+            stage_configs = (
+                buffer_stage.detector_configs
+                if buffer_stage is not None
+                else output_detector_configs
+            )
             buffered: list[str] = []
             full_content = ""
             try:
@@ -423,7 +616,9 @@ def _build_streaming_response(
                 metadata={"content": full_content},
             )
             result = await engine.run(
-                output_detectors, [context], output_detector_configs
+                list(stage_detectors),
+                [context],
+                {name: dict(config) for name, config in stage_configs.items()},
             )
 
             if result.final_action == "block":
@@ -444,7 +639,9 @@ def _build_streaming_response(
 
             # Buffer mode skips post-audit (full detection already done).
             if audit_enabled and audit_logger:
-                audit_logger.record(
+                _record_request_audit(
+                    request,
+                    audit_logger,
                     _build_audit_entry(
                         request_id=request_id,
                         direction="output",
@@ -459,16 +656,30 @@ def _build_streaming_response(
                         total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
                         user_id=user_id,
                         post_audit={"executed": False},
+                        flow_evidence=_combined_flow_evidence(
+                            request, "output", result.flow_evidence
+                        ),
                         **_availability_audit_fields(request),
                     )
                 )
             return
 
         # --- Sliding window mode (SC-001 ~ SC-009) ---
+        sliding_stage = _record_snapshot_stage(request, "output", "sliding-window")
+        stage_detectors = (
+            sliding_stage.detectors if sliding_stage is not None else output_detectors
+        )
+        stage_configs = (
+            sliding_stage.detector_configs
+            if sliding_stage is not None
+            else output_detector_configs
+        )
         handler = StreamingHandler(
             engine=engine,
-            output_detectors=output_detectors,
-            detector_configs=output_detector_configs,
+            output_detectors=list(stage_detectors),
+            detector_configs={
+                name: dict(config) for name, config in stage_configs.items()
+            },
             window_size=streaming_config.window_size if streaming_config else 200,
             overlap=streaming_config.overlap if streaming_config else 50,
             send_flag_events=(
@@ -495,7 +706,9 @@ def _build_streaming_response(
             yield f"event: error\ndata: {err}\n\n"
             yield SSE_DONE
             if audit_enabled and audit_logger:
-                audit_logger.record(
+                _record_request_audit(
+                    request,
+                    audit_logger,
                     _build_audit_entry(
                         request_id=request_id,
                         direction="output",
@@ -511,6 +724,8 @@ def _build_streaming_response(
                         total_duration_ms=(time.monotonic() - stream_start) * 1000.0,
                         user_id=user_id,
                         post_audit={"executed": False},
+                        streaming_evidence=handler.evidence_summary,
+                        flow_evidence=_latest_flow_evidence(request, "output"),
                         **_availability_audit_fields(request),
                     )
                 )
@@ -532,7 +747,6 @@ def _build_streaming_response(
         if (
             streaming_config
             and streaming_config.post_audit
-            and output_detectors
             and post_audit_runner
         ):
             post_audit_outcome = await post_audit_runner.run(
@@ -540,6 +754,7 @@ def _build_streaming_response(
                 request_id=request_id,
                 language=input_language,
             )
+            handler.set_post_audit_evidence(post_audit_outcome.flow_evidence)
             post_audit_info = {
                 "executed": True,
                 "result": post_audit_outcome.effective_action,
@@ -583,7 +798,9 @@ def _build_streaming_response(
             # When post-audit is skipped, post_audit should be {'executed': False}.
             effective_post_audit = post_audit_info or {"executed": False}
 
-            audit_logger.record(
+            _record_request_audit(
+                request,
+                audit_logger,
                 _build_audit_entry(
                     request_id=request_id,
                     direction="output",
@@ -600,8 +817,14 @@ def _build_streaming_response(
                     user_id=user_id,
                     applied_modify=applied_modify,
                     post_audit=effective_post_audit,
+                    streaming_evidence=handler.evidence_summary,
                     recalled=recalled if recalled else None,
                     recall_method=recall_method,
+                    flow_evidence=_combined_flow_evidence(
+                        request,
+                        "output",
+                        getattr(post_audit_outcome, "flow_evidence", None),
+                    ),
                     **_availability_audit_fields(request),
                 )
             )
@@ -675,13 +898,23 @@ async def chat_completions(request: Request) -> Response:
         forward_headers["X-Request-ID"] = request_id
 
     # 5. Input safety pipeline
-    input_detectors: list[Any] = getattr(
-        request.state,
-        "input_detectors",
-        getattr(request.app.state, "input_detectors", []),
+    input_stage = _record_snapshot_stage(request, "input", "input")
+    input_detectors: list[Any] = (
+        list(input_stage.detectors)
+        if input_stage is not None
+        else getattr(
+            request.state,
+            "input_detectors",
+            getattr(request.app.state, "input_detectors", []),
+        )
     )
-    input_detector_configs: dict[str, dict[str, Any]] = getattr(
-        request.app.state, "input_detector_configs", {}
+    input_detector_configs: dict[str, dict[str, Any]] = (
+        {
+            name: dict(config)
+            for name, config in input_stage.detector_configs.items()
+        }
+        if input_stage is not None
+        else getattr(request.app.state, "input_detector_configs", {})
     )
     engine = getattr(request.app.state, "pipeline_engine", None)
 
@@ -689,7 +922,8 @@ async def chat_completions(request: Request) -> Response:
     input_extracted: list[Any] | None = None
     input_language: str | None = None
 
-    if input_detectors and engine:
+    if _stage_flow_enabled(request, "input", input_detectors, engine):
+        assert engine is not None
         messages = body.get("messages", [])
         extracted = extract_content(messages)
         input_extracted = extracted
@@ -764,7 +998,9 @@ async def chat_completions(request: Request) -> Response:
         ):
             input_applied_modify = True
 
-        audit_logger.record(
+        _record_request_audit(
+            request,
+            audit_logger,
             _build_audit_entry(
                 request_id=request_id or "",
                 direction="input",
@@ -788,6 +1024,11 @@ async def chat_completions(request: Request) -> Response:
                 total_duration_ms=(time.monotonic() - request_start) * 1000.0,
                 user_id=user_id,
                 applied_modify=input_applied_modify,
+                flow_evidence=_combined_flow_evidence(
+                    request,
+                    "input",
+                    getattr(input_pipeline_result, "flow_evidence", None),
+                ),
                 **_availability_audit_fields(request),
             )
         )
@@ -814,13 +1055,25 @@ async def chat_completions(request: Request) -> Response:
     provider_response_time = time.monotonic()
 
     # 8. Output safety pipeline
-    output_detectors: list[Any] = getattr(
-        request.state,
-        "output_detectors",
-        getattr(request.app.state, "output_detectors", []),
+    output_snapshot: FlowExecutionSnapshot | None = getattr(
+        request.state, "flow_snapshot", None
     )
-    output_detector_configs: dict[str, dict[str, Any]] = getattr(
-        request.app.state, "output_detector_configs", {}
+    output_detectors: list[Any] = (
+        list(output_snapshot.output_detectors)
+        if output_snapshot is not None
+        else getattr(
+            request.state,
+            "output_detectors",
+            getattr(request.app.state, "output_detectors", []),
+        )
+    )
+    output_detector_configs: dict[str, dict[str, Any]] = (
+        {
+            name: dict(config)
+            for name, config in output_snapshot.output_detector_configs.items()
+        }
+        if output_snapshot is not None
+        else getattr(request.app.state, "output_detector_configs", {})
     )
 
     response_content = provider_response.content
@@ -831,12 +1084,17 @@ async def chat_completions(request: Request) -> Response:
 
     # 8a. Async output detection (SC-014, SC-015)
     output_detection_cfg = getattr(request.app.state, "output_detection_config", None)
+    async_stage = (
+        _record_snapshot_stage(request, "output", "async-output")
+        if output_detection_cfg and output_detection_cfg.mode == "async"
+        else None
+    )
     if (
         output_detection_cfg
         and output_detection_cfg.mode == "async"
-        and output_detectors
-        and engine
+        and _stage_flow_enabled(request, "output", output_detectors, engine)
     ):
+        assert engine is not None
         output_webhook: WebhookRecall | None = getattr(
             request.app.state, "output_webhook_recall", None
         )
@@ -845,8 +1103,18 @@ async def chat_completions(request: Request) -> Response:
         _provider_name = provider.config.name
         _response_content = response_content
         _engine = engine
-        _output_detectors = output_detectors
-        _output_configs = output_detector_configs
+        _output_detectors = tuple(
+            async_stage.detectors if async_stage is not None else output_detectors
+        )
+        _output_configs = {
+            name: dict(config)
+            for name, config in (
+                async_stage.detector_configs
+                if async_stage is not None
+                else output_detector_configs
+            ).items()
+        }
+        _availability_fields = dict(_availability_audit_fields(request))
         _audit_logger = audit_logger
         _audit_enabled = audit_enabled
         _user_id = user_id
@@ -870,7 +1138,7 @@ async def chat_completions(request: Request) -> Response:
                             metadata={"content": otext},
                         )
                         bg_result = await _engine.run(
-                            _output_detectors, [octx], _output_configs
+                            list(_output_detectors), [octx], _output_configs
                         )
 
                         if (
@@ -887,7 +1155,9 @@ async def chat_completions(request: Request) -> Response:
                                 )
 
                         if _audit_enabled and _audit_logger:
-                            _audit_logger.record(
+                            _record_request_audit(
+                                request,
+                                _audit_logger,
                                 _build_audit_entry(
                                     request_id=_req_id,
                                     direction="output",
@@ -911,7 +1181,10 @@ async def chat_completions(request: Request) -> Response:
                                         if bg_result.final_action == "block"
                                         else None
                                     ),
-                                    **_availability_audit_fields(request),
+                                    flow_evidence=_combined_flow_evidence(
+                                        request, "output", bg_result.flow_evidence
+                                    ),
+                                    **_availability_fields,
                                 )
                             )
             except Exception:
@@ -921,7 +1194,9 @@ async def chat_completions(request: Request) -> Response:
 
         # Initial audit entry (pending)
         if audit_enabled and audit_logger:
-            audit_logger.record(
+            _record_request_audit(
+                request,
+                audit_logger,
                 _build_audit_entry(
                     request_id=request_id or "",
                     direction="output",
@@ -934,6 +1209,7 @@ async def chat_completions(request: Request) -> Response:
                     * 1000.0,
                     user_id=user_id,
                     async_detection="pending",
+                    flow_evidence=_latest_flow_evidence(request, "output"),
                     **_availability_audit_fields(request),
                 )
             )
@@ -947,8 +1223,27 @@ async def chat_completions(request: Request) -> Response:
     # 8b. Sync output detection (existing flow)
     output_pipeline_result: Any = None
     output_text_for_audit = ""
+    sync_stage = (
+        _record_snapshot_stage(request, "output", "sync-output")
+        if output_detection_cfg is None or output_detection_cfg.mode != "async"
+        else None
+    )
 
-    if output_detectors and engine:
+    if _stage_flow_enabled(request, "output", output_detectors, engine):
+        assert engine is not None
+        sync_detectors = (
+            list(sync_stage.detectors)
+            if sync_stage is not None
+            else output_detectors
+        )
+        sync_configs = (
+            {
+                name: dict(config)
+                for name, config in sync_stage.detector_configs.items()
+            }
+            if sync_stage is not None
+            else output_detector_configs
+        )
         try:
             response_json: dict[str, Any] = json.loads(provider_response.content)
             choices = response_json.get("choices", [])
@@ -974,9 +1269,9 @@ async def chat_completions(request: Request) -> Response:
                     try:
                         result = await asyncio.wait_for(
                             engine.run(
-                                output_detectors,
+                                sync_detectors,
                                 [output_context],
-                                output_detector_configs,
+                                sync_configs,
                             ),
                             timeout=sync_timeout_seconds,
                         )
@@ -986,7 +1281,7 @@ async def chat_completions(request: Request) -> Response:
                             sync_timeout_seconds=sync_timeout_seconds,
                         )
                         result = _handle_sync_timeout(
-                            output_detectors, output_detector_configs
+                            sync_detectors, sync_configs
                         )
                     output_pipeline_result = result
 
@@ -1045,7 +1340,9 @@ async def chat_completions(request: Request) -> Response:
         ):
             output_applied_modify = True
 
-        audit_logger.record(
+        _record_request_audit(
+            request,
+            audit_logger,
             _build_audit_entry(
                 request_id=request_id or "",
                 direction="output",
@@ -1068,6 +1365,11 @@ async def chat_completions(request: Request) -> Response:
                 total_duration_ms=(time.monotonic() - provider_response_time) * 1000.0,
                 user_id=user_id,
                 applied_modify=output_applied_modify,
+                flow_evidence=_combined_flow_evidence(
+                    request,
+                    "output",
+                    getattr(output_pipeline_result, "flow_evidence", None),
+                ),
                 **_availability_audit_fields(request),
             )
         )

@@ -259,6 +259,10 @@ pipeline:
     app = _make_app(tmp_path, config)
     client = TestClient(app)
 
+    provider_route = respx.post(
+        "https://api.openai.com/v1/chat/completions"
+    ).respond(200, json={"choices": [{"message": {"content": "not reached"}}]})
+
     resp = client.post(
         "/v1/chat/completions",
         json={
@@ -271,6 +275,7 @@ pipeline:
     )
     assert resp.status_code == 400
     assert "safety_input_blocked" in resp.text
+    assert provider_route.call_count == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -314,7 +319,7 @@ def test_streaming_window_block_emits_safety_block(tmp_path: Any) -> None:
     # sk- + 27 chars = 30 chars total, matches sk-[a-zA-Z0-9]{20,}
     secret = "sk-1234567890abcdefghij1234567"
     chunks = [_sse_chunk(secret), "data: [DONE]\n\n"]
-    respx.post("https://api.openai.com/v1/chat/completions").mock(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         side_effect=_stream_side_effect(chunks)
     )
 
@@ -329,6 +334,7 @@ def test_streaming_window_block_emits_safety_block(tmp_path: Any) -> None:
     text = resp.text
     assert "safety_block" in text
     assert "[DONE]" in text
+    assert provider_route.call_count == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -342,7 +348,7 @@ def test_buffer_mode_safe_replay(tmp_path: Any) -> None:
     client = TestClient(app)
 
     chunks = [_sse_chunk("hello"), _sse_chunk(" world"), "data: [DONE]\n\n"]
-    respx.post("https://api.openai.com/v1/chat/completions").mock(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         side_effect=_stream_side_effect(chunks)
     )
 
@@ -359,6 +365,7 @@ def test_buffer_mode_safe_replay(tmp_path: Any) -> None:
     assert "world" in text
     assert "[DONE]" in text
     assert "safety_block" not in text
+    assert provider_route.call_count == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -373,7 +380,7 @@ def test_buffer_mode_blocked_sends_safety_block(tmp_path: Any) -> None:
 
     secret = "sk-abcdefghij1234567890xxx"
     chunks = [_sse_chunk(f"Here is the key: {secret}"), "data: [DONE]\n\n"]
-    respx.post("https://api.openai.com/v1/chat/completions").mock(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         side_effect=_stream_side_effect(chunks)
     )
 
@@ -388,6 +395,7 @@ def test_buffer_mode_blocked_sends_safety_block(tmp_path: Any) -> None:
     text = resp.text
     assert "safety_block" in text
     assert "[DONE]" in text
+    assert provider_route.call_count == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -404,7 +412,7 @@ def test_post_audit_recall_sse_event(tmp_path: Any) -> None:
     # but post-audit will detect the secret in full content.
     secret = "sk-abcdefghij1234567890xx"
     chunks = [_sse_chunk(secret), "data: [DONE]\n\n"]
-    respx.post("https://api.openai.com/v1/chat/completions").mock(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         side_effect=_stream_side_effect(chunks)
     )
 
@@ -419,6 +427,7 @@ def test_post_audit_recall_sse_event(tmp_path: Any) -> None:
     text = resp.text
     # Post-audit should find the secret and emit safety_recall.
     assert "safety_recall" in text or "safety_block" in text
+    assert provider_route.call_count == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -616,7 +625,7 @@ pipeline:
     app = _make_app(tmp_path, config)
     client = TestClient(app)
 
-    respx.post("https://api.openai.com/v1/chat/completions").respond(
+    provider_route = respx.post("https://api.openai.com/v1/chat/completions").respond(
         status_code=200,
         json={
             "id": "chatcmpl-1",
@@ -634,6 +643,7 @@ pipeline:
     # Response should be returned immediately (200, not blocked).
     assert resp.status_code == 200
     assert "Hello!" in resp.text
+    assert provider_route.call_count == 1
 
 
 # --------------------------------------------------------------------------- #

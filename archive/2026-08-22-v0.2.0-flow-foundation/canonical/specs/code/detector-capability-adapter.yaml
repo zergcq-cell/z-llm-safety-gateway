@@ -1,0 +1,66 @@
+meta:
+  capability: "detector-capability-adapter"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-DCA-001
+    description: "Detector 被映射为版本化 Capability descriptor"
+    scenarios:
+      - id: SC-DCA-001
+        confidence: high
+        evidence: "proposal C6; capabilities detector-capability-adapter; plugin anchors"
+        given: "built-in、ML、in-process plugin 或 gRPC Detector 已加载"
+        when: "DetectorCapabilityAdapter 创建 descriptor"
+        then: "descriptor SHALL 包含稳定 Capability ID、contract_version=1.0、Detector name/category/version 和输入输出 schema"
+        and:
+          - "四类 Detector SHALL 使用同一 descriptor schema"
+          - "Detector version SHALL 作为实际实现版本记录"
+          - "adapter SHALL NOT 修改 Detector 类属性"
+  - id: REQ-DCA-002
+    description: "Adapter 精确保留 Detector 输入、结果和修改语义"
+    scenarios:
+      - id: SC-DCA-002
+        confidence: high
+        evidence: "proposal C6/C7; detector-sdk anchor; design D3/D8"
+        given: "有序 Flow item 与 request snapshot context"
+        when: "adapter 调用 Detector.detect"
+        then: "adapter SHALL 构造兼容 DetectionContext 并传入对应 content"
+        and:
+          - "direction、request_id、user_id、language、message_index SHALL 保留"
+          - "DetectorResult SHALL 映射为 CapabilityResult"
+          - "allow/block/flag/modify SHALL 映射为稳定 signals"
+          - "modified_content SHALL 仅保留在内存输出"
+      - id: SC-DCA-003
+        confidence: high
+        evidence: "proposal success_criteria 7; non_goals SDK; design D8"
+        given: "现有 Detector SDK 0.1.x 插件与导入语句"
+        when: "插件在 Flow Runtime 下安装、初始化并执行"
+        then: "Detector、DetectionContext、DetectionResult、Modification 的公开导入和签名 SHALL 保持兼容"
+        and:
+          - "现有示例插件 SHALL 无源码修改通过"
+          - "SDK lifecycle SHALL 保持 initialize→detect→shutdown"
+          - "不得要求插件实现新的 Capability 类"
+  - id: REQ-DCA-003
+    description: "Adapter 复用既有 lifecycle/status 且正确传播错误与取消"
+    scenarios:
+      - id: SC-DCA-004
+        confidence: high
+        evidence: "proposal C6; detector readiness anchors; design D8/D13"
+        given: "Detector 生命周期协调器已创建健康、unavailable 和 unhealthy 状态"
+        when: "Capability registry 注册 adapter 并执行 lifecycle"
+        then: "每个 Detector SHALL 只初始化和关闭一次，health/status SHALL 使用既有协调器"
+        and:
+          - "unavailable Detector SHALL NOT 由 sentinel 替代"
+          - "相同 Detector 的 Node SHALL 共享请求快照状态"
+          - "fatal startup cleanup SHALL 保持逆序有界"
+      - id: SC-DCA-005
+        confidence: high
+        evidence: "proposal C5/C9; EXP-2026-0002/0003; design D10/D13"
+        given: "Detector 抛出普通异常或 CancelledError"
+        when: "adapter 执行 detect"
+        then: "普通异常 SHALL 交给 Runtime policy 且外部只见稳定 reason，CancelledError SHALL 原样传播"
+        and:
+          - "原始异常可在边界内用于控制流但 SHALL NOT 进入证据"
+          - "adapter SHALL NOT 把取消转换为 fail_open"
+          - "gRPC 本地 channel SHALL 在 finally 有界关闭"

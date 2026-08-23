@@ -1,6 +1,6 @@
 # gRPC 对接指南（gRPC Integration Guide）
 
-> 适用版本：v0.1.1
+> 适用版本：Gateway v0.2.0 / SDK v0.1.1
 > 合约：`proto/detector/v1/detector.proto`
 > 示例：`examples/plugins/python-grpc/`、`examples/plugins/go-grpc/`
 
@@ -101,7 +101,7 @@ pipeline:
 
 启用单向 TLS 服务端认证：`tls_enabled: true` + `tls_ca_file` 指向 sidecar CA
 证书。网关用 `grpc.ssl_channel_credentials(root_certificates=CA)` 验证 sidecar
-服务端证书；未配置 CA 时使用系统默认根证书。v0.1.1 不发送客户端证书，因而
+服务端证书；未配置 CA 时使用系统默认根证书。Gateway v0.2.0 不发送客户端证书，因而
 不提供 mTLS；需要双向认证时应在服务网格或反向代理层终止 mTLS。
 
 ```yaml

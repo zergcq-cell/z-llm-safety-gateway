@@ -70,18 +70,21 @@ def distributions(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_release_versions_and_changelog_are_consistent() -> None:
-    """TC-REL-001: both packages and CHANGELOG consistently declare 0.1.1."""
-    versions = {
+    """TC-REL-001: gateway 0.2.0 and SDK 0.1.1 are declared consistently."""
+    gateway_versions = {
         _project_version(ROOT / "pyproject.toml"),
         _module_version(ROOT / "src" / "z_llm_safety_gateway" / "__init__.py"),
+    }
+    sdk_versions = {
         _project_version(ROOT / "sdk" / "pyproject.toml"),
         _module_version(ROOT / "sdk" / "src" / "z_llm_safety_gateway_sdk" / "__init__.py"),
     }
-    assert versions == {"0.1.1"}
+    assert gateway_versions == {"0.2.0"}
+    assert sdk_versions == {"0.1.1"}
 
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     section = re.search(
-        r"^## \[0\.1\.1\].+?(?=^## \[0\.1\.0\])", changelog, re.MULTILINE | re.DOTALL
+        r"^## \[0\.2\.0\].+?(?=^## \[0\.1\.1\])", changelog, re.MULTILINE | re.DOTALL
     )
     assert section is not None
     assert len(section.group(0).strip().splitlines()) >= 5
@@ -98,12 +101,12 @@ def test_ci_dev_dependencies_include_no_isolation_build_backend() -> None:
 
 
 def test_release_notes_extraction_stops_at_adjacent_version() -> None:
-    """TC-REL-006: extracted 0.1.1 notes cannot include adjacent releases."""
+    """TC-REL-006: extracted 0.2.0 notes cannot include adjacent releases."""
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    notes = extract_release_notes(changelog, "v0.1.1")
-    assert "检测器就绪状态" in notes
-    assert "首个公开测试版" not in notes
-    assert "[0.1.0]" not in notes
+    notes = extract_release_notes(changelog, "v0.2.0")
+    assert "Flow Foundation" in notes
+    assert "检测器就绪状态" not in notes
+    assert "[0.1.1]" not in notes
 
 
 def test_build_produces_four_valid_distribution_artifacts(distributions: Path) -> None:
@@ -131,7 +134,7 @@ def test_build_produces_four_valid_distribution_artifacts(distributions: Path) -
                 metadata.append(Metadata.from_email(extracted.read(), validate=True))
 
     assert {(item.name, str(item.version)) for item in metadata} == {
-        ("z-llm-safety-gateway", "0.1.1"),
+        ("z-llm-safety-gateway", "0.2.0"),
         ("z-llm-safety-gateway-sdk", "0.1.1"),
     }
 

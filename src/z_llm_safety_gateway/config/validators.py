@@ -103,6 +103,9 @@ def _validate_detectors_v2(config: GatewayConfig) -> None:
         ("input", d) for d in detectors.input
     ] + [
         ("output", d) for d in detectors.output
+    ] + [
+        ("capability", binding.detector_config())
+        for binding in config.capabilities
     ]
 
     for _direction, detector in all_detectors:

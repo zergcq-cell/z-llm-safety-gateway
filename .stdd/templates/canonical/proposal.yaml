@@ -50,5 +50,13 @@ anchoring:
   reference_changes: []        # L3 时引用
   anchor_implementations: []   # L4 时引用
 
+# 必须逐项对照项目根目录 PRINCIPLES.md；不适用也要说明原因
+principle_check:
+  plugin_flow: ""             # 领域能力在插件、组合在 Flow、核心保持最小
+  explicit_policy_failure: "" # 策略/默认值/失败/绕过/降级显式且可观测
+  transparent_contracts: ""   # 边界语义、兼容性、延迟和资源成本
+  evidence_data_protection: "" # 可解释/可审计、最小化敏感数据采集
+  tradeoffs_or_departures: "" # 无则填 none；有则记录取舍及待确认事项
+
 success_criteria:
   - ""

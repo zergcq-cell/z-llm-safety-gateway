@@ -1,8 +1,8 @@
 changes:
 - 2026-08-19-detector-readiness-fail-safe
 meta:
-  last_updated: '2026-08-22T20:44:19.757520'
-  total_changes: 2
+  last_updated: '2026-08-23T07:52:45.490143'
+  total_changes: 3
 modules:
   .github/dependabot.yml:
     changes:

@@ -1,0 +1,71 @@
+meta:
+  capability: "flow-contracts"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  created: "2026-08-22T22:10:50+08:00"
+  confidence: high
+requirements:
+  - id: REQ-FC-001
+    description: "Flow、Node 与 Capability 契约采用显式版本并严格验证"
+    scenarios:
+      - id: SC-FC-001
+        confidence: high
+        evidence: "proposal.yaml C1; success_criteria 1; design D1"
+        given: "contract_version=1.0 的 Flow、Node 和 Capability descriptor"
+        when: "配置加载并构建运行时契约"
+        then: "三个契约 SHALL 被接受并保留各自 ID、契约版本和实现版本"
+        and:
+          - "Flow version SHALL 为有效 SemVer"
+          - "Capability 实现版本 SHALL 作为非空字符串进入证据"
+      - id: SC-FC-002
+        confidence: high
+        evidence: "proposal.yaml success_criteria 1; principle 3"
+        given: "未知 major、未实现的更新 minor 或不受支持的契约版本"
+        when: "启动时验证契约"
+        then: "网关 SHALL 拒绝启动并返回稳定的 incompatible_contract_version 诊断"
+        and:
+          - "运行时 SHALL NOT 静默降级或忽略版本"
+          - "错误 SHALL 指出对象类型和 ID 但不含敏感配置"
+      - id: SC-FC-003
+        confidence: medium
+        evidence: "proposal.yaml C1/C8; design D1/D5"
+        given: "新 Flow 配置含未知字段、重复 ID、超长 ID 或非法 SemVer"
+        when: "Pydantic 和交叉验证运行"
+        then: "配置 SHALL 在启动阶段被拒绝"
+        and:
+          - "新 Flow 模型 SHALL 使用 extra=forbid"
+          - "Flow 内 Node ID SHALL 唯一"
+          - "标识符长度 SHALL 不超过 128 字符"
+  - id: REQ-FC-002
+    description: "Node 使用可判别的 Capability 或嵌套 Flow 目标契约"
+    scenarios:
+      - id: SC-FC-004
+        confidence: high
+        evidence: "proposal.yaml C1/C2; design D1"
+        given: "kind=capability 且目标 descriptor 已注册的 Node"
+        when: "Flow validator 解析 Node"
+        then: "Node SHALL 解析为 CapabilityNode 并精确绑定目标 Capability"
+        and:
+          - "输入/输出 schema 不兼容时 SHALL 拒绝"
+          - "解析结果 SHALL 保留 Node 优先级和完整策略"
+      - id: SC-FC-005
+        confidence: high
+        evidence: "proposal.yaml C2; success_criteria 2; design D2"
+        given: "kind=flow 且引用确定 ID/version 的子 Flow Node"
+        when: "Flow 图在启动时展开"
+        then: "Node SHALL 解析为 NestedFlowNode 并使用与 CapabilityNode 相同的生命周期和证据外壳"
+        and:
+          - "缺失或版本不匹配的子 Flow SHALL 被拒绝"
+          - "循环引用或深度超过 8 SHALL 被拒绝"
+  - id: REQ-FC-003
+    description: "Flow 使用有序输入 envelope 与不可变请求上下文"
+    scenarios:
+      - id: SC-FC-006
+        confidence: medium
+        evidence: "proposal.yaml C2/C3; design D2/D7"
+        given: "包含多个 content item、request_id、direction、stage 和 metadata 的 FlowInput"
+        when: "父 Flow、Capability Node 与嵌套 Flow 接收输入"
+        then: "所有执行层 SHALL 使用同一版本化 envelope 且保持 item 顺序"
+        and:
+          - "请求上下文 SHALL 对节点只读"
+          - "子 Flow SHALL 继承 correlation 与 parent_execution_id"
+          - "敏感 payload SHALL NOT 进入证据 envelope"

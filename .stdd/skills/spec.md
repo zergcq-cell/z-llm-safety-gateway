@@ -48,6 +48,7 @@ stdd_version: "2.9.5"
 
 按模板生成 design.md：
 - **Context**：当前技术背景和约束
+- **Project Principle Check**：逐项说明设计如何满足 `PRINCIPLES.md`、风险取舍及验证方式
 - **Decisions**：每个技术决策包含：
   - 方案描述
   - 为什么选这个方案

@@ -1,0 +1,47 @@
+meta:
+  task_id: "flow-contracts"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway flow-contracts"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-FC-001 Flow、Node 与 Capability 契约采用显式版本并严格验证"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_contracts.py::test_tc_fc_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-FC-002 Flow、Node 与 Capability 契约采用显式版本并严格验证"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_contracts.py::test_tc_fc_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-FC-003 Flow、Node 与 Capability 契约采用显式版本并严格验证"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_contracts.py::test_tc_fc_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-FC-004 Node 使用可判别的 Capability 或嵌套 Flow 目标契约"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_contracts.py::test_tc_fc_004"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-005
+    description: "SC-FC-005 Node 使用可判别的 Capability 或嵌套 Flow 目标契约"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_contracts.py::test_tc_fc_005"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-006
+    description: "SC-FC-006 Flow 使用有序输入 envelope 与不可变请求上下文"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_contracts.py::test_tc_fc_006"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

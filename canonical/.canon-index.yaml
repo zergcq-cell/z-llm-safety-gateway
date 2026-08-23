@@ -24,3 +24,19 @@ changes:
     - release-hardening
     - stdd-toolchain-recovery
     verified: true
+  2026-08-22-v0.2.0-flow-foundation:
+    proposal: canonical/proposals/2026-08-22-v0.2.0-flow-foundation.yaml
+    capabilities:
+    - audit-logger
+    - config-system
+    - default-detector-flow
+    - degraded-safety-visibility
+    - detector-capability-adapter
+    - detector-framework
+    - flow-contracts
+    - flow-policy
+    - flow-runtime
+    - node-evidence-chain
+    - observability
+    - pipeline-engine
+    verified: true

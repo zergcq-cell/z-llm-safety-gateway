@@ -1,0 +1,29 @@
+meta:
+  task_id: "pipeline-engine"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway pipeline-engine"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-PE-001 PipelineEngine 作为兼容 facade 委托 Flow Runtime"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/pipeline/test_flow_compat.py::test_tc_pe_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-PE-002 PipelineEngine 作为兼容 facade 委托 Flow Runtime"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/pipeline/test_flow_compat.py::test_tc_pe_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-PE-003 Flow 适配保持性能目标且无任务泄漏"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/pipeline/test_flow_compat.py::test_tc_pe_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"

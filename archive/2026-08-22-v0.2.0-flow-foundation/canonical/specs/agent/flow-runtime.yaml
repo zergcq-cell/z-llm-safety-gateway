@@ -1,0 +1,47 @@
+meta:
+  task_id: "flow-runtime"
+  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_type: code
+  system: "z LLM Safety Gateway flow-runtime"
+  preconditions:
+    - "Phase 2 spec locked and the referenced RED test node exists"
+steps:
+  - id: CP-001
+    description: "SC-FR-001 Runtime 有界并行执行节点与 item，输出顺序确定"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_runtime.py::test_tc_fr_001"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-002
+    description: "SC-FR-002 Runtime 有界并行执行节点与 item，输出顺序确定"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_runtime.py::test_tc_fr_002"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-003
+    description: "SC-FR-003 Stop policy 取消 pending 调用并保留完整终态"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_runtime.py::test_tc_fr_003"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-004
+    description: "SC-FR-004 嵌套 Flow 复用相同执行、限制与证据语义"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_runtime.py::test_tc_fr_004"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-005
+    description: "SC-FR-005 取消、deadline 与硬限制均产生确定行为"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_runtime.py::test_tc_fr_005"
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-006
+    description: "SC-FR-006 取消、deadline 与硬限制均产生确定行为"
+    action: "cd ../.. && .venv/bin/pytest -q tests/unit/flow/test_runtime.py::test_tc_fr_006"
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"
