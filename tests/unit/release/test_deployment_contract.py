@@ -1,4 +1,4 @@
-"""Compose deployment invariants for the v0.2.0 gateway release."""
+"""Compose deployment invariants for the v0.2.1 gateway release."""
 
 from __future__ import annotations
 
@@ -26,12 +26,12 @@ def test_development_and_production_compose_have_health_contracts() -> None:
 
 
 def test_production_compose_preserves_capacity_and_sidecar_invariants() -> None:
-    """TC-DEPL-002: production Compose retains capacity and sidecar wiring."""
+    """TC-DOCS-008: production Compose retains v0.2.1 capacity and sidecar wiring."""
     compose = _yaml(ROOT / "docker-compose.prod.yml")
     gateway = compose["services"]["gateway"]
     sidecar = compose["services"]["acme-guard"]
 
-    assert gateway["image"] == "z-safety-gateway:0.2.0"
+    assert gateway["image"] == "z-safety-gateway:0.2.1"
     assert gateway["deploy"]["replicas"] >= 2
     assert set(gateway["deploy"]["resources"]["limits"]) >= {"cpus", "memory"}
     assert set(gateway["deploy"]["resources"]["reservations"]) >= {"cpus", "memory"}

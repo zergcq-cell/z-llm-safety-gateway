@@ -1,6 +1,6 @@
 # Detector 开发指南（Plugin Development Guide）
 
-> 适用版本：Gateway v0.2.0 / SDK v0.1.1（Plugin Ecosystem）
+> 适用版本：Gateway v0.2.1 / SDK v0.1.1（Plugin Ecosystem）
 > 配套：`examples/plugins/python-inprocess/`（in-process 示例）、`examples/plugins/python-grpc/`（gRPC 示例）
 
 本指南说明如何为 z LLM Safety Gateway 开发第三方检测器。两种模式：

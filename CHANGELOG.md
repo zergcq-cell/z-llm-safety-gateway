@@ -11,6 +11,20 @@
 
 暂无。
 
+## [0.2.1] - 2026-08-24
+
+### 发布热修复
+
+- 修复 Release 对 Gateway 与 Detector SDK 的独立版本校验：Gateway package/runtime 必须
+  匹配 tag，SDK package/runtime 必须内部一致，但 SDK 不再被错误要求等于 Gateway tag。
+- Gateway 发布版本提升到 v0.2.1；独立 Detector SDK 保持 0.1.1，继续构建两个 wheel 与
+  两个 sdist，并在组合环境验证三个 CLI entry points。
+- 移除手动 Release 验证输入的过期静态默认值；手动运行仍只验证，只有新 tag push 才能在
+  quality、build、audit 全部成功后创建 GitHub Release。
+- v0.2.0 Release workflow 因独立版本校验缺陷在 build 阶段失败，未创建成功 Release；其
+  公开 annotated tag 与目标提交保持不可变，本热修复使用全新的 v0.2.1 tag。
+- 本补丁不改变 Flow、HTTP/SSE、Provider、gRPC、Detector SDK API 或 YAML 运行时行为。
+
 ## [0.2.0] - 2026-08-23
 
 ### Flow Foundation

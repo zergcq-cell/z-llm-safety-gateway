@@ -2,6 +2,7 @@ by_category:
   cascading_errors:
   - EXP-2026-0003
   - EXP-2026-0012
+  - EXP-2026-0015
   content_quality:
   - EXP-2026-0002
   - EXP-2026-0010
@@ -9,6 +10,7 @@ by_category:
   - EXP-2026-0005
   - EXP-2026-0009
   - EXP-2026-0013
+  - EXP-2026-0016
   coverage_vacuum:
   - EXP-2026-0006
   pipeline_break:
@@ -19,6 +21,7 @@ by_category:
   - EXP-2026-0008
   tool_misuse:
   - EXP-2026-0011
+  - EXP-2026-0014
 by_language:
   python:
   - EXP-2026-0001
@@ -34,6 +37,9 @@ by_language:
   - EXP-2026-0011
   - EXP-2026-0012
   - EXP-2026-0013
+  - EXP-2026-0014
+  - EXP-2026-0015
+  - EXP-2026-0016
 by_lifecycle:
   discovered:
   - EXP-2026-0001
@@ -49,6 +55,9 @@ by_lifecycle:
   - EXP-2026-0011
   - EXP-2026-0012
   - EXP-2026-0013
+  - EXP-2026-0014
+  - EXP-2026-0015
+  - EXP-2026-0016
 by_severity:
   high:
   - EXP-2026-0001
@@ -63,7 +72,10 @@ by_severity:
   - EXP-2026-0010
   - EXP-2026-0012
   - EXP-2026-0013
+  - EXP-2026-0015
+  - EXP-2026-0016
   medium:
   - EXP-2026-0011
-last_id: 13
-total: 13
+  - EXP-2026-0014
+last_id: 16
+total: 16

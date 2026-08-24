@@ -1,6 +1,6 @@
 # Deployment Guide
 
-> 适用版本：Gateway v0.2.0
+> 适用版本：Gateway v0.2.1
 
 ## 1. Docker 部署（推荐）
 
@@ -32,11 +32,11 @@ docker compose -f docker-compose.prod.yml up -d --build --scale gateway=2
 ## 2. 构建自定义镜像
 
 ```bash
-docker build -t z-safety-gateway:0.2.0 .
+docker build -t z-safety-gateway:0.2.1 .
 docker run -d -p 8080:8080 \
   -v $(pwd)/config/gateway.yaml:/app/config/gateway.yaml:ro \
   -e OPENAI_API_KEY=sk-... \
-  z-safety-gateway:0.2.0
+  z-safety-gateway:0.2.1
 ```
 
 ## 3. 生产建议

@@ -9,7 +9,6 @@ on:
       version:
         description: "Version to validate without publishing"
         required: true
-        default: "0.1.1"
         type: string
 permissions:
   contents: read

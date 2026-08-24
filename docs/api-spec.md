@@ -1,6 +1,6 @@
 # API Specification
 
-> 适用版本：Gateway v0.2.0
+> 适用版本：Gateway v0.2.1
 > 基础路径：所有端点位于网关监听地址（默认 `http://localhost:8080`）
 
 ## 认证

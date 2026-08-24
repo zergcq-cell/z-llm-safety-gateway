@@ -40,3 +40,10 @@ changes:
     - observability
     - pipeline-engine
     verified: true
+  2026-08-23-v0.2.1-release-version-hotfix:
+    proposal: canonical/proposals/2026-08-23-v0.2.1-release-version-hotfix.yaml
+    capabilities:
+    - detector-sdk
+    - project-docs
+    - release-hardening
+    verified: true

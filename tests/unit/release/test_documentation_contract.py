@@ -39,15 +39,19 @@ def _anchors(path: Path) -> set[str]:
 
 
 def test_release_version_and_python_support_are_consistent() -> None:
-    """TC-DOCS-001: gateway surfaces use v0.2.0 and Python 3.10–3.12."""
-    for relative in (
-        "README.md",
-        "docs/getting-started.md",
-        "docs/configuration.md",
-        "docs/deployment.md",
-        "config/gateway.yaml",
-    ):
-        assert "v0.2.0" in (ROOT / relative).read_text(encoding="utf-8")
+    """TC-DOCS-008: current Gateway surfaces use v0.2.1 and Python 3.10–3.12."""
+    expected_surfaces = {
+        "README.md": "v0.2.1",
+        "docs/getting-started.md": "v0.2.1",
+        "docs/configuration.md": "v0.2.1",
+        "docs/api-spec.md": "v0.2.1",
+        "docs/deployment.md": "v0.2.1",
+        "config/gateway.yaml": "v0.2.1",
+        "config/gateway.prod.yaml": "v0.2.1",
+        "docker-compose.prod.yml": "z-safety-gateway:0.2.1",
+    }
+    for relative, expected in expected_surfaces.items():
+        assert expected in (ROOT / relative).read_text(encoding="utf-8")
 
     combined = "\n".join(
         (ROOT / relative).read_text(encoding="utf-8")
@@ -121,7 +125,7 @@ def test_configuration_reference_matches_runtime_schema() -> None:
 
 
 def test_plugin_docs_describe_available_release_and_tls_capabilities() -> None:
-    """Plugin guides cannot depend on unpublished packages or advertise mTLS as implemented."""
+    """TC-DOCS-009 / TC-SDK-012: plugin guides preserve independent release roles."""
     files = [
         ROOT / "docs" / "plugin-development.md",
         ROOT / "docs" / "grpc-integration.md",
@@ -130,8 +134,9 @@ def test_plugin_docs_describe_available_release_and_tls_capabilities() -> None:
     combined = "\n".join(path.read_text(encoding="utf-8") for path in files)
     for path in files:
         contents = path.read_text(encoding="utf-8")
-        assert "Gateway v0.2.0" in contents
+        assert "Gateway v0.2.1" in contents
         assert "SDK v0.1.1" in contents
+    assert "SDK v0.2.1" not in combined
     assert "pip install z-llm-safety-gateway-sdk" not in combined
     assert "pip install z-llm-safety-gateway[grpc]" not in combined
     assert "启用双向信任" not in combined
@@ -147,12 +152,28 @@ def test_conduct_reports_do_not_reuse_the_vulnerability_advisory_channel() -> No
 
 
 def test_example_plugins_allow_the_documented_sdk_wheel_reference() -> None:
-    """Hatch can build examples that depend directly on the GitHub Release SDK wheel."""
+    """TC-SDK-012: examples keep the available SDK 0.1.1 GitHub wheel reference."""
     for relative in (
         "examples/plugins/python-inprocess/pyproject.toml",
         "examples/plugins/python-grpc/pyproject.toml",
     ):
         pyproject = (ROOT / relative).read_text(encoding="utf-8")
         assert "z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl" in pyproject
+        assert "z_llm_safety_gateway_sdk-0.2.1" not in pyproject
         assert "[tool.hatch.metadata]" in pyproject
         assert "allow-direct-references = true" in pyproject
+
+
+def test_sdk_release_surfaces_keep_independent_version() -> None:
+    """TC-SDK-012: SDK README and CLI template retain the published 0.1.1 wheel."""
+    sdk_readme = (ROOT / "sdk" / "README.md").read_text(encoding="utf-8")
+    sdk_cli = (
+        ROOT / "sdk" / "src" / "z_llm_safety_gateway_sdk" / "cli.py"
+    ).read_text(encoding="utf-8")
+
+    assert "Gateway v0.2.1" in sdk_readme
+    assert "SDK v0.1.1" in sdk_readme
+    assert "z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl" in sdk_readme
+    assert "v0.1.1/z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl" in sdk_cli
+    assert "z_llm_safety_gateway_sdk-0.2.1" not in sdk_readme
+    assert "z_llm_safety_gateway_sdk-0.2.1" not in sdk_cli

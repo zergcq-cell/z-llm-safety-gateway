@@ -1,0 +1,13 @@
+designs: {}
+proposals:
+  2026-08-23-v0.2.1-release-version-hotfix: proposals/2026-08-23-v0.2.1-release-version-hotfix.yaml
+specs:
+  agent:
+    detector-sdk: specs/agent/detector-sdk.yaml
+    project-docs: specs/agent/project-docs.yaml
+    release-hardening: specs/agent/release-hardening.yaml
+  code:
+    detector-sdk: specs/code/detector-sdk.yaml
+    project-docs: specs/code/project-docs.yaml
+    release-hardening: specs/code/release-hardening.yaml
+version: '2.9'

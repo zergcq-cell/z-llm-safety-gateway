@@ -1,0 +1,233 @@
+active_phase: null
+active_slice: null
+anchoring:
+  level: L3
+  rationale: 公开 tag、跨包独立版本、GitHub Actions 与四个发布产物的跨系统供应链热修复
+  reference_changes:
+  - 2026-08-20-v0.1.1-release-hardening
+  - 2026-08-22-v0.2.0-flow-foundation
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  canonical_code_specs: canonical/specs/code
+  design_adjustments_md: design-adjustments.md
+  design_adjustments_yaml: design-adjustments.yaml
+  design_md: design.md
+  human_specs: specs
+  phase_context_md: phase-context.md
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-23-v0.2.1-release-version-hotfix.yaml
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+change_id: 2026-08-23-v0.2.1-release-version-hotfix
+complexity_score: 13
+confirmed_at:
+  gate1_understand: '2026-08-23T22:19:44+08:00'
+  gate2_spec: '2026-08-23T22:51:26+08:00'
+  gate3_verify: '2026-08-24T23:46:17+08:00'
+critical:
+  cross_system: true
+  financial: false
+  is_critical: true
+  rationale: 错误校验或发布可能产生错误 tag、错误版本产物或不完整公开 Release
+  required_anchoring_level: L3
+  safety_critical: false
+current_phase: completed
+design_adjustments:
+  count: 0
+  requires_re_build: false
+  requires_re_spec: false
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+long_range:
+  authorization: confirmed_all
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  max_iterations: 10
+  mode: full_auto
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-24T22:47:19+08:00'
+  selection: full_auto
+mode: thorough
+mode_selection: completed
+pattern: thorough
+phase:
+  build: completed
+  current: completed
+  deliver: completed
+  slice: completed
+  spec: completed
+  understand: completed
+  verify: completed
+phase1:
+  capabilities_modified: 3
+  capabilities_new: 0
+  completed_at: '2026-08-23T22:19:44+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 3
+    conclusion: passed
+    dimensions:
+    - completeness
+    - clarity
+    - scope
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L3
+    minimum: L3
+    status: passed
+  canonical_tracks:
+    agent: 3
+    code: 3
+  capabilities: 3
+  completed_at: '2026-08-23T22:51:26+08:00'
+  confidence:
+    high: 13
+    low: 0
+    medium: 3
+  confirmed_at: '2026-08-23T22:51:26+08:00'
+  experiences_loaded:
+  - EXP-2026-0004
+  - EXP-2026-0005
+  - EXP-2026-0006
+  priority:
+    P0: 13
+    P1: 3
+    P2: 0
+  requirements: 5
+  review:
+    auto_fixed: 3
+    conclusion: passed
+    dimensions:
+    - requirement_coverage
+    - scenario_completeness
+    - tc_id_consistency
+    - document_consistency
+    unresolved: 0
+  scenarios: 16
+  status: completed
+phase3:
+  capabilities: 3
+  completed_at: '2026-08-24T22:55:00+08:00'
+  dependency_cycles: 0
+  requirements_covered: 5
+  scenarios_covered: 16
+  slices: 4
+  status: completed
+phase4:
+  completed_at: '2026-08-24T23:10:40+08:00'
+  slices_completed:
+    S1:
+      collected_cases: 6
+      full_regression: 1017_passed_1_skipped
+      new_tests: 4
+      status: done
+      tc_coverage: 5/5
+      verified_at: '2026-08-24T22:58:57+08:00'
+    S2:
+      collected_cases: 3
+      full_regression: 1018_passed_1_skipped
+      new_tests: 1
+      status: done
+      tc_coverage: 4/4
+      verified_at: '2026-08-24T23:03:32+08:00'
+    S3:
+      collected_cases: 7
+      full_regression: 1019_passed_1_skipped
+      new_tests: 1
+      status: done
+      tc_coverage: 5/5
+      verified_at: '2026-08-24T23:06:57+08:00'
+    S4:
+      checkpoint_targets: 23
+      collected_cases: 61
+      full_regression: 1027_passed_1_skipped
+      local_tc_execution: 13/13
+      new_tests: 1
+      remote_tc_status: 3_deliver_pending
+      status: done
+      tc_coverage: 16/16_mapped
+      verified_at: '2026-08-24T23:42:18+08:00'
+  status: completed
+phase5:
+  confirmed_at: '2026-08-24T23:46:17+08:00'
+  coverage: 93.33
+  design_adjustments: 0
+  experiences_added: 3
+  experiences_reused: 3
+  failure_modes_checked: 12/12
+  iteration: 1
+  local_clean_install: skipped_host_interpreter_injection
+  local_python: '3.10'
+  max_iterations: 10
+  multi_python_remote_pending:
+  - '3.11'
+  - '3.12'
+  review_final: C0_H0_M0_L0
+  status: completed
+  steps:
+    design_adjustments: completed
+    diff_review: completed
+    experience_update: completed
+    failure_modes: completed
+    multi_agent_review: completed
+    quality: completed
+    test_report: completed
+  test_result: 1027_passed_1_skipped
+phase6:
+  archive: archive/2026-08-23-v0.2.1-release-version-hotfix
+  canonical_merge: completed
+  code_structure_merge: completed
+  completed_at: '2026-08-24T23:48:39+08:00'
+  experience_upload: skipped (3 discovered; 0 deposited)
+  gateway_version: 0.2.1
+  human_spec_merge: completed
+  principle_check: completed
+  sdk_version: 0.1.1
+  status: completed
+  verification:
+    coverage: 93.33%
+    diff_check: passed
+    full_suite: 1027 passed, 1 skipped, 0 failed
+    mypy: 99 source files, 0 issues
+    release_artifacts: 4 passed twine checks
+    review: C0 H0 M0 L0
+    ruff: passed
+phases:
+  build:
+    completed_at: '2026-08-24T23:10:40+08:00'
+    started_at: '2026-08-24T22:55:00+08:00'
+    status: completed
+  deliver:
+    completed_at: '2026-08-24T23:48:39+08:00'
+    started_at: '2026-08-24T23:46:17+08:00'
+    status: completed
+  slice:
+    completed_at: '2026-08-24T22:55:00+08:00'
+    started_at: '2026-08-24T22:47:19+08:00'
+    status: completed
+  spec:
+    confirmed_at: '2026-08-23T22:51:26+08:00'
+    gate2_ready: true
+    status: completed
+  understand:
+    confirmed_at: '2026-08-23T22:19:44+08:00'
+    status: completed
+  verify:
+    completed_at: '2026-08-24T23:46:17+08:00'
+    confirmed_at: '2026-08-24T23:46:17+08:00'
+    started_at: '2026-08-24T23:10:40+08:00'
+    status: completed
+score_confidence: preliminary
+status: archived
+task_type: code
+traceability:
+  spec_scenarios: 16
+  tc_cases: 16
+  test_functions: 21
+version: '2.0'
