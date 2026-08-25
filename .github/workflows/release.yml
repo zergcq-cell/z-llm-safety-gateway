@@ -20,10 +20,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -34,9 +34,9 @@ jobs:
 
       - name: Build distributions (gateway + SDK)
         run: |
-          python -m pip install --upgrade pip build twine
-          python -m build --outdir dist
-          python -m build --outdir dist sdk
+          python -m pip install --require-hashes -r requirements/release-tools.lock
+          python -m build --no-isolation --outdir dist .
+          python -m build --no-isolation --outdir dist sdk
           python -m twine check dist/*
 
       - name: Clean-install all CLI entry points
@@ -48,7 +48,7 @@ jobs:
           release-smoke/bin/zlg-sdk --help
 
       - name: Upload verified distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: distributions
           path: dist/*
@@ -57,16 +57,16 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Audit resolved production dependencies
         run: |
-          python -m pip install --upgrade pip pip-audit
+          python -m pip install --require-hashes -r requirements/release-tools.lock
           python -m venv audit-env
           audit-env/bin/python -m pip install . ./sdk
           audit-env/bin/python -m pip freeze \
@@ -82,10 +82,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
 
       - name: Download verified distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: distributions
           path: dist
@@ -93,7 +98,34 @@ jobs:
       - name: Extract deterministic release notes
         run: python tools/release_checks.py notes --version "$GITHUB_REF_NAME" --output release-notes.md
 
-      - name: Create GitHub Release
+      - name: Check Release absence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          gh api --include \
+            "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+            > release-absence-response.txt 2> release-absence-error.txt
+          api_exit=$?
+          set -e
+          status="$(awk 'NR == 1 {for (i=1; i<=NF; i++) if ($i ~ /^[0-9][0-9][0-9]$/) {print $i; exit}}' release-absence-response.txt)"
+          if [ "$api_exit" -eq 0 ]; then
+            printf '{"status":%s}\n' "${status:-200}" > release-absence.json
+          elif [ -n "$status" ]; then
+            printf '{"status":%s}\n' "$status" > release-absence.json
+          else
+            printf '{"kind":"command_failure"}\n' > release-absence.json
+          fi
+          python tools/release_checks.py absence --input release-absence.json
+
+      - name: Generate expected asset digests
+        run: |
+          python tools/release_checks.py asset-digests \
+            --version "$GITHUB_REF_NAME" \
+            --dist-dir dist \
+            --output expected-digests.json
+
+      - name: Create private draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -101,4 +133,92 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "z LLM Safety Gateway $GITHUB_REF_NAME" \
             --notes-file release-notes.md \
+            --draft \
             --verify-tag
+
+      - name: Capture remote tag refs
+        run: |
+          git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+            "refs/tags/$GITHUB_REF_NAME" \
+            "refs/tags/$GITHUB_REF_NAME^{}" > release-refs.txt
+          tag_object="$(awk -v ref="refs/tags/$GITHUB_REF_NAME" '$2 == ref {print $1}' release-refs.txt)"
+          peeled_commit="$(awk -v ref="refs/tags/$GITHUB_REF_NAME^{}" '$2 == ref {print $1}' release-refs.txt)"
+          jq -n \
+            --arg tag_object "$tag_object" \
+            --arg peeled_commit "$peeled_commit" \
+            '{tag_object: $tag_object, peeled_commit: $peeled_commit}' \
+            > release-refs.json
+
+      - name: Validate private draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+            --jq '{tagName:.tag_name,body,isDraft:.draft,isPrerelease:.prerelease,url:.html_url,assets:[.assets[]|{name,state,size,digest}]}' \
+            > release-draft.json
+          python tools/release_checks.py github-release \
+            --version "$GITHUB_REF_NAME" \
+            --input release-draft.json \
+            --expected-state draft \
+            --expected-digests expected-digests.json \
+            --refs-input release-refs.json \
+            --expected-sha "$GITHUB_SHA"
+
+      - name: Publish verified draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      - name: Recheck public Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+            --jq '{tagName:.tag_name,body,isDraft:.draft,isPrerelease:.prerelease,url:.html_url,assets:[.assets[]|{name,state,size,digest}]}' \
+            > release-public.json
+          python tools/release_checks.py github-release \
+            --version "$GITHUB_REF_NAME" \
+            --input release-public.json \
+            --expected-state public \
+            --expected-digests expected-digests.json \
+            --refs-input release-refs.json \
+            --expected-sha "$GITHUB_SHA"
+
+      - name: Generate release evidence
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          AUDIT_RESULT: ${{ needs.audit.result }}
+        run: |
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg quality "$QUALITY_RESULT" \
+            --arg build "$BUILD_RESULT" \
+            --arg audit "$AUDIT_RESULT" \
+            '{repository:$repository,run_id:$run_id,run_attempt:$run_attempt,run_url:$run_url,jobs:{quality:$quality,build:$build,audit:$audit,public_verify:"success"}}' \
+            > workflow-metadata.json
+          verified_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python tools/release_checks.py evidence \
+            --version "$GITHUB_REF_NAME" \
+            --release-input release-public.json \
+            --refs-input release-refs.json \
+            --workflow-input workflow-metadata.json \
+            --expected-sha "$GITHUB_SHA" \
+            --expected-digests expected-digests.json \
+            --verified-at "$verified_at" \
+            --output release-evidence.json
+          {
+            echo "## Release evidence"
+            jq -r '"- Tag: `\(.tag)`\n- Gateway: `\(.gateway_version)`\n- SDK: `\(.sdk_version)`\n- Peeled commit: `\(.peeled_commit)`\n- Assets: `\(.assets | length)`\n- Schema: `\(.verifier_schema_version)`"' release-evidence.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-${{ github.ref_name }}
+          path: release-evidence.json
+          retention-days: 90
+          if-no-files-found: error

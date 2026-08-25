@@ -1,6 +1,6 @@
 # 商业插件指南（Commercial Plugin Guide）
 
-> 适用版本：Gateway v0.2.1 / SDK v0.1.1
+> 适用版本：Gateway v0.2.2 / SDK v0.1.1
 > 许可证：网关与 SDK 均为 Apache License 2.0
 
 本指南面向希望通过第三方检测器商业化的团队：如何基于 SDK / gRPC 合约构建、打包、授权并销售检测器插件。
@@ -68,7 +68,7 @@ services:
 ## 4. 认证与密钥
 
 - **API key**：网关 `config.api_key` 透传给 `InitializeRequest.config`，sidecar 内校验并锁定
-- **TLS**：Gateway v0.2.1 的 `tls_enabled` + `tls_ca_file` 仅验证 sidecar 服务端证书；
+- **TLS**：Gateway v0.2.2 的 `tls_enabled` + `tls_ca_file` 仅验证 sidecar 服务端证书；
   双向 mTLS 仍在路线图中，当前请由服务网格或反向代理提供
 - **许可证 key**：建议在 `config` 中透传 license key，`Initialize` 时校验；无效返回 `success=false`，网关记录 ERROR 并停止使用该检测器
 

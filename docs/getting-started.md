@@ -1,6 +1,6 @@
 # Getting Started
 
-> 适用版本：Gateway v0.2.1
+> 适用版本：Gateway v0.2.2
 
 本指南带你在 10 分钟内跑通 z LLM Safety Gateway。
 

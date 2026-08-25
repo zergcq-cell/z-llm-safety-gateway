@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> 适用版本：Gateway v0.2.1（兼容 v0.1.1 legacy 配置）
+> 适用版本：Gateway v0.2.2（兼容 v0.1.1 legacy 配置）
 > 配置加载顺序：YAML 文件（支持 `${VAR}` 环境变量插值）→ 默认值
 
 ## Flow Foundation（v0.2.0）

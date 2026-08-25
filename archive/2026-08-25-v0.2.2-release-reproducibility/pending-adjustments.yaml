@@ -1,0 +1,61 @@
+meta:
+  change_id: 2026-08-25-v0.2.2-release-reproducibility
+  created: '2026-08-25T21:52:00+08:00'
+  updated: '2026-08-26T07:21:43+08:00'
+
+adjustments:
+  - id: ADJ-001
+    original_design_ref: design.md Decision 2 的 pip-compile 命令未包含 --allow-unsafe 或 --strip-extras
+    actual_change: >-
+      Python 3.12 锁生成命令增加 --allow-unsafe 以使 pip==26.2.1 真正进入 hash lock，
+      并增加 --strip-extras 采用 pip-tools 7.6.1 推荐的确定性输出形式。
+    reason: >-
+      pip-tools 默认把 pip 视为 unsafe package 并从锁文件排除；不增加 --allow-unsafe 会违反
+      已锁定的 pip 版本契约并导致 --require-hashes 安装环境仍漂移。
+    impact_scope: release-hardening 的锁生成维护命令与契约测试；不改变 runtime、公开 API 或发布状态机语义
+    principle_impact: >-
+      Plugin/Flow 不适用且 runtime 核心不变；失败策略更显式；工具链契约由实际 hash lock 加强；
+      不新增数据收集。无原则偏离。
+    severity: minor
+    affected_capabilities:
+      - release-hardening
+      - github-setup
+    exp_id: ''
+    resolved: true
+  - id: ADJ-002
+    original_design_ref: design.md Decision 7 与 SC-DOCS-012 把 v0.2.0～v0.2.2 概括为已发布状态
+    actual_change: >-
+      路线图与项目文档改为区分 v0.2.0 tag 已发布但 Release workflow 失败、v0.2.1
+      Release 成功和 v0.2.2 当前源码 / release candidate；仅在 Deliver 成功后更新 v0.2.2
+      为已发布 Release。
+    reason: >-
+      既有 v0.2.1 审计证据明确记录 v0.2.0 未创建成功 Release；Gate 3 前 v0.2.2 也尚未发布。
+      原表述会把不同远程状态压平为错误的成功历史。
+    impact_scope: DESIGN 路线图、project-docs human/canonical spec 与 Phase Context；不改变 runtime、API 或发布状态机
+    principle_impact: >-
+      Plugin/Flow 不适用且核心不变；失败发布状态改为显式；历史边界与文档契约更准确；
+      不新增数据收集。无原则偏离。
+    severity: minor
+    affected_capabilities:
+      - project-docs
+    exp_id: ''
+    resolved: true
+  - id: ADJ-003
+    original_design_ref: design.md Decision 8 与 TC-REL-025 原先以发布后远程检查覆盖 dry-run 不发布
+    actual_change: >-
+      在 workflow_dispatch 成功后、创建 v0.2.2 tag 前新增独立 pre-tag 远程 checkpoint，
+      同时要求 v0.2.2 Release API 明确返回 404 且远程 tag 不存在；发布后 checkpoint
+      继续验证 public Release、evidence 与历史 refs。
+    reason: >-
+      发布后观察到最终 public Release 无法追溯证明 dry-run 时点没有提前创建 Release；
+      必须在状态改变前采集 absence 证据，才能闭合 TC-REL-025 的时序契约。
+    impact_scope: release-hardening Agent spec、远程验证脚本、test-plan 与 checkpoint 元契约；不修改 GitHub workflow 的发布行为
+    principle_impact: >-
+      Plugin/Flow 不适用且核心不变；dry-run 失败/旁路策略更显式；远程时序契约获得可执行锚点；
+      证据只含公开 run ID、HEAD、404 与 tag absence，不新增敏感数据。
+    severity: minor
+    affected_capabilities:
+      - release-hardening
+      - github-setup
+    exp_id: ''
+    resolved: true

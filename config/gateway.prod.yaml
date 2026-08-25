@@ -1,4 +1,4 @@
-# Production Compose example for z LLM Safety Gateway v0.2.1.
+# Production Compose example for z LLM Safety Gateway v0.2.2.
 # Replace the example acme-guard implementation and credentials before real deployment.
 
 server:

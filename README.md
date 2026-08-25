@@ -20,7 +20,7 @@ Open-source, modular LLM content safety gateway that acts as a transparent proxy
 
 ## Quick Start
 
-The v0.2.1 gateway and v0.1.1 Detector SDK are not yet published to PyPI. Install from the
+The v0.2.2 gateway and v0.1.1 Detector SDK are not yet published to PyPI. Install from the
 repository source. Python 3.10–3.12 is supported; Python 3.12 is recommended for a new
 environment.
 
@@ -88,8 +88,12 @@ zlg-sdk new my-detector --type python     # scaffold a detector project
 
 ## Project Status
 
-Current gateway source version: **v0.2.1**, the Flow Foundation release hotfix. See
+Current gateway source version: **v0.2.2**, the release reproducibility and evidence update. See
 [DESIGN.md](DESIGN.md) for architecture and roadmap.
+
+| Gateway | Detector SDK | Compatibility |
+|---------|--------------|---------------|
+| Gateway v0.2.2 | Detector SDK v0.1.1 | Compatible |
 
 Supported Python versions: **3.10–3.12**; **3.12 is recommended** for releases and new
 development environments.

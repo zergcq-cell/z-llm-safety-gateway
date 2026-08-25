@@ -1,0 +1,272 @@
+active_phase: deliver
+active_slice: null
+anchoring:
+  level: L3
+  rationale: 发布状态机、固定工具链与远程证据闭环需要锚定已发布的 release-hardening 模式
+  reference_changes:
+  - 2026-08-20-v0.1.1-release-hardening
+  - 2026-08-23-v0.2.1-release-version-hotfix
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  canonical_code_specs: canonical/specs/code
+  design_adjustments_md: design-adjustments.md
+  design_adjustments_yaml: design-adjustments.yaml
+  design_md: design.md
+  human_specs: specs
+  phase_context_md: phase-context.md
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-25-v0.2.2-release-reproducibility.yaml
+  slices_md: slices.md
+  tasks_md: tasks.md
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+change_id: 2026-08-25-v0.2.2-release-reproducibility
+complexity_score: 14
+confirmed_at:
+  gate1_understand: '2026-08-25T20:51:08+08:00'
+  gate2_spec: '2026-08-25T21:37:00+08:00'
+  gate3_verify: '2026-08-26T07:51:13+08:00'
+critical:
+  cross_system: true
+  financial: false
+  is_critical: true
+  rationale: 涉及 GitHub Actions、公开 tag、draft/public Release 状态和跨包供应链证据
+  required_anchoring_level: L3
+  safety_critical: false
+current_phase: deliver
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+long_range:
+  authorization: confirmed_all
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  max_iterations: 10
+  mode: full_auto
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-25T21:42:53+08:00'
+  selection: full_auto
+mode: thorough
+mode_selection: completed
+pattern: thorough
+phase:
+  build: completed
+  current: deliver
+  deliver: in_progress
+  slice: completed
+  spec: completed
+  understand: completed
+  verify: completed
+phase1:
+  capabilities_modified: 3
+  capabilities_new: 0
+  completed_at: '2026-08-25T20:51:08+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 4
+    conclusion: passed
+    dimensions:
+    - completeness
+    - clarity
+    - scope
+    discovered: 4
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L3
+    minimum: L3
+    status: passed
+  canonical_tracks:
+    agent: 3
+    code: 3
+  capabilities: 3
+  completed_at: '2026-08-25T21:37:00+08:00'
+  confidence:
+    high: 12
+    low: 0
+    medium: 3
+  confirmed_at: '2026-08-25T21:37:00+08:00'
+  experiences_loaded:
+  - EXP-2026-0004
+  - EXP-2026-0005
+  - EXP-2026-0006
+  - EXP-2026-0014
+  - EXP-2026-0015
+  - EXP-2026-0016
+  priority:
+    P0: 12
+    P1: 3
+    P2: 0
+  requirements: 8
+  review:
+    auto_fixed: 1
+    conclusion: passed
+    dimensions:
+    - requirement_coverage
+    - scenario_completeness
+    - tc_id_consistency
+    - document_consistency
+    discovered: 1
+    unresolved: 0
+  scenarios: 15
+  status: completed
+phase3:
+  capabilities: 3
+  completed_at: '2026-08-25T21:44:43+08:00'
+  dependency_cycles: 0
+  dependency_edges: 0
+  requirements_covered: 8
+  scenarios_covered: 15
+  slices: 4
+  status: completed
+phase4:
+  completed_at: '2026-08-25T22:26:43+08:00'
+  context_budget:
+    decision: continue
+    rationale: phase-context 已更新且本轮在完整 handoff 摘要后继续，未触发重置阈值
+  experiences_loaded:
+    discovered_guardrails_referenced: 5
+    verified_or_settled: 0
+  slices_completed:
+    S1:
+      full_regression: 1030_passed_1_skipped
+      lock_install_smoke: python_3_12_require_hashes_passed
+      mypy: tools_4_source_files_0_issues
+      new_tests: 3
+      red: 3_failed_missing_lock_and_unpinned_actions
+      ruff: passed
+      status: done
+      tc_coverage: 3/3
+      verified_at: '2026-08-25T21:57:25+08:00'
+    S2:
+      collected_cases: 18
+      full_regression: 1048_passed_1_skipped
+      mypy: passed
+      new_test_functions: 4
+      new_tests: 18
+      red: 18_failed_missing_exact_state_ref_absence_and_evidence_contracts
+      ruff: passed
+      status: done
+      tc_coverage: 5/5
+      verified_at: '2026-08-25T22:08:44+08:00'
+    S3:
+      full_regression: 1050_passed_1_skipped
+      mypy: 99_source_files_0_issues
+      new_test_functions: 2
+      new_tests: 2
+      red: 6_failed_version_notes_roadmap_and_compatibility_contracts
+      ruff: passed
+      status: done
+      tc_coverage: 3/3
+      verified_at: '2026-08-25T22:14:31+08:00'
+    S4:
+      agent_checkpoint_targets: 19_local_3_remote
+      build_artifacts: gateway_0.2.2_and_sdk_0.1.1_four_distributions_twine_passed
+      full_regression: 1054_passed_1_skipped
+      mypy: 99_source_files_0_issues
+      new_test_functions: 4
+      new_tests: 4
+      red: 2_failed_no_isolation_and_draft_first_workflow_contracts
+      ruff: passed
+      status: done
+      tc_coverage: 4/4
+      verified_at: '2026-08-25T22:26:43+08:00'
+  status: completed
+phase5:
+  checkpoints:
+    local_nodes_passed: 19
+    remote_modes:
+    - pre-tag
+    - annotations
+    - release
+    remote_pending: 3
+  completed_at: '2026-08-26T07:28:07+08:00'
+  confirmed_at: '2026-08-26T07:51:13+08:00'
+  design_adjustments:
+    requires_re_build: false
+    requires_re_spec: false
+    resolved: 3
+    total: 3
+  experiences:
+    added: 4
+    library_total: 20
+    reused: 5
+  failure_modes:
+    anchoring_remote_pending: true
+    checked: 12
+    local_unresolved: 0
+    runtime_remote_pending: true
+  gate3: approved
+  principle_check: completed
+  quality:
+    build_artifacts: gateway_0.2.2_and_sdk_0.1.1_four_distributions_twine_passed
+    coverage: 93_percent
+    diff_check: passed
+    mypy: 99_source_files_0_issues
+    python_3_10: 1065_passed_1_skipped
+    python_3_11: remote_ci_pending_local_interpreter_unavailable
+    python_3_12: 1065_passed_1_skipped
+    ruff: passed
+    yaml_parse: 14_files_passed
+  review:
+    conclusion: passed
+    rounds: 3
+    tracks_per_round: 3
+    unresolved_critical: 0
+    unresolved_high: 0
+    unresolved_low: 0
+    unresolved_medium: 0
+  status: completed
+  tc_coverage:
+    local_passed: 13
+    pending_ids:
+    - TC-GH-011
+    - TC-REL-025
+    remote_pending: 2
+    total: 15
+phase6:
+  archive: archive/2026-08-25-v0.2.2-release-reproducibility
+  canonical_merge: completed
+  code_structure_merge: completed
+  gate3_confirmed_at: '2026-08-26T07:51:13+08:00'
+  gate_cli: failed_known_nested_path_check_manual_dialog_confirmation_recorded
+  gateway_version: 0.2.2
+  human_spec_merge: completed
+  principle_check: completed
+  remote_delivery: pending
+  sdk_version: 0.1.1
+  started_at: '2026-08-26T07:51:13+08:00'
+  status: in_progress
+phases:
+  build:
+    completed_at: '2026-08-25T22:26:43+08:00'
+    started_at: '2026-08-25T21:44:43+08:00'
+    status: completed
+  deliver:
+    started_at: '2026-08-26T07:51:13+08:00'
+    status: in_progress
+  slice:
+    completed_at: '2026-08-25T21:44:43+08:00'
+    status: completed
+  spec:
+    confirmed_at: '2026-08-25T21:37:00+08:00'
+    gate2_ready: true
+    started_at: '2026-08-25T20:51:08+08:00'
+    status: completed
+  understand:
+    confirmed_at: '2026-08-25T20:51:08+08:00'
+    status: completed
+  verify:
+    completed_at: '2026-08-26T07:28:07+08:00'
+    confirmed_at: '2026-08-26T07:51:13+08:00'
+    started_at: '2026-08-25T22:26:43+08:00'
+    status: completed
+score_confidence: preliminary
+status: archived
+task_type: code
+title: v0.2.2 发布可复现性与证据闭环
+version: '2.0'

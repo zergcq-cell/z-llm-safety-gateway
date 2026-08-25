@@ -1,0 +1,13 @@
+version: '2.9'
+proposals:
+  2026-08-25-v0.2.2-release-reproducibility: proposals/2026-08-25-v0.2.2-release-reproducibility.yaml
+designs: {}
+specs:
+  code:
+    release-hardening: specs/code/release-hardening.yaml
+    github-setup: specs/code/github-setup.yaml
+    project-docs: specs/code/project-docs.yaml
+  agent:
+    release-hardening: specs/agent/release-hardening.yaml
+    github-setup: specs/agent/github-setup.yaml
+    project-docs: specs/agent/project-docs.yaml

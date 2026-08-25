@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,17 @@ from tools.release_checks import extract_release_notes
 
 ROOT = Path(__file__).resolve().parents[3]
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+RELEASE_TOOLS_INPUT = ROOT / "requirements" / "release-tools.in"
+RELEASE_TOOLS_LOCK = ROOT / "requirements" / "release-tools.lock"
+RELEASE_TOOLS_GUIDE = ROOT / "requirements" / "README.md"
+
+EXPECTED_RELEASE_TOOLS = {
+    "build": "1.5.0",
+    "hatchling": "1.32.0",
+    "pip": "26.2.1",
+    "pip-audit": "2.10.1",
+    "twine": "7.0.0",
+}
 
 
 def _project_version(pyproject: Path) -> str:
@@ -107,6 +120,47 @@ def _create_test_venv(
     return python
 
 
+def _v022_release_payload(*, draft: bool) -> dict[str, Any]:
+    assets = [
+        "z_llm_safety_gateway-0.2.2-py3-none-any.whl",
+        "z_llm_safety_gateway-0.2.2.tar.gz",
+        "z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl",
+        "z_llm_safety_gateway_sdk-0.1.1.tar.gz",
+    ]
+    return {
+        "tagName": "v0.2.2",
+        "body": "Reproducible release notes.",
+        "isDraft": draft,
+        "isPrerelease": False,
+        "url": "https://github.com/example/gateway/releases/tag/v0.2.2",
+        "assets": [
+            {
+                "name": name,
+                "state": "uploaded",
+                "size": index + 100,
+                "digest": f"sha256:{index + 1:064x}",
+            }
+            for index, name in enumerate(assets)
+        ],
+    }
+
+
+def _v022_expected_digests(payload: dict[str, Any]) -> dict[str, str]:
+    return {asset["name"]: asset["digest"] for asset in payload["assets"]}
+
+
+def _v022_release_tree(root: Path) -> None:
+    _write_release_tree(
+        root,
+        gateway_package="0.2.2",
+        gateway_runtime="0.2.2",
+        changelog=(
+            "# Changelog\n\n## [0.2.2] - 2026-08-25\n\n"
+            "Reproducible release notes.\n\n## [0.2.1] - 2026-08-24\n\nPrevious.\n"
+        ),
+    )
+
+
 @pytest.fixture(scope="module")
 def distributions(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Build both projects once without network-dependent isolation."""
@@ -130,7 +184,7 @@ def distributions(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_release_versions_and_changelog_are_consistent() -> None:
-    """TC-SDK-010: Gateway 0.2.1 and SDK 0.1.1 declarations are internally consistent."""
+    """TC-DOCS-011: Gateway 0.2.2 and SDK 0.1.1 declarations are consistent."""
     gateway_versions = {
         _project_version(ROOT / "pyproject.toml"),
         _module_version(ROOT / "src" / "z_llm_safety_gateway" / "__init__.py"),
@@ -139,7 +193,7 @@ def test_release_versions_and_changelog_are_consistent() -> None:
         _project_version(ROOT / "sdk" / "pyproject.toml"),
         _module_version(ROOT / "sdk" / "src" / "z_llm_safety_gateway_sdk" / "__init__.py"),
     }
-    assert gateway_versions == {"0.2.1"}
+    assert gateway_versions == {"0.2.2"}
     assert sdk_versions == {"0.1.1"}
 
 
@@ -219,14 +273,14 @@ def test_ci_dev_dependencies_include_no_isolation_build_backend() -> None:
 
 
 def test_release_notes_extraction_stops_at_adjacent_version() -> None:
-    """TC-DOCS-010: extracted 0.2.1 notes cannot include adjacent releases."""
+    """TC-DOCS-013: extracted 0.2.2 notes cannot include adjacent releases."""
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    notes = extract_release_notes(changelog, "v0.2.1")
-    assert "独立版本" in notes
+    notes = extract_release_notes(changelog, "v0.2.2")
+    assert "Node 24" in notes
     assert "SDK" in notes and "0.1.1" in notes
-    assert "v0.2.0 Release" in notes
+    assert "v0.2.1 Release" not in notes
+    assert "v0.2.0 Release" not in notes
     assert "检测器就绪状态" not in notes
-    assert "[0.1.1]" not in notes
 
 
 def test_current_release_notes_document_hotfix_without_rewriting_history() -> None:
@@ -239,6 +293,30 @@ def test_current_release_notes_document_hotfix_without_rewriting_history() -> No
     assert "v0.2.1" in notes
     assert "SDK" in notes and "0.1.1" in notes
     assert "v0.2.0 Release 成功" not in notes
+
+
+def test_current_release_notes_document_reproducibility_without_runtime_changes() -> None:
+    """TC-DOCS-013: v0.2.2 notes are scoped and preserve prior release history."""
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    notes = extract_release_notes(changelog, "0.2.2")
+
+    for required in (
+        "Node 24",
+        "hash",
+        "draft",
+        "evidence",
+        "Gateway 0.2.2",
+        "SDK 0.1.1",
+        "运行时",
+    ):
+        assert required in notes
+    for non_goal in ("K8s", "Redis", "新 Provider", "UI", "SBOM", "签名"):
+        assert non_goal not in notes
+
+    v021 = extract_release_notes(changelog, "0.2.1")
+    v020 = extract_release_notes(changelog, "0.2.0")
+    assert "独立版本校验" in v021 and "v0.2.0 Release workflow" in v021
+    assert "Flow Foundation" in v020 and "逐节点证据链" in v020
 
 
 def test_release_payload_accepts_exact_notes_and_assets(
@@ -357,8 +435,8 @@ def test_build_produces_four_valid_distribution_artifacts(distributions: Path) -
                 metadata.append((Metadata.from_email(extracted.read(), validate=True), "sdist"))
 
     assert {(item.name, str(item.version), kind) for item, kind in metadata} == {
-        ("z-llm-safety-gateway", "0.2.1", "wheel"),
-        ("z-llm-safety-gateway", "0.2.1", "sdist"),
+        ("z-llm-safety-gateway", "0.2.2", "wheel"),
+        ("z-llm-safety-gateway", "0.2.2", "sdist"),
         ("z-llm-safety-gateway-sdk", "0.1.1", "wheel"),
         ("z-llm-safety-gateway-sdk", "0.1.1", "sdist"),
     }
@@ -411,6 +489,7 @@ def test_combined_wheels_install_and_run_all_cli_entry_points(
             "-m",
             "pip",
             "install",
+            "--force-reinstall",
             "--no-deps",
             str(gateway_wheel),
             str(sdk_wheel),
@@ -426,7 +505,7 @@ def test_combined_wheels_install_and_run_all_cli_entry_points(
             "-c",
             "import z_llm_safety_gateway as g; "
             "import z_llm_safety_gateway_sdk as s; "
-            "assert (g.__version__, s.__version__) == ('0.2.1', '0.1.1')",
+            "assert (g.__version__, s.__version__) == ('0.2.2', '0.1.1')",
         ],
         check=False,
         capture_output=True,
@@ -489,3 +568,417 @@ def test_dependabot_covers_both_packages_and_actions() -> None:
     config = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
     scopes = {(item["package-ecosystem"], item["directory"]) for item in config["updates"]}
     assert scopes == {("pip", "/"), ("pip", "/sdk"), ("github-actions", "/")}
+
+
+def test_release_tool_lock_is_hashed_and_complete() -> None:
+    """TC-REL-018: release tooling is exact, transitively locked, and hashed."""
+    direct_pins: dict[str, str] = {}
+    for line in RELEASE_TOOLS_INPUT.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        name, version = stripped.split("==", 1)
+        direct_pins[name] = version
+    assert direct_pins == EXPECTED_RELEASE_TOOLS
+
+    lock = RELEASE_TOOLS_LOCK.read_text(encoding="utf-8")
+    all_requirements = re.findall(
+        r"(?m)^(?P<name>[a-zA-Z0-9_.-]+)==(?P<version>[^\s\\]+)", lock
+    )
+    logical_requirements = re.findall(
+        r"(?m)^(?P<name>[a-zA-Z0-9_.-]+)==(?P<version>[^\s\\]+)(?P<body>(?:\s*\\\n\s+--hash=sha256:[0-9a-f]{64})+)",
+        lock,
+    )
+    assert logical_requirements
+    assert len(all_requirements) == len({name.lower() for name, _ in all_requirements})
+    assert {(name.lower(), version) for name, version in all_requirements} == {
+        (name.lower(), version) for name, version, _ in logical_requirements
+    }
+    locked = {name.lower(): version for name, version, _ in logical_requirements}
+    assert all(re.fullmatch(r"[^<>=!~]+", version) for version in locked.values())
+    assert {name: locked[name] for name in EXPECTED_RELEASE_TOOLS} == EXPECTED_RELEASE_TOOLS
+    for _, _, hash_block in logical_requirements:
+        assert re.search(r"--hash=sha256:[0-9a-f]{64}", hash_block)
+
+    workflow_commands = "\n".join(
+        step.get("run", "")
+        for job in _workflow()["jobs"].values()
+        if isinstance(job, dict)
+        for step in job.get("steps", [])
+    )
+    assert workflow_commands.count(
+        "python -m pip install --require-hashes -r requirements/release-tools.lock"
+    ) >= 2
+    assert not re.search(
+        r"pip install[^\n]*(?:\bbuild\b|\btwine\b|\bpip-audit\b)", workflow_commands
+    )
+
+
+def test_dependabot_covers_pinned_release_dependencies() -> None:
+    """TC-GH-009: dependency updates preserve lock regeneration and SHA review."""
+    config = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+    scopes = {(item["package-ecosystem"], item["directory"]) for item in config["updates"]}
+    assert scopes == {("pip", "/"), ("pip", "/sdk"), ("github-actions", "/")}
+
+    guide = " ".join(RELEASE_TOOLS_GUIDE.read_text(encoding="utf-8").split())
+    for required in (
+        "pip-tools==7.6.1",
+        "python3.12",
+        "pip-compile --generate-hashes --resolver=backtracking",
+        "requirements/release-tools.lock",
+        "full commit SHA",
+        "Node 24",
+    ):
+        assert required in guide
+
+
+def test_release_workflow_uses_locked_no_isolation_builds() -> None:
+    """TC-REL-019: build and audit share the lock and both packages avoid isolation."""
+    workflow = _workflow()
+    build_commands = "\n".join(
+        step.get("run", "") for step in workflow["jobs"]["build"]["steps"]
+    )
+    audit_commands = "\n".join(
+        step.get("run", "") for step in workflow["jobs"]["audit"]["steps"]
+    )
+    lock_install = (
+        "python -m pip install --require-hashes -r requirements/release-tools.lock"
+    )
+
+    assert lock_install in build_commands
+    assert lock_install in audit_commands
+    assert "python -m build --no-isolation --outdir dist ." in build_commands
+    assert "python -m build --no-isolation --outdir dist sdk" in build_commands
+    assert "python -m twine check dist/*" in build_commands
+    assert not re.search(
+        r"pip install[^\n]*(?:\bbuild\b|\btwine\b|\bpip-audit\b)",
+        f"{build_commands}\n{audit_commands}",
+    )
+
+
+def test_release_workflow_is_draft_first_and_tag_only() -> None:
+    """TC-REL-020: dispatch validates only and tag publication is draft-first."""
+    workflow = _workflow()
+    triggers = workflow.get("on", workflow.get(True))
+    assert set(triggers) == {"push", "workflow_dispatch"}
+    release_job = workflow["jobs"]["release"]
+    assert release_job["needs"] == ["quality", "build", "audit"]
+    assert "github.event_name == 'push'" in release_job["if"]
+    assert "refs/tags/v" in release_job["if"]
+
+    step_names = [step.get("name") for step in release_job["steps"]]
+    required_order = [
+        "Check Release absence",
+        "Generate expected asset digests",
+        "Create private draft",
+        "Capture remote tag refs",
+        "Validate private draft",
+        "Publish verified draft",
+        "Recheck public Release",
+        "Generate release evidence",
+        "Upload release evidence",
+    ]
+    assert [step_names.index(name) for name in required_order] == sorted(
+        step_names.index(name) for name in required_order
+    )
+
+    commands = "\n".join(step.get("run", "") for step in release_job["steps"])
+    assert "release_checks.py absence" in commands
+    assert commands.count("gh release create") == 1
+    assert "--draft" in commands and "--verify-tag" in commands
+    assert "--expected-state draft" in commands
+    assert commands.count("--expected-digests expected-digests.json") == 3
+    assert "gh release edit" in commands and "--draft=false" in commands
+    assert "--expected-state public" in commands
+    assert "gh release delete" not in commands
+    assert "git push --delete" not in commands
+
+    evidence_upload = _workflow_step(workflow, "release", "Upload release evidence")
+    assert evidence_upload["with"]["retention-days"] == 90
+    assert evidence_upload["with"]["if-no-files-found"] == "error"
+    assert "release-evidence" in evidence_upload["with"]["name"]
+
+
+def test_release_payload_requires_exact_state_digests_and_refs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-REL-021: exact draft/public payloads and peeled refs pass."""
+    _v022_release_tree(tmp_path)
+    monkeypatch.setattr(release_checks, "ROOT", tmp_path)
+    expected_sha = "b" * 40
+    refs = {"tag_object": "a" * 40, "peeled_commit": expected_sha}
+
+    draft = _v022_release_payload(draft=True)
+    release_checks.verify_release_payload(
+        json.dumps(draft),
+        "v0.2.2",
+        expected_draft=True,
+        expected_digests=_v022_expected_digests(draft),
+    )
+    assert release_checks.verify_release_refs(json.dumps(refs), expected_sha) == (
+        "a" * 40,
+        expected_sha,
+    )
+
+    public = _v022_release_payload(draft=False)
+    release_checks.verify_release_payload(
+        json.dumps(public),
+        "v0.2.2",
+        expected_draft=False,
+        expected_digests=_v022_expected_digests(public),
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "draft",
+        "prerelease",
+        "asset_state",
+        "missing_digest",
+        "bad_digest",
+        "wrong_digest",
+        "swapped_digests",
+        "duplicate_asset",
+        "missing_asset",
+        "extra_asset",
+        "body",
+        "tag",
+        "blank_tag_object",
+        "wrong_peeled_commit",
+    ],
+)
+def test_release_payload_rejects_state_digest_and_ref_mutations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    """TC-REL-022: state, digest, asset, notes, tag, and ref mutations fail closed."""
+    _v022_release_tree(tmp_path)
+    monkeypatch.setattr(release_checks, "ROOT", tmp_path)
+    payload = _v022_release_payload(draft=True)
+    expected_digests = _v022_expected_digests(payload)
+    refs = {"tag_object": "a" * 40, "peeled_commit": "b" * 40}
+
+    if mutation == "draft":
+        payload["isDraft"] = False
+    elif mutation == "prerelease":
+        payload["isPrerelease"] = True
+    elif mutation == "asset_state":
+        payload["assets"][0]["state"] = "new"
+    elif mutation == "missing_digest":
+        payload["assets"][0].pop("digest")
+    elif mutation == "bad_digest":
+        payload["assets"][0]["digest"] = "sha256:not-a-digest"
+    elif mutation == "wrong_digest":
+        payload["assets"][0]["digest"] = f"sha256:{9:064x}"
+    elif mutation == "swapped_digests":
+        first = payload["assets"][0]["digest"]
+        payload["assets"][0]["digest"] = payload["assets"][1]["digest"]
+        payload["assets"][1]["digest"] = first
+    elif mutation == "duplicate_asset":
+        payload["assets"][1] = deepcopy(payload["assets"][0])
+    elif mutation == "missing_asset":
+        payload["assets"].pop()
+    elif mutation == "extra_asset":
+        payload["assets"].append(
+            {
+                "name": "release-evidence.json",
+                "state": "uploaded",
+                "size": 1,
+                "digest": f"sha256:{9:064x}",
+            }
+        )
+    elif mutation == "body":
+        payload["body"] = "Reproducible release notes.\nUnexpected adjacent notes."
+    elif mutation == "tag":
+        payload["tagName"] = "v0.2.1"
+    elif mutation == "blank_tag_object":
+        refs["tag_object"] = ""
+    else:
+        refs["peeled_commit"] = "c" * 40
+
+    with pytest.raises(ValueError, match="GitHub Release|remote tag refs"):
+        if mutation in {"blank_tag_object", "wrong_peeled_commit"}:
+            release_checks.verify_release_refs(json.dumps(refs), "b" * 40)
+        else:
+            release_checks.verify_release_payload(
+                json.dumps(payload),
+                "v0.2.2",
+                expected_draft=True,
+                expected_digests=expected_digests,
+            )
+
+
+def test_expected_asset_digests_are_computed_from_local_distributions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-REL-021: expected digests bind each asset name to its local bytes."""
+    _v022_release_tree(tmp_path)
+    monkeypatch.setattr(release_checks, "ROOT", tmp_path)
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    for index, name in enumerate(release_checks._expected_asset_names("v0.2.2")):
+        (dist / name).write_bytes(f"artifact-{index}".encode())
+
+    observed = release_checks.build_expected_asset_digests(dist, "v0.2.2")
+
+    assert observed == {
+        path.name: f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+        for path in sorted(dist.iterdir())
+    }
+
+
+def test_release_evidence_is_deterministic_bounded_and_sanitized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TC-REL-023 / TC-REL-025: local evidence contract is deterministic and safe."""
+    _v022_release_tree(tmp_path)
+    monkeypatch.setattr(release_checks, "ROOT", tmp_path)
+    release = _v022_release_payload(draft=False)
+    refs = {"tag_object": "a" * 40, "peeled_commit": "b" * 40}
+    workflow = {
+        "repository": "example/gateway",
+        "run_id": 42,
+        "run_attempt": 1,
+        "run_url": "https://github.com/example/gateway/actions/runs/42",
+        "jobs": {
+            "quality": "success",
+            "build": "success",
+            "audit": "success",
+            "public_verify": "success",
+        },
+        "token": "must-not-appear",
+        "actor_email": "private@example.com",
+    }
+
+    first = release_checks.build_release_evidence(
+        json.dumps(release),
+        "v0.2.2",
+        json.dumps(refs),
+        json.dumps(workflow),
+        expected_sha="b" * 40,
+        expected_digests=_v022_expected_digests(release),
+        verified_at="2026-08-25T12:00:00Z",
+    )
+    release["assets"].reverse()
+    workflow["jobs"] = dict(reversed(list(workflow["jobs"].items())))
+    second = release_checks.build_release_evidence(
+        json.dumps(release),
+        "v0.2.2",
+        json.dumps(refs),
+        json.dumps(workflow),
+        expected_sha="b" * 40,
+        expected_digests=_v022_expected_digests(release),
+        verified_at="2026-08-25T12:00:00Z",
+    )
+
+    assert first == second
+    assert "must-not-appear" not in first
+    assert "private@example.com" not in first
+    evidence = json.loads(first)
+    assert set(evidence) == {
+        "assets",
+        "gateway_version",
+        "release",
+        "sdk_version",
+        "tag",
+        "tag_object",
+        "peeled_commit",
+        "verified_at",
+        "verifier_schema_version",
+        "workflow",
+    }
+    assert evidence["verifier_schema_version"] == 1
+    assert evidence["gateway_version"] == "0.2.2"
+    assert evidence["sdk_version"] == "0.1.1"
+    assert [asset["name"] for asset in evidence["assets"]] == sorted(
+        asset["name"] for asset in evidence["assets"]
+    )
+    assert len(evidence["assets"]) == 4
+    assert evidence["workflow"]["jobs"] == {
+        "audit": "success",
+        "build": "success",
+        "public_verify": "success",
+        "quality": "success",
+    }
+    assert evidence["release"]["is_draft"] is False
+    assert re.fullmatch(r"[0-9a-f]{64}", evidence["release"]["notes_sha256"])
+
+    workflow["jobs"]["audit"] = "failure"
+    with pytest.raises(ValueError, match="workflow metadata job conclusions"):
+        release_checks.build_release_evidence(
+            json.dumps(release),
+            "v0.2.2",
+            json.dumps(refs),
+            json.dumps(workflow),
+            expected_sha="b" * 40,
+            expected_digests=_v022_expected_digests(release),
+            verified_at="2026-08-25T12:00:00Z",
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "replacement"),
+    [
+        ("run_url", "https://github.com/other/repo/actions/runs/42"),
+        ("release_url", "https://github.com/other/repo/releases/tag/v0.2.2"),
+        ("verified_at", "2026-08-25 12:00:00"),
+    ],
+)
+def test_release_evidence_rejects_cross_field_and_timestamp_mismatches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    replacement: str,
+) -> None:
+    """TC-REL-023: schema-v1 URLs and timestamps must agree exactly."""
+    _v022_release_tree(tmp_path)
+    monkeypatch.setattr(release_checks, "ROOT", tmp_path)
+    release = _v022_release_payload(draft=False)
+    refs = {"tag_object": "a" * 40, "peeled_commit": "b" * 40}
+    workflow = {
+        "repository": "example/gateway",
+        "run_id": 42,
+        "run_attempt": 1,
+        "run_url": "https://github.com/example/gateway/actions/runs/42",
+        "jobs": {
+            "quality": "success",
+            "build": "success",
+            "audit": "success",
+            "public_verify": "success",
+        },
+    }
+    verified_at = "2026-08-25T12:00:00Z"
+    if mutation == "run_url":
+        workflow["run_url"] = replacement
+    elif mutation == "release_url":
+        release["url"] = replacement
+    else:
+        verified_at = replacement
+
+    with pytest.raises(ValueError, match="URL|verified_at"):
+        release_checks.build_release_evidence(
+            json.dumps(release),
+            "v0.2.2",
+            json.dumps(refs),
+            json.dumps(workflow),
+            expected_sha="b" * 40,
+            expected_digests=_v022_expected_digests(release),
+            verified_at=verified_at,
+        )
+
+
+@pytest.mark.parametrize("status", [401, 403, 429, 500])
+def test_remote_absence_parser_accepts_only_explicit_404(status: int) -> None:
+    """TC-REL-024: only a structured HTTP 404 means the Release is absent."""
+    assert release_checks.parse_release_absence('{"status": 404}') is True
+
+    with pytest.raises(ValueError, match="Release absence check failed"):
+        release_checks.parse_release_absence(json.dumps({"status": status}))
+    with pytest.raises(ValueError, match="Release absence check failed"):
+        release_checks.parse_release_absence(
+            '{"kind": "network_error", "message": "must-not-appear"}'
+        )
+    with pytest.raises(ValueError, match="Release absence check failed"):
+        release_checks.parse_release_absence("not-json")

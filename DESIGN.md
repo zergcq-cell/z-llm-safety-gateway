@@ -2842,14 +2842,14 @@ def mock_llm_provider():
 
 ---
 
-### Versioning Policy (v0.1.0, 2026-08-15)
+### Versioning Policy (v0.2.2, 2026-08-25)
 
 SemVer-aligned release strategy:
 
 | Version | Meaning |
 |---------|---------|
 | v0.0.x | Internal development phases (not for public distribution) |
-| v0.x.y | Public test releases — API may change between releases (current: v0.1.0) |
+| v0.x.y | Public test releases — API may change between releases (current: v0.2.2) |
 | v1.0.0 | General availability — stable public API, formal release |
 
 The first public test release is v0.1.0 (previously labeled v1.0.0 internally).
@@ -2950,11 +2950,13 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 
 ### Post-v0.1.0 Roadmap (until v1.0.0 GA)
 
-| Version | Focus |
-|---------|-------|
-| v0.2.0 | K8s Helm Chart, Redis rate limiting, provider failover, additional detectors (jailbreak, hallucination), mTLS |
-| v0.3.0 | Anthropic/Gemini provider support, RBAC, multi-tenancy, embeddings detection |
-| v0.4.0 | Agent execution rails, dashboard/observability UI, pluggable tokenizer, plugin marketplace |
+| Version | Focus | Status |
+|---------|-------|--------|
+| v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed |
+| v0.2.1 | Release version hotfix | Released 2026-08-24 |
+| v0.2.2 | Release reproducibility and evidence | Current source / release candidate |
+| v0.3.0 | Next functional milestone; scope requires an independent STDD change | Planned |
+| v0.4.0 | Later milestone; scope requires an independent STDD change | Planned |
 
 ---
 

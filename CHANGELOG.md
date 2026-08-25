@@ -11,6 +11,20 @@
 
 暂无。
 
+## [0.2.2] - 2026-08-25
+
+### 发布可复现性与证据闭环
+
+- 将 CI 与 Release 使用的官方 Actions 升级到已核验的 Node 24 版本，并固定完整 commit SHA。
+- 以受版本控制的 hash lock 固定 pip、build、twine、pip-audit 与 Hatchling；Gateway 和 SDK
+  均使用无隔离构建，保持精确两个 wheel 与两个 sdist。
+- tag 发布改为 draft-first：只有明确不存在、完整质量门、四资产 digest、notes 和 peeled tag
+  SHA 全部验证通过后才公开；失败 draft 保持私有供诊断，任何公开 tag 都不会自动重写。
+- 生成仅含公开元数据的确定性 release evidence，作为保留 90 天的 Actions artifact 和 Job
+  Summary；GitHub Release 仍精确包含四个 distribution assets。
+- Gateway 0.2.2 与独立 SDK 0.1.1 保持兼容；本维护版本不改变 Flow、Pipeline、HTTP/SSE、
+  Provider、gRPC、Detector SDK API 或 YAML 运行时行为。
+
 ## [0.2.1] - 2026-08-24
 
 ### 发布热修复

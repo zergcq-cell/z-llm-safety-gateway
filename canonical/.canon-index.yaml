@@ -47,3 +47,10 @@ changes:
     - project-docs
     - release-hardening
     verified: true
+  2026-08-25-v0.2.2-release-reproducibility:
+    proposal: canonical/proposals/2026-08-25-v0.2.2-release-reproducibility.yaml
+    capabilities:
+    - github-setup
+    - project-docs
+    - release-hardening
+    verified: true

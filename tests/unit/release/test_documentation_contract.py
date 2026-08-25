@@ -39,16 +39,16 @@ def _anchors(path: Path) -> set[str]:
 
 
 def test_release_version_and_python_support_are_consistent() -> None:
-    """TC-DOCS-008: current Gateway surfaces use v0.2.1 and Python 3.10–3.12."""
+    """TC-DOCS-011: current Gateway surfaces use v0.2.2 and Python 3.10–3.12."""
     expected_surfaces = {
-        "README.md": "v0.2.1",
-        "docs/getting-started.md": "v0.2.1",
-        "docs/configuration.md": "v0.2.1",
-        "docs/api-spec.md": "v0.2.1",
-        "docs/deployment.md": "v0.2.1",
-        "config/gateway.yaml": "v0.2.1",
-        "config/gateway.prod.yaml": "v0.2.1",
-        "docker-compose.prod.yml": "z-safety-gateway:0.2.1",
+        "README.md": "v0.2.2",
+        "docs/getting-started.md": "v0.2.2",
+        "docs/configuration.md": "v0.2.2",
+        "docs/api-spec.md": "v0.2.2",
+        "docs/deployment.md": "v0.2.2",
+        "config/gateway.yaml": "v0.2.2",
+        "config/gateway.prod.yaml": "v0.2.2",
+        "docker-compose.prod.yml": "z-safety-gateway:0.2.2",
     }
     for relative, expected in expected_surfaces.items():
         assert expected in (ROOT / relative).read_text(encoding="utf-8")
@@ -68,6 +68,8 @@ def test_release_version_and_python_support_are_consistent() -> None:
 
     active_docs = "\n".join(path.read_text(encoding="utf-8") for path in _active_markdown())
     assert "z-llm-safety-gateway-sdk>=1.0,<2.0" not in active_docs
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "| Gateway v0.2.2 | Detector SDK v0.1.1 | Compatible |" in readme
 
 
 def test_readme_quick_start_matches_executable_source_flow() -> None:
@@ -134,9 +136,10 @@ def test_plugin_docs_describe_available_release_and_tls_capabilities() -> None:
     combined = "\n".join(path.read_text(encoding="utf-8") for path in files)
     for path in files:
         contents = path.read_text(encoding="utf-8")
-        assert "Gateway v0.2.1" in contents
+        assert "Gateway v0.2.2" in contents
         assert "SDK v0.1.1" in contents
     assert "SDK v0.2.1" not in combined
+    assert "SDK v0.2.2" not in combined
     assert "pip install z-llm-safety-gateway-sdk" not in combined
     assert "pip install z-llm-safety-gateway[grpc]" not in combined
     assert "启用双向信任" not in combined
@@ -160,20 +163,46 @@ def test_example_plugins_allow_the_documented_sdk_wheel_reference() -> None:
         pyproject = (ROOT / relative).read_text(encoding="utf-8")
         assert "z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl" in pyproject
         assert "z_llm_safety_gateway_sdk-0.2.1" not in pyproject
+        assert "z_llm_safety_gateway_sdk-0.2.2" not in pyproject
         assert "[tool.hatch.metadata]" in pyproject
         assert "allow-direct-references = true" in pyproject
 
 
 def test_sdk_release_surfaces_keep_independent_version() -> None:
-    """TC-SDK-012: SDK README and CLI template retain the published 0.1.1 wheel."""
+    """TC-DOCS-011: SDK surfaces retain the published 0.1.1 release."""
     sdk_readme = (ROOT / "sdk" / "README.md").read_text(encoding="utf-8")
     sdk_cli = (
         ROOT / "sdk" / "src" / "z_llm_safety_gateway_sdk" / "cli.py"
     ).read_text(encoding="utf-8")
 
-    assert "Gateway v0.2.1" in sdk_readme
+    assert "Gateway v0.2.2" in sdk_readme
     assert "SDK v0.1.1" in sdk_readme
     assert "z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl" in sdk_readme
     assert "v0.1.1/z_llm_safety_gateway_sdk-0.1.1-py3-none-any.whl" in sdk_cli
     assert "z_llm_safety_gateway_sdk-0.2.1" not in sdk_readme
     assert "z_llm_safety_gateway_sdk-0.2.1" not in sdk_cli
+    assert "z_llm_safety_gateway_sdk-0.2.2" not in sdk_readme
+    assert "z_llm_safety_gateway_sdk-0.2.2" not in sdk_cli
+
+
+def test_design_roadmap_matches_release_history() -> None:
+    """TC-DOCS-012: roadmap records v0.2.x facts and leaves v0.3.0 independently scoped."""
+    design = (ROOT / "DESIGN.md").read_text(encoding="utf-8")
+    versioning = design.split("### Versioning Policy", 1)[1].split(
+        "## 18. Development Roadmap", 1
+    )[0]
+    roadmap = design.split("### Post-v0.1.0 Roadmap", 1)[1].split("\n---\n", 1)[0]
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "current: v0.2.2" in versioning
+    for required in (
+        "| v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed |",
+        "| v0.2.1 | Release version hotfix | Released 2026-08-24 |",
+        "| v0.2.2 | Release reproducibility and evidence | Current source / release candidate |",
+        "| v0.3.0 | Next functional milestone; scope requires an independent STDD change "
+        "| Planned |",
+    ):
+        assert required in roadmap
+    for non_goal in ("K8s Helm Chart", "Redis rate limiting", "provider failover", "SBOM"):
+        assert non_goal not in roadmap
+    assert "Current gateway source version: **v0.2.2**" in readme

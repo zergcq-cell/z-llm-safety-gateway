@@ -1,0 +1,37 @@
+meta:
+  change_id: 2026-08-25-v0.2.2-release-reproducibility
+  created: '2026-08-26T07:21:43+08:00'
+  total_adjustments: 3
+  requires_re_spec: false
+  requires_re_build: false
+
+adjustments:
+  - id: ADJ-001
+    category: design_change
+    original: design.md Decision 2 的 pip-compile 命令未包含 --allow-unsafe 或 --strip-extras
+    adjusted: Python 3.12 锁生成命令增加 --allow-unsafe --strip-extras，并将 pip==26.2.1 纳入完整 hash lock
+    reason: pip-tools 默认排除 unsafe package pip；原命令无法满足已锁定的 pip 版本契约
+    principle_impact: 失败策略和工具链契约更显式；不改变 runtime、API、Flow 或数据收集，无原则偏离
+    affected_capabilities:
+      - release-hardening
+      - github-setup
+    resolved_in_phase: verify
+  - id: ADJ-002
+    category: design_change
+    original: design.md Decision 7 与 SC-DOCS-012 把 v0.2.0～v0.2.2 概括为已发布状态
+    adjusted: 区分 v0.2.0 tag 成功但 Release workflow 失败、v0.2.1 Release 成功和 v0.2.2 当前源码 / release candidate
+    reason: 历史审计证据与 Gate 3 前真实状态要求按 tag、workflow 和 Release 分别表述
+    principle_impact: 失败状态和历史边界更透明；不改变 runtime 或收集范围，无原则偏离
+    affected_capabilities:
+      - project-docs
+    resolved_in_phase: verify
+  - id: ADJ-003
+    category: boundary_discovery
+    original: design.md Decision 8 与 TC-REL-025 原先以发布后远程检查覆盖 dry-run 不发布
+    adjusted: workflow_dispatch 成功后、tag 创建前新增 pre-tag checkpoint，同时验证 Release 明确 404 与远程 tag 不存在
+    reason: 发布后的最终 public 状态不能倒推 dry-run 时点的 absence，必须在状态改变前采集证据
+    principle_impact: 失败旁路与远程时序契约更显式；证据只含公开元数据，无原则偏离
+    affected_capabilities:
+      - release-hardening
+      - github-setup
+    resolved_in_phase: verify
