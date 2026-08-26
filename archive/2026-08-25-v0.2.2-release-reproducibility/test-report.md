@@ -184,4 +184,15 @@ pre-tag absence、annotated tag、tag workflow、annotations 和 Release/evidenc
 | 19 个本地 nodes | ✅ | AST + collect-only + execute |
 | 3 个远程 checkpoints | ⏳ | pre-tag、annotations、release |
 | 十二类失败模式 | ✅ / ⏳ | 本地均闭合；(f) 与 (l) 的远程部分待验 |
-| Gate 3 | ⏳ | 等待用户明确确认 |
+| Gate 3 | ✅ | 用户已于 2026-08-26T07:51:13+08:00 明确确认 |
+
+## 十、Deliver 远程验证记录
+
+### Attempt 1 — fail-closed，未创建 tag
+
+- 发布提交：`58e9ff48e9d447f9cf8539d3e0eb00cbb31529c8`
+- Main CI run：`32913069469`，Python 3.10/3.11/3.12 全绿。
+- Dry-run：`32913194675`；quality 三版本全绿，build 与 audit 在安装 release lock 时失败，release job skipped。
+- 根因：lock 在 macOS 生成，遗漏 keyring 只在 Linux 声明的 `SecretStorage>=3.2`，Ubuntu runner 的 `--require-hashes` 正确拒绝未固定依赖。
+- 安全结果：v0.2.2 tag 和 Release 均未创建，失败关闭契约真实生效。
+- 修复证据：新增 RED 测试要求 `secretstorage==3.5.0` 为跨平台直接输入；Python 3.12 重新生成 lock 后测试 GREEN，全新 venv 的 `--require-hashes` 安装与 `pip check` 通过。

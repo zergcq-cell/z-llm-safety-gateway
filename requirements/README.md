@@ -2,7 +2,8 @@
 
 `release-tools.lock` is the reproducible tool environment used by both release build and audit
 jobs. Direct inputs are reviewed in `release-tools.in`; all transitive versions and hashes are
-generated, never edited by hand.
+generated, never edited by hand. Platform-conditional dependencies used by the Ubuntu release
+runner are explicit inputs so regeneration on macOS cannot silently omit them.
 
 Regenerate in a clean Python 3.12 virtual environment:
 

@@ -238,6 +238,16 @@ phase6:
   human_spec_merge: completed
   principle_check: completed
   remote_delivery: pending
+  delivery_attempts:
+  - attempt: 1
+    commit: 58e9ff48e9d447f9cf8539d3e0eb00cbb31529c8
+    main_ci_run: 32913069469
+    main_ci: passed_python_3_10_3_11_3_12
+    dry_run: 32913194675
+    result: failed_closed_before_tag
+    root_cause: macos_generated_hash_lock_omitted_linux_secretstorage_dependency
+    remediation: explicit_secretstorage_pin_and_python_3_12_lock_regeneration
+    tag_created: false
   sdk_version: 0.1.1
   started_at: '2026-08-26T07:51:13+08:00'
   status: in_progress

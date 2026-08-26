@@ -4,3 +4,5 @@ build==1.5.0
 twine==7.0.0
 pip-audit==2.10.1
 hatchling==1.32.0
+# keyring declares this only on Linux; pin it explicitly so a macOS-generated lock is portable.
+secretstorage==3.5.0

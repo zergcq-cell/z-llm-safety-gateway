@@ -169,3 +169,11 @@
 - Verify 已完成，Gate 3 已于 2026-08-26T07:51:13+08:00 获得用户明确确认。
 - 三份 human specs、六份 canonical specs 与代码结构索引已合并，change 已归档。
 - Deliver 正按 push main → same-SHA CI → dry-run → pre-tag absence → annotated tag → tag workflow → annotations/release evidence 顺序执行。
+
+## Phase 6 Deliver 远程迭代
+
+- Attempt 1：提交 `58e9ff48e9d447f9cf8539d3e0eb00cbb31529c8` 的 main CI 三版本全绿。
+- Dry-run `32913194675` 在 build/audit 的 hash lock 安装阶段失败关闭；release job skipped，未创建 tag 或 Release。
+- 根因：macOS 生成 lock 时，keyring 的 Linux 条件依赖 `SecretStorage>=3.2` 被排除。
+- 修复：先增加失败契约测试，再把 `secretstorage==3.5.0` 作为跨平台直接输入，使用固定 pip-tools 7.6.1 / Python 3.12 重新生成完整 hashes。
+- 本地证据：目标测试 GREEN；全新 Python 3.12 `--require-hashes` 安装与 `pip check` 通过。下一次远程尝试必须使用新的 commit 和 CI，不复用失败 run。

@@ -35,6 +35,11 @@ EXPECTED_RELEASE_TOOLS = {
     "pip-audit": "2.10.1",
     "twine": "7.0.0",
 }
+EXPECTED_RELEASE_PLATFORM_DEPENDENCIES = {
+    # keyring only declares this dependency on Linux. Keeping it as a reviewed direct input
+    # makes a lock generated on macOS complete for GitHub's Ubuntu runner as well.
+    "secretstorage": "3.5.0",
+}
 
 
 def _project_version(pyproject: Path) -> str:
@@ -579,7 +584,7 @@ def test_release_tool_lock_is_hashed_and_complete() -> None:
             continue
         name, version = stripped.split("==", 1)
         direct_pins[name] = version
-    assert direct_pins == EXPECTED_RELEASE_TOOLS
+    assert direct_pins == EXPECTED_RELEASE_TOOLS | EXPECTED_RELEASE_PLATFORM_DEPENDENCIES
 
     lock = RELEASE_TOOLS_LOCK.read_text(encoding="utf-8")
     all_requirements = re.findall(
@@ -597,6 +602,9 @@ def test_release_tool_lock_is_hashed_and_complete() -> None:
     locked = {name.lower(): version for name, version, _ in logical_requirements}
     assert all(re.fullmatch(r"[^<>=!~]+", version) for version in locked.values())
     assert {name: locked[name] for name in EXPECTED_RELEASE_TOOLS} == EXPECTED_RELEASE_TOOLS
+    assert {
+        name: locked[name] for name in EXPECTED_RELEASE_PLATFORM_DEPENDENCIES
+    } == EXPECTED_RELEASE_PLATFORM_DEPENDENCIES
     for _, _, hash_block in logical_requirements:
         assert re.search(r"--hash=sha256:[0-9a-f]{64}", hash_block)
 
