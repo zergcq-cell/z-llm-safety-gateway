@@ -181,3 +181,7 @@
 - Tag run `32914540121` 的 build/audit/Python 3.10-3.12 quality 全绿，但私有 draft 校验因 GitHub `releases/tags/<tag>` 对 draft 返回 404 而失败关闭；draft 未公开、未删除，四资产完整保留。
 - 记录 `ADJ-004`：新增分页 draft 唯一选择和只读 evidence-recovery。现存 draft 已与 tag run distributions 按 notes、四资产 digest 和 peeled ref 逐字节复验后显式公开；公开 URL 为 `https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.2.2`。
 - 本轮本地质量门：1067 passed、1 skipped，coverage 93.33%；Ruff 与 99 个 Mypy source files 全绿。下一步为推送修复、等待 main CI，并运行只读 evidence recovery。
+- 修复提交 `5cf820ad0e68752e7ea60f53dc38e6d814ed92d8` 已推送。GitHub Actions 重大中断使 main CI `32985111201` attempt 1 在零步骤状态取消；恢复后的 attempt 2 三版本全绿。
+- 只读 evidence recovery run `32997130363` 的 quality/build/audit/evidence-recovery 全绿，artifact `release-evidence-v0.2.2` 已下载并逐字重建一致。
+- 最终远程验收通过：Release public/non-prerelease、四资产 digest、tag object `b6cb482562f10292110d08caab191ab0d025cfea`、peeled commit `ccfb9c442c341b68c4e1ecdcd9e13531aa348033`、Node 20 annotations absence 与 v0.2.0/v0.2.1 历史 refs 全部符合契约。
+- Phase 6 于 `2026-08-27T02:03:14+08:00` 完成；下一功能里程碑仍为需独立 STDD change 的 v0.3.0。

@@ -2954,7 +2954,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 |---------|-------|--------|
 | v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed |
 | v0.2.1 | Release version hotfix | Released 2026-08-24 |
-| v0.2.2 | Release reproducibility and evidence | Current source / release candidate |
+| v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 |
 | v0.3.0 | Next functional milestone; scope requires an independent STDD change | Planned |
 | v0.4.0 | Later milestone; scope requires an independent STDD change | Planned |
 

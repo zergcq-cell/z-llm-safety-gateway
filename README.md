@@ -20,9 +20,10 @@ Open-source, modular LLM content safety gateway that acts as a transparent proxy
 
 ## Quick Start
 
-The v0.2.2 gateway and v0.1.1 Detector SDK are not yet published to PyPI. Install from the
-repository source. Python 3.10–3.12 is supported; Python 3.12 is recommended for a new
-environment.
+The [GitHub v0.2.2 Release](https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.2.2)
+pairs Gateway v0.2.2 with Detector SDK v0.1.1. They are not yet published to PyPI, so install
+from the repository source or the verified Release distributions. Python 3.10–3.12 is
+supported; Python 3.12 is recommended for a new environment.
 
 ```bash
 # 1. Clone and create an isolated environment
@@ -88,7 +89,7 @@ zlg-sdk new my-detector --type python     # scaffold a detector project
 
 ## Project Status
 
-Current gateway source version: **v0.2.2**, the release reproducibility and evidence update. See
+Current gateway release version: **v0.2.2**, the release reproducibility and evidence update. See
 [DESIGN.md](DESIGN.md) for architecture and roadmap.
 
 | Gateway | Detector SDK | Compatibility |

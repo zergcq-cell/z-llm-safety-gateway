@@ -55,7 +55,7 @@ pattern: thorough
 phase:
   build: completed
   current: deliver
-  deliver: in_progress
+  deliver: completed
   slice: completed
   spec: completed
   understand: completed
@@ -237,7 +237,8 @@ phase6:
   gateway_version: 0.2.2
   human_spec_merge: completed
   principle_check: completed
-  remote_delivery: pending
+  completed_at: '2026-08-27T02:03:14+08:00'
+  remote_delivery: passed
   delivery_attempts:
   - attempt: 1
     commit: 58e9ff48e9d447f9cf8539d3e0eb00cbb31529c8
@@ -248,17 +249,55 @@ phase6:
     root_cause: macos_generated_hash_lock_omitted_linux_secretstorage_dependency
     remediation: explicit_secretstorage_pin_and_python_3_12_lock_regeneration
     tag_created: false
+  - attempt: 2
+    commit: ccfb9c442c341b68c4e1ecdcd9e13531aa348033
+    main_ci_run: 32913717122
+    main_ci: passed_python_3_10_3_11_3_12
+    dry_run: 32913857677
+    pre_tag_checkpoint: passed
+    tag: v0.2.2
+    tag_object: b6cb482562f10292110d08caab191ab0d025cfea
+    peeled_commit: ccfb9c442c341b68c4e1ecdcd9e13531aa348033
+    tag_run: 32914540121
+    result: failed_closed_at_private_draft_validation
+    root_cause: github_release_by_tag_endpoint_does_not_return_private_drafts
+    recovery: exact_private_draft_validation_then_explicit_publication
+  - attempt: 3
+    commit: 5cf820ad0e68752e7ea60f53dc38e6d814ed92d8
+    main_ci_run: 32985111201
+    main_ci_attempt: 2
+    main_ci: passed_python_3_10_3_11_3_12
+    infrastructure_incident: github_actions_major_outage_initial_jobs_cancelled_without_steps
+    evidence_recovery_run: 32997130363
+    evidence_artifact: release-evidence-v0.2.2
+    evidence_schema: 1
+    result: passed
+  release:
+    url: https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.2.2
+    tag: v0.2.2
+    tag_object: b6cb482562f10292110d08caab191ab0d025cfea
+    peeled_commit: ccfb9c442c341b68c4e1ecdcd9e13531aa348033
+    assets: 4_exact_digest_verified
+    notes_sha256: f99eb841e0ceae8b94fa4cbdb925518b340aa26a8131a7227c750e727b669247
+    public: true
+    prerelease: false
+  remote_checkpoints:
+    pre_tag: passed
+    annotations: passed_no_node20
+    release: passed_evidence_rebuilt_exactly
+    historical_refs: passed_v0.2.0_v0.2.1_unchanged
   sdk_version: 0.1.1
   started_at: '2026-08-26T07:51:13+08:00'
-  status: in_progress
+  status: completed
 phases:
   build:
     completed_at: '2026-08-25T22:26:43+08:00'
     started_at: '2026-08-25T21:44:43+08:00'
     status: completed
   deliver:
+    completed_at: '2026-08-27T02:03:14+08:00'
     started_at: '2026-08-26T07:51:13+08:00'
-    status: in_progress
+    status: completed
   slice:
     completed_at: '2026-08-25T21:44:43+08:00'
     status: completed
