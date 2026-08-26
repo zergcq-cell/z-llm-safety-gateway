@@ -177,3 +177,7 @@
 - 根因：macOS 生成 lock 时，keyring 的 Linux 条件依赖 `SecretStorage>=3.2` 被排除。
 - 修复：先增加失败契约测试，再把 `secretstorage==3.5.0` 作为跨平台直接输入，使用固定 pip-tools 7.6.1 / Python 3.12 重新生成完整 hashes。
 - 本地证据：目标测试 GREEN；全新 Python 3.12 `--require-hashes` 安装与 `pip check` 通过。下一次远程尝试必须使用新的 commit 和 CI，不复用失败 run。
+- Attempt 2：修复提交 `ccfb9c442c341b68c4e1ecdcd9e13531aa348033` 的 main CI `32913717122`、dry-run `32913857677` 与 pre-tag checkpoint 全绿；annotated tag `v0.2.2`（object `b6cb482562f10292110d08caab191ab0d025cfea`）精确 peeled 到该提交。
+- Tag run `32914540121` 的 build/audit/Python 3.10-3.12 quality 全绿，但私有 draft 校验因 GitHub `releases/tags/<tag>` 对 draft 返回 404 而失败关闭；draft 未公开、未删除，四资产完整保留。
+- 记录 `ADJ-004`：新增分页 draft 唯一选择和只读 evidence-recovery。现存 draft 已与 tag run distributions 按 notes、四资产 digest 和 peeled ref 逐字节复验后显式公开；公开 URL 为 `https://github.com/zergcq-cell/z-llm-safety-gateway/releases/tag/v0.2.2`。
+- 本轮本地质量门：1067 passed、1 skipped，coverage 93.33%；Ruff 与 99 个 Mypy source files 全绿。下一步为推送修复、等待 main CI，并运行只读 evidence recovery。

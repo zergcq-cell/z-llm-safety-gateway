@@ -78,6 +78,51 @@ def _load_json_object(payload: str, description: str) -> dict[str, Any]:
     return loaded
 
 
+def select_unique_release(
+    payload: str, version: str, *, expected_draft: bool
+) -> dict[str, Any]:
+    """Select one tag/state match from a slurped GitHub Releases listing."""
+    try:
+        loaded = json.loads(payload)
+    except json.JSONDecodeError as error:
+        raise ValueError("GitHub Releases listing must be valid JSON") from error
+    if not isinstance(loaded, list):
+        raise ValueError("GitHub Releases listing must be an array")
+
+    releases: list[Any]
+    if all(isinstance(page, list) for page in loaded):
+        releases = [release for page in loaded for release in page]
+    elif all(isinstance(release, dict) for release in loaded):
+        releases = loaded
+    else:
+        raise ValueError("GitHub Releases listing has an invalid page structure")
+
+    expected_tag = f"v{version.removeprefix('v')}"
+    matches = [
+        release
+        for release in releases
+        if isinstance(release, dict)
+        and release.get("tag_name") == expected_tag
+        and release.get("draft") is expected_draft
+    ]
+    if len(matches) != 1:
+        state = "draft" if expected_draft else "public"
+        raise ValueError(
+            f"GitHub Releases listing must contain exactly one {state} "
+            f"Release for {expected_tag}; found {len(matches)}"
+        )
+
+    release = matches[0]
+    return {
+        "tagName": release.get("tag_name"),
+        "body": release.get("body"),
+        "isDraft": release.get("draft"),
+        "isPrerelease": release.get("prerelease"),
+        "url": release.get("html_url"),
+        "assets": release.get("assets"),
+    }
+
+
 def _expected_asset_names(version: str) -> list[str]:
     normalized = version.removeprefix("v")
     sdk_version = _declared_version(ROOT / "sdk" / "pyproject.toml", "version")
@@ -338,6 +383,12 @@ def main() -> int:
     release_parser.add_argument("--refs-input", type=Path)
     release_parser.add_argument("--expected-sha")
 
+    select_parser = subparsers.add_parser("select-release")
+    select_parser.add_argument("--version", required=True)
+    select_parser.add_argument("--input", type=Path, required=True)
+    select_parser.add_argument("--expected-state", choices=("draft", "public"), required=True)
+    select_parser.add_argument("--output", type=Path, required=True)
+
     absence_parser = subparsers.add_parser("absence")
     absence_parser.add_argument("--input", type=Path, required=True)
 
@@ -383,6 +434,17 @@ def main() -> int:
         return 0
     if args.command == "absence":
         parse_release_absence(args.input.read_text(encoding="utf-8"))
+        return 0
+    if args.command == "select-release":
+        selected = select_unique_release(
+            args.input.read_text(encoding="utf-8"),
+            args.version,
+            expected_draft=args.expected_state == "draft",
+        )
+        args.output.write_text(
+            f"{json.dumps(selected, sort_keys=True, separators=(',', ':'))}\n",
+            encoding="utf-8",
+        )
         return 0
     if args.command == "asset-digests":
         digests = build_expected_asset_digests(args.dist_dir, args.version)

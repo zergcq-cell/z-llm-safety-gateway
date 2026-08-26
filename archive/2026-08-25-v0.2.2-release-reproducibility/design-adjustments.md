@@ -1,7 +1,7 @@
 # v0.2.2 设计调整汇总
 
 > 汇总日期：2026-08-26
-> 结论：3 项轻量调整均已在 Verify 阶段收口；无需重新 Spec 或重新 Build。
+> 结论：4 项轻量调整均已收口；无需重新 Spec 或重新 Build。
 
 ## ADJ-001：锁生成纳入 pip unsafe package
 
@@ -24,11 +24,18 @@
 - **原因**：终态无法证明中间时点没有越权写入，证据必须在状态改变前采集。
 - **影响**：远程 checkpoint 从 2 个增为 3 个；GitHub workflow 发布行为和权限不变。
 
+## ADJ-004：显式处理 GitHub draft 查询语义并提供只读证据恢复
+
+- **原设计**：私有 draft 创建后使用 `releases/tags/<tag>` API 读取并校验；假设该端点可返回 draft。
+- **最终调整**：通过分页 Releases 列表唯一选择指定 tag/state 的 draft，再执行原有 payload/ref/digest 校验。首次 tag run 因该 API 假设失败并保留了完整私有 draft；在逐字节复验后显式公开该 draft。新增的 evidence-recovery dispatch 只读取指定失败 run 的已验证 distributions、公开 Release 与 tag refs，并上传 90 天 evidence artifact；它只有 `actions: read` 与 `contents: read`，没有发布写路径。
+- **原因**：真实 GitHub 行为证明 `releases/tags/<tag>` 对私有 draft 返回 404，即使 draft 已存在；原查询会在正确创建草稿后错误失败。
+- **影响**：修正发布自动化的远程采集边界并增加失败后只读证据闭环；四个公开资产、tag object/peeled commit、runtime/API/Flow/SDK 行为均不变。workflow dispatch 仍不能创建、编辑或删除 Release/tag。
+
 ## 项目原则复核
 
-1. **Plugin / Flow**：三项调整均位于发布工具、文档和验证层；Flow、插件和核心 runtime 不变。
-2. **显式策略 / 失败**：pip 锁定、失败发布历史和 pre-tag absence 均由隐含假设改为显式失败条件。
+1. **Plugin / Flow**：四项调整均位于发布工具、文档和验证层；Flow、插件和核心 runtime 不变。
+2. **显式策略 / 失败**：pip 锁定、失败发布历史、pre-tag absence 与 draft 唯一选择均由隐含假设改为显式失败条件。
 3. **透明边界 / 稳定契约**：Gateway 0.2.2 / SDK 0.1.1、四资产和既有 tag 不变性继续保持。
-4. **证据 / 数据保护**：新增证据仅含公开 repository、HEAD、run ID、HTTP 404 与 tag absence，不含 token、用户内容或完整环境。
+4. **证据 / 数据保护**：恢复证据仅含公开 repository、HEAD、run/Release/asset 元数据，不含 token、用户内容或完整环境。
 
 无原则偏离，也没有需要用户追加批准的重大取舍。

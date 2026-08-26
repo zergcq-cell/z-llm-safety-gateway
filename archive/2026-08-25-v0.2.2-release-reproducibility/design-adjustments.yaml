@@ -1,7 +1,7 @@
 meta:
   change_id: 2026-08-25-v0.2.2-release-reproducibility
   created: '2026-08-26T07:21:43+08:00'
-  total_adjustments: 3
+  total_adjustments: 4
   requires_re_spec: false
   requires_re_build: false
 
@@ -35,3 +35,13 @@ adjustments:
       - release-hardening
       - github-setup
     resolved_in_phase: verify
+  - id: ADJ-004
+    category: boundary_discovery
+    original: design.md Decision 3 假设 releases/tags/<tag> API 可返回刚创建的私有 draft
+    adjusted: 分页列举 Releases 并唯一选择指定 tag/state 的 draft；增加只读 evidence-recovery dispatch 以绑定失败 tag run 的 distributions 并恢复 evidence artifact
+    reason: GitHub 对按 tag 查询私有 draft 返回 404，即使该 draft 已存在且资产完整
+    principle_impact: 失败状态与远程 API 语义更显式；恢复 job 仅有 actions/contents read，不改变 runtime、公开资产、tag 或数据收集边界
+    affected_capabilities:
+      - release-hardening
+      - github-setup
+    resolved_in_phase: deliver

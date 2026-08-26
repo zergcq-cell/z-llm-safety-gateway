@@ -196,3 +196,12 @@ pre-tag absence、annotated tag、tag workflow、annotations 和 Release/evidenc
 - 根因：lock 在 macOS 生成，遗漏 keyring 只在 Linux 声明的 `SecretStorage>=3.2`，Ubuntu runner 的 `--require-hashes` 正确拒绝未固定依赖。
 - 安全结果：v0.2.2 tag 和 Release 均未创建，失败关闭契约真实生效。
 - 修复证据：新增 RED 测试要求 `secretstorage==3.5.0` 为跨平台直接输入；Python 3.12 重新生成 lock 后测试 GREEN，全新 venv 的 `--require-hashes` 安装与 `pip check` 通过。
+
+### Attempt 2 — draft 查询失败关闭与只读证据恢复
+
+- 修复提交：`ccfb9c442c341b68c4e1ecdcd9e13531aa348033`；main CI `32913717122` 与 dry-run `32913857677` 全绿，pre-tag absence checkpoint 通过。
+- `v0.2.2` annotated tag object 为 `b6cb482562f10292110d08caab191ab0d025cfea`，peeled commit 精确为上述提交。
+- Tag run `32914540121` 的 build、audit、Python 3.10/3.11/3.12 quality 全绿；release 在 `Validate private draft` 失败。根因是 GitHub `releases/tags/<tag>` 对私有 draft 固定返回 404。
+- 失败后 draft 保持私有且四资产完整。下载同一 tag run 的 distributions 后，notes、状态、四资产名称/大小/digest 与 tag refs 全部精确通过；随后仅将已验证 draft 显式公开，未移动 tag、未重建资产。
+- 新增 RED→GREEN 契约：分页 draft 唯一选择拒绝零匹配、重复匹配和状态不符；只读 evidence-recovery 必须绑定指定失败 tag run，且只有 `actions: read` / `contents: read`，不含任何 Release/tag 写命令。
+- 修复后本地质量门：1067 passed、1 skipped；coverage 93.33%；Ruff、Mypy（99 source files）、YAML 与 diff check 全绿。远程 evidence recovery 与最终 checkpoint 仍待执行。

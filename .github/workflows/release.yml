@@ -10,6 +10,19 @@ on:
         description: "Version to validate without publishing"
         required: true
         type: string
+      recover_evidence:
+        description: "Verify an already-public Release and recover its evidence artifact"
+        required: false
+        default: false
+        type: boolean
+      source_run_id:
+        description: "Failed tag run containing the verified distributions"
+        required: false
+        type: string
+      expected_sha:
+        description: "Expected peeled commit for evidence recovery"
+        required: false
+        type: string
 permissions:
   contents: read
 
@@ -153,9 +166,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
-            --jq '{tagName:.tag_name,body,isDraft:.draft,isPrerelease:.prerelease,url:.html_url,assets:[.assets[]|{name,state,size,digest}]}' \
-            > release-draft.json
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            > release-pages.json
+          python tools/release_checks.py select-release \
+            --version "$GITHUB_REF_NAME" \
+            --input release-pages.json \
+            --expected-state draft \
+            --output release-draft.json
           python tools/release_checks.py github-release \
             --version "$GITHUB_REF_NAME" \
             --input release-draft.json \
@@ -219,6 +237,142 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-evidence-${{ github.ref_name }}
+          path: release-evidence.json
+          retention-days: 90
+          if-no-files-found: error
+
+  evidence-recovery:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.recover_evidence
+    needs: [quality, build, audit]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate failed source run
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh run view "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,event,headBranch,headSha,conclusion,jobs \
+            > source-run.json
+          jq -e \
+            --argjson run_id "$SOURCE_RUN_ID" \
+            --arg version "$RELEASE_VERSION" \
+            --arg expected_sha "$EXPECTED_SHA" \
+            '
+              .databaseId == $run_id and
+              .event == "push" and
+              .headBranch == $version and
+              .headSha == $expected_sha and
+              .conclusion == "failure" and
+              ([.jobs[] | select(
+                .name == "build" or
+                .name == "audit" or
+                (.name | startswith("quality / test ("))
+              )] | length == 5) and
+              ([.jobs[] | select(
+                .name == "build" or
+                .name == "audit" or
+                (.name | startswith("quality / test ("))
+              ) | .conclusion] | all(. == "success")) and
+              ([.jobs[] | select(.name == "release" and .conclusion == "failure")]
+                | length == 1)
+            ' source-run.json
+
+      - name: Download source distributions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name distributions \
+            --dir dist
+
+      - name: Validate public Release
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          python tools/release_checks.py asset-digests \
+            --version "$RELEASE_VERSION" \
+            --dist-dir dist \
+            --output expected-digests.json
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_VERSION" \
+            --jq '{tagName:.tag_name,body,isDraft:.draft,isPrerelease:.prerelease,url:.html_url,assets:[.assets[]|{name,state,size,digest}]}' \
+            > release-public.json
+          git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+            "refs/tags/$RELEASE_VERSION" \
+            "refs/tags/$RELEASE_VERSION^{}" > release-refs.txt
+          tag_object="$(awk -v ref="refs/tags/$RELEASE_VERSION" '$2 == ref {print $1}' release-refs.txt)"
+          peeled_commit="$(awk -v ref="refs/tags/$RELEASE_VERSION^{}" '$2 == ref {print $1}' release-refs.txt)"
+          jq -n \
+            --arg tag_object "$tag_object" \
+            --arg peeled_commit "$peeled_commit" \
+            '{tag_object: $tag_object, peeled_commit: $peeled_commit}' \
+            > release-refs.json
+          python tools/release_checks.py github-release \
+            --version "$RELEASE_VERSION" \
+            --input release-public.json \
+            --expected-state public \
+            --expected-digests expected-digests.json \
+            --refs-input release-refs.json \
+            --expected-sha "$EXPECTED_SHA"
+
+      - name: Generate recovered release evidence
+        env:
+          AUDIT_RESULT: ${{ needs.audit.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg quality "$QUALITY_RESULT" \
+            --arg build "$BUILD_RESULT" \
+            --arg audit "$AUDIT_RESULT" \
+            '{repository:$repository,run_id:$run_id,run_attempt:$run_attempt,run_url:$run_url,jobs:{quality:$quality,build:$build,audit:$audit,public_verify:"success"}}' \
+            > workflow-metadata.json
+          verified_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python tools/release_checks.py evidence \
+            --version "$RELEASE_VERSION" \
+            --release-input release-public.json \
+            --refs-input release-refs.json \
+            --workflow-input workflow-metadata.json \
+            --expected-sha "$EXPECTED_SHA" \
+            --expected-digests expected-digests.json \
+            --verified-at "$verified_at" \
+            --output release-evidence.json
+          {
+            echo "## Recovered release evidence"
+            jq -r '"- Tag: `\(.tag)`\n- Gateway: `\(.gateway_version)`\n- SDK: `\(.sdk_version)`\n- Peeled commit: `\(.peeled_commit)`\n- Assets: `\(.assets | length)`\n- Schema: `\(.verifier_schema_version)`"' release-evidence.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload recovered release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence-${{ inputs.version }}
           path: release-evidence.json
           retention-days: 90
           if-no-files-found: error

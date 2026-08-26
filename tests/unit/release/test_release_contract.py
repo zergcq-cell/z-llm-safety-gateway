@@ -701,10 +701,89 @@ def test_release_workflow_is_draft_first_and_tag_only() -> None:
     assert "gh release delete" not in commands
     assert "git push --delete" not in commands
 
+    draft_validation = _workflow_step(workflow, "release", "Validate private draft")["run"]
+    assert "gh api --paginate --slurp" in draft_validation
+    assert "release_checks.py select-release" in draft_validation
+    assert "releases/tags/$GITHUB_REF_NAME" not in draft_validation
+
     evidence_upload = _workflow_step(workflow, "release", "Upload release evidence")
     assert evidence_upload["with"]["retention-days"] == 90
     assert evidence_upload["with"]["if-no-files-found"] == "error"
     assert "release-evidence" in evidence_upload["with"]["name"]
+
+
+def test_draft_release_selection_is_unique_and_normalized() -> None:
+    """TC-REL-021: draft discovery handles paginated list semantics explicitly."""
+    draft = {
+        "tag_name": "v0.2.2",
+        "body": "Reproducible release notes.",
+        "draft": True,
+        "prerelease": False,
+        "html_url": "https://github.com/example/gateway/releases/tag/untagged-draft",
+        "assets": [
+            {
+                "name": "asset.whl",
+                "state": "uploaded",
+                "size": 10,
+                "digest": f"sha256:{1:064x}",
+            }
+        ],
+    }
+    unrelated = {**draft, "tag_name": "v0.2.1"}
+
+    selected = release_checks.select_unique_release(
+        json.dumps([[unrelated], [draft]]), "v0.2.2", expected_draft=True
+    )
+
+    assert selected == {
+        "tagName": "v0.2.2",
+        "body": "Reproducible release notes.",
+        "isDraft": True,
+        "isPrerelease": False,
+        "url": "https://github.com/example/gateway/releases/tag/untagged-draft",
+        "assets": draft["assets"],
+    }
+
+    with pytest.raises(ValueError, match="exactly one"):
+        release_checks.select_unique_release(
+            json.dumps([[draft, deepcopy(draft)]]), "v0.2.2", expected_draft=True
+        )
+    with pytest.raises(ValueError, match="exactly one"):
+        release_checks.select_unique_release(
+            json.dumps([[{**draft, "draft": False}]]), "v0.2.2", expected_draft=True
+        )
+
+
+def test_release_evidence_recovery_is_read_only_and_source_bound() -> None:
+    """TC-REL-025: a failed tag run can recover evidence without republishing."""
+    workflow = _workflow()
+    triggers = workflow.get("on", workflow.get(True))
+    dispatch_inputs = triggers["workflow_dispatch"]["inputs"]
+    assert dispatch_inputs["recover_evidence"]["type"] == "boolean"
+    assert dispatch_inputs["recover_evidence"]["default"] is False
+    assert dispatch_inputs["source_run_id"]["type"] == "string"
+    assert dispatch_inputs["expected_sha"]["type"] == "string"
+
+    recovery = workflow["jobs"]["evidence-recovery"]
+    assert recovery["needs"] == ["quality", "build", "audit"]
+    assert "github.event_name == 'workflow_dispatch'" in recovery["if"]
+    assert "inputs.recover_evidence" in recovery["if"]
+    assert recovery["permissions"] == {"actions": "read", "contents": "read"}
+
+    commands = "\n".join(step.get("run", "") for step in recovery["steps"])
+    assert "gh run view \"$SOURCE_RUN_ID\"" in commands
+    assert "gh run download \"$SOURCE_RUN_ID\"" in commands
+    assert "release_checks.py github-release" in commands
+    assert "release_checks.py evidence" in commands
+    assert "gh release create" not in commands
+    assert "gh release edit" not in commands
+    assert "gh release delete" not in commands
+    assert "git push" not in commands
+
+    upload = _workflow_step(workflow, "evidence-recovery", "Upload recovered release evidence")
+    assert upload["with"]["name"] == "release-evidence-${{ inputs.version }}"
+    assert upload["with"]["retention-days"] == 90
+    assert upload["with"]["if-no-files-found"] == "error"
 
 
 def test_release_payload_requires_exact_state_digests_and_refs(
