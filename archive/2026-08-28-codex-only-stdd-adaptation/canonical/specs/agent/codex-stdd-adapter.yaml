@@ -1,0 +1,31 @@
+meta:
+  task_id: codex-stdd-adapter
+  change_id: 2026-08-28-codex-only-stdd-adaptation
+  task_type: configuration
+  system: Codex 项目级 STDD 规则与 Skills overlay
+  preconditions:
+    - Gate 2 已批准 Codex-only overlay 设计
+steps:
+  - id: CP-CODEX-001
+    description: 根目录 AGENTS.md 是 Codex 项目规则入口
+    action: .venv/bin/pytest tests/unit/stdd/test_codex_adapter.py::test_codex_project_instructions_are_canonical -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-CODEX-002
+    description: Codex Skill 集合与核心 STDD Skills 一致
+    action: .venv/bin/pytest tests/unit/stdd/test_codex_adapter.py::test_codex_skill_wrappers_match_core_skills -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-CODEX-003
+    description: Codex Skill frontmatter 与单一正文引用有效
+    action: .venv/bin/pytest tests/unit/stdd/test_codex_adapter.py::test_codex_skill_wrappers_have_valid_frontmatter -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-CODEX-004
+    description: 长程授权说明使用 Codex 运行时权限边界
+    action: .venv/bin/pytest tests/unit/stdd/test_codex_adapter.py::test_codex_long_range_guidance_is_platform_native -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-CODEX-005
+    description: 非 Codex 活跃适配目录已移除
+    action: .venv/bin/pytest tests/unit/stdd/test_codex_adapter.py::test_non_codex_project_adapters_are_absent -q
+    assertions: [{type: exit_code, expected: 0}]
+rollback:
+  steps:
+    - 从 Git 恢复被删除的平台适配目录并移除 .agents/skills overlay

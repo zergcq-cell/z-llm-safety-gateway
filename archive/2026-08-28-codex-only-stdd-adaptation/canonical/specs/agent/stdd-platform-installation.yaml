@@ -1,0 +1,23 @@
+meta:
+  task_id: stdd-platform-installation
+  change_id: 2026-08-28-codex-only-stdd-adaptation
+  task_type: configuration
+  system: 项目 STDD overlay 与 vendored CLI 边界
+  preconditions:
+    - stdd-v2.9.5.sha256 与 STDD_CLI_PROVENANCE.md 存在
+steps:
+  - id: CP-STDD-001
+    description: Vendored STDD 上游 hash 保持完整
+    action: .venv/bin/pytest tests/unit/stdd/test_cli_recovery.py::test_vendored_manifest_matches_upstream -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-002
+    description: 活跃 STDD overlay 文档只描述 Codex
+    action: .venv/bin/pytest tests/unit/stdd/test_codex_adapter.py::test_active_stdd_docs_are_codex_only -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-STDD-003
+    description: Codex-only 变更通过完整项目质量门
+    action: "bash -lc 'set -euo pipefail; for skill in .agents/skills/stdd-*; do .venv/bin/python /home/zergcq/.codex/skills/.system/skill-creator/scripts/quick_validate.py \"$skill\"; done; PYTHONPATH=sdk/src:examples/plugins/python-inprocess/src:examples/plugins/python-grpc/src OPENAI_API_KEY=sk-test .venv/bin/pytest tests/ examples/plugins/python-inprocess/tests examples/plugins/python-grpc/tests --cov=src/z_llm_safety_gateway --cov-fail-under=90 -q; .venv/bin/ruff check src/ tests/ sdk/src/ tools/ examples/plugins/python-inprocess/src examples/plugins/python-inprocess/tests examples/plugins/python-grpc/src examples/plugins/python-grpc/tests; .venv/bin/mypy src/ sdk/src tools/; git diff --check'"
+    assertions: [{type: exit_code, expected: 0}]
+rollback:
+  steps:
+    - 回退当前 change 的 overlay、测试和文档修改，不改动 vendored CLI

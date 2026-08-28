@@ -23,28 +23,31 @@ stdd_version: "2.9.5"
 3. 如果项目版本 >= 技能版本：提示"项目已是最新版本"，询问是否仍要强制同步
 4. 如果项目版本 < 技能版本：确认升级
 
-### Step 2: 平台检测
+### Step 2: Codex overlay 检测
 
-检查以下目录/文件的存在性，确定当前平台：
+检查项目级 Codex 入口是否完整：
 
-| 平台 | 检测标志 |
-|------|---------|
-| Claude Code | `.claude/skills/` 目录存在 |
-| OpenCode | `.opencode/skills/` 目录存在 |
-| Cursor | `.cursor/rules/stdd.md` 文件存在 |
-| WorkBuddy | `.workbuddy/skills/` 目录存在 |
-| Trae | `.trae/skills/` 目录存在 |
+- 根目录 `AGENTS.md` 存在并声明 STDD 强制门和项目原则
+- `.agents/skills/stdd-<phase>/SKILL.md` 覆盖全部顶层 `.stdd/skills/<phase>.md`
+- 每个入口包含合法 frontmatter，并引用对应的单一正文源文件
 
-提示用户检测到的平台列表。
+任何入口缺失、重复正文或引用失效都必须显式报告，不得以空集合通过。
 
 ### Step 3: 备份当前版本
 
 1. 创建备份目录：`.stdd/backup/<old_version>-<timestamp>/`
 2. 复制当前 `.stdd/skills/`、`.stdd/templates/`、`.stdd/config.d/`、`.stdd/version.yaml` 到备份目录
+3. 备份 `.agents/skills/` 到同一备份目录，并记录同步前入口集合；空集合也必须显式记录
 
 ### Step 4: 同步静态资源
 
-从 GitHub raw 拉取最新文件并写入项目 `.stdd/`：
+先把 GitHub raw 文件拉取到 `.stdd/upgrade-staging/<new_version>/`，校验完整性后再同步。以下 Codex 项目 overlay 文件不得直接被上游版本覆盖：
+
+- `.stdd/skills/spec.md`
+- `.stdd/skills/upgrade.md`
+- `.stdd/templates/long-range-auth.md`
+
+对这三个文件只合并上游通用流程变化，并保留 Codex 权限边界、薄入口与单平台策略。其他静态资源可以从暂存目录同步到项目 `.stdd/`：
 
 **技能文件**（拉取自 `.stdd/skills/`）：
 - `understand.md`、`spec.md`、`slice.md`、`build.md`、`verify.md`、`deliver.md`
@@ -73,19 +76,16 @@ stdd_version: "<new_version>"
 upgraded_at: "<current_iso_timestamp>"
 ```
 
-### Step 6: 重装平台技能
+### Step 6: 同步 Codex Skill 薄入口
 
-对 Step 2 检测到的每个平台，重新生成技能文件：
-1. 读取 `.stdd/skills/` 下最新的技能文件
-2. 为每个技能生成对应平台的 SKILL.md（包含 name / description / stdd_version 的 YAML frontmatter）
-3. 写入到目标平台目录
+对 `.stdd/skills/` 下每个顶层阶段文件同步项目入口：
 
-**Claude Code / OpenCode 重装**：
-- `.claude/skills/stdd-<phase>/SKILL.md` 或 `.opencode/skills/stdd-<phase>/SKILL.md`
-- 每个文件 = YAML frontmatter + `.stdd/skills/<phase>.md` 内容
-
-**Cursor 重装**：
-- 重装 `.cursor/rules/stdd.md`（如果存在 Cursor 适配器 `.stdd/platforms/cursor/`）
+1. 目标路径为 `.agents/skills/stdd-<phase>/SKILL.md`
+2. 入口只包含 `name`、`description` frontmatter 和读取 `../../../.stdd/skills/<phase>.md` 的强制路由
+3. 不复制阶段正文，不写用户级 Codex 配置，不修改 vendored CLI 或来源 manifest
+4. 运行 Codex Skill validator 和项目契约测试；任何失败必须显式报告
+5. 如果同步、合并或验证失败，原子恢复 Step 3 的 `.stdd/` 资源并恢复 `.agents/skills/`，同时精确删除同步中新出现的多余入口；保留失败日志，不得留下部分升级状态
+6. 验证成功并完成一次性切换后清理暂存目录；失败回滚完成后也清理暂存目录
 
 ### Step 7: 输出升级摘要
 
@@ -93,7 +93,7 @@ upgraded_at: "<current_iso_timestamp>"
 ✅ STDD 升级完成
   项目版本: <old_version> → <new_version>
   同步文件: <N> 个
-  重装平台: <platform_list>
+  同步入口: .agents/skills/stdd-*/SKILL.md
   备份位置: .stdd/backup/<old_version>-<timestamp>/
 ```
 
@@ -110,7 +110,7 @@ upgraded_at: "<current_iso_timestamp>"
 - 更新后的 `.stdd/skills/`、`.stdd/templates/`、`.stdd/config.d/`
 - `.stdd/version.yaml`（版本号和时间戳更新）
 - `.stdd/backup/<old_version>-<timestamp>/`（升级前备份）
-- 重装后的平台技能文件
+- 同步后的 Codex Skill 薄入口
 
 ## 质量检查
 
@@ -118,4 +118,5 @@ upgraded_at: "<current_iso_timestamp>"
 - [ ] 所有拉取的文件成功写入
 - [ ] `.stdd/version.yaml` 版本号正确更新
 - [ ] 备份目录包含升级前的文件快照
-- [ ] 平台技能文件 frontmatter 包含新版本号
+- [ ] Codex Skill 入口 frontmatter 合法且引用目标存在
+- [ ] Codex Skill 入口未复制完整阶段正文

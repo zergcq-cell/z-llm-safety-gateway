@@ -1,0 +1,31 @@
+meta:
+  change_id: 2026-08-28-codex-only-stdd-adaptation
+  created: '2026-08-28T15:11:13+08:00'
+  total_adjustments: 3
+  requires_re_spec: false
+  requires_re_build: false
+adjustments:
+  - id: ADJ-001
+    category: design_change
+    original: Gate 1 proposal 要求通过修改或调用 stdd install 实现 Codex 安装，并让非 Codex 安装失败。
+    adjusted: 保持固定上游 v2.9.5 CLI 与 manifest 不变，在仓库中预置 `.agents/skills` Codex overlay，并删除活跃非 Codex 副本。
+    reason: vendored CLI 受来源 hash 契约保护；项目适配不应伪装成上游实现，也不应破坏供应链证据。
+    principle_impact: 核心保持最小；策略和边界更显式；上游契约稳定；所有路径由测试和 Git diff 留证。无原则偏离。
+    affected_capabilities: [codex-stdd-adapter, stdd-platform-installation]
+    resolved_in_phase: Phase 2（Gate 2 已批准）
+  - id: ADJ-002
+    category: boundary_discovery
+    original: 上游 upgrade 流程直接覆盖 STDD 静态资源，仅备份 `.stdd` 内容。
+    adjusted: Codex 定制文件采用暂存与人工合并；备份和失败恢复同时覆盖 `.stdd` 与 `.agents/skills`，删除新增入口并清理 staging。
+    reason: 并行审查发现直接覆盖会重新引入旧平台说明，且遗漏 Skill 入口会产生半升级状态。
+    principle_impact: 强化显式失败、稳定契约与证据链；不改变 Gateway 或 SDK 边界。
+    affected_capabilities: [codex-stdd-adapter, stdd-platform-installation]
+    resolved_in_phase: Phase 5
+  - id: ADJ-003
+    category: test_change
+    original: 新增平台场景使用 TC-STDD-001～003，且把完整质量门描述为 pytest 节点。
+    adjusted: 重编号为 TC-CODEX-006～008；TC-CODEX-008 绑定失败即停止的组合 checkpoint，覆盖 Skill validator、完整 pytest、Ruff、Mypy 与 diff check。
+    reason: 全仓 TC-ID 冲突会让字符串式追溯工具把无关既有测试误算为覆盖；完整质量门天然由多个命令组成。
+    principle_impact: 消除覆盖假绿并让验证证据可审计；无原则偏离。
+    affected_capabilities: [stdd-platform-installation]
+    resolved_in_phase: Phase 5

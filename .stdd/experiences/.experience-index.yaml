@@ -14,12 +14,14 @@ by_category:
   - EXP-2026-0013
   - EXP-2026-0016
   - EXP-2026-0018
+  - EXP-2026-0022
   coverage_vacuum:
   - EXP-2026-0006
   pipeline_break:
   - EXP-2026-0001
   - EXP-2026-0004
   - EXP-2026-0020
+  - EXP-2026-0021
   runtime_deviation:
   - EXP-2026-0007
   - EXP-2026-0008
@@ -48,6 +50,8 @@ by_language:
   - EXP-2026-0018
   - EXP-2026-0019
   - EXP-2026-0020
+  - EXP-2026-0021
+  - EXP-2026-0022
 by_lifecycle:
   discovered:
   - EXP-2026-0001
@@ -70,6 +74,8 @@ by_lifecycle:
   - EXP-2026-0018
   - EXP-2026-0019
   - EXP-2026-0020
+  - EXP-2026-0021
+  - EXP-2026-0022
 by_severity:
   high:
   - EXP-2026-0001
@@ -90,8 +96,10 @@ by_severity:
   - EXP-2026-0018
   - EXP-2026-0019
   - EXP-2026-0020
+  - EXP-2026-0021
+  - EXP-2026-0022
   medium:
   - EXP-2026-0011
   - EXP-2026-0014
-last_id: 20
-total: 20
+last_id: 22
+total: 22

@@ -1,7 +1,7 @@
 paths:
   archive_dir: archive
   changes_dir: changes
-  platforms_dir: .stdd/platforms
+  platforms_dir: .agents/skills
   skills_dir: .stdd/skills
   specs_dir: specs
   standards_dir: .stdd/standards

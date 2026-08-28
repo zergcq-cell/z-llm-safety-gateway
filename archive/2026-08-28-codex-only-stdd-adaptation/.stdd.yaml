@@ -1,0 +1,191 @@
+active_phase: deliver
+artifacts:
+  agent_specs: canonical/specs/agent
+  design_adjustments_md: design-adjustments.md
+  design_adjustments_yaml: design-adjustments.yaml
+  design_md: design.md
+  phase_context_md: phase-context.md
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-28-codex-only-stdd-adaptation.yaml
+  specs_md: specs
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+change_id: 2026-08-28-codex-only-stdd-adaptation
+complexity_score: 7
+confirmed_at:
+  gate1_understand: '2026-08-28T14:12:04+08:00'
+  gate2_spec: '2026-08-28T14:29:55+08:00'
+  gate3_verify: '2026-08-28T17:32:59+08:00'
+current_phase: deliver
+design_adjustments:
+  count: 3
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+last_modified: '2026-08-28T17:40:16+08:00'
+long_range:
+  authorization: 确认全部，长程全自动
+  confirmed_at: '2026-08-28T14:42:44+08:00'
+  enabled: true
+  gate3_mandatory: true
+  mode: full_auto
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-28T14:42:44+08:00'
+  stop_at: gate3_verify
+mode: standard
+mode_selection: completed
+phase1:
+  capabilities_modified: 1
+  capabilities_new: 1
+  completed_at: '2026-08-28T14:12:04+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 2
+    conclusion: passed
+    dimensions:
+    - completeness
+    - clarity
+    - scope
+    discovered: 2
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L1
+    minimum: L1
+    status: passed
+  capabilities: 2
+  completed_at: '2026-08-28T14:24:32+08:00'
+  confidence:
+    high: 7
+    low: 0
+    medium: 1
+  experiences_loaded:
+  - EXP-2026-0005
+  - EXP-2026-0006
+  - EXP-2026-0017
+  priority:
+    P0: 6
+    P1: 2
+    P2: 0
+  requirements: 7
+  review:
+    auto_fixed: 2
+    conclusion: passed
+    dimensions:
+    - requirement_coverage
+    - scenario_completeness
+    - tc_id_consistency
+    - document_consistency
+    discovered: 2
+    unresolved: 0
+  scenarios: 8
+  status: completed
+phase3:
+  capabilities: 2
+  completed_at: '2026-08-28T14:43:00+08:00'
+  dependency_cycles: 0
+  dependency_edges: 0
+  requirements_covered: 7
+  scenarios_covered: 8
+  slices: 2
+  status: completed
+phase4:
+  completed_at: '2026-08-28T14:48:30+08:00'
+  context_budget:
+    decision: continue
+    rationale: phase-context 已更新且长程授权明确，未触发上下文重置阈值
+  experiences_loaded:
+    referenced: 3
+    verified_or_settled: 0
+  slices_completed:
+    S1:
+      full_regression: 1065_passed_1_skipped_1_unrelated_host_throughput_failure
+      new_tests: 5
+      red: 5_failed_before_codex_overlay_implementation
+      status: done
+      targeted_tests: 6_passed
+      tc_coverage: 6/6
+      verified_at: '2026-08-28T14:46:05+08:00'
+    S2:
+      full_regression: 1073_passed_1_skipped_coverage_93_33_percent
+      new_tests: 1
+      red: 1_failed_before_active_document_cleanup
+      skill_validation: 7_passed
+      status: done
+      targeted_tests: 7_passed
+      tc_coverage: 2/2
+      verified_at: '2026-08-28T15:11:13+08:00'
+phase5:
+  completed_at: '2026-08-28T15:11:13+08:00'
+  design_adjustments: 3
+  e2e: skipped_disabled_by_config
+  experiences:
+    added: 2
+    reused: 3
+    total: 22
+  failure_modes:
+    checked: 12
+    unresolved: 0
+  gate3: approved
+  multi_python:
+    python_3_10: 1073_passed_1_skipped
+    python_3_11: 1072_passed_1_failed_1_skipped_existing_rate_limit_timing_test
+    python_3_12: 1073_passed_1_skipped
+  quality:
+    coverage: 93.33_percent
+    mypy: 99_source_files_0_issues
+    release_test: 1073_passed_1_skipped
+    ruff: passed
+    skill_validator: 7_passed
+    vendored_diff: clean
+  review:
+    agents: 3
+    rounds: 3
+    unresolved: 0
+  status: completed
+phase6:
+  archived_to: archive/2026-08-28-codex-only-stdd-adaptation
+  archived_at: '2026-08-28T17:35:00+08:00'
+  canonical_agent_specs_merged: 2
+  canonical_proposal_verified: true
+  completed_at: '2026-08-28T17:40:16+08:00'
+  experience_upload: skipped_no_deposited_entries
+  git_commit_message: 'chore(stdd): add Codex-only project adapter'
+  git_step: approved
+  git_tag: stdd-codex-adapter-2026-08-28
+  human_specs_merged: 2
+  status: completed
+phases:
+  build:
+    completed_at: '2026-08-28T14:48:30+08:00'
+    red_green_cycles: 2
+    slices_completed: 2
+    status: completed
+  deliver:
+    completed_at: '2026-08-28T17:40:16+08:00'
+    status: completed
+  slice:
+    completed_at: '2026-08-28T14:43:00+08:00'
+    slices: 2
+    status: completed
+  spec:
+    confirmed_at: '2026-08-28T14:29:55'
+    status: completed
+  understand:
+    confirmed_at: '2026-08-28T14:14:18'
+    status: completed
+  verify:
+    completed_at: '2026-08-28T15:11:13+08:00'
+    confirmed_at: '2026-08-28T17:32:59+08:00'
+    started_at: '2026-08-28T14:48:30+08:00'
+    status: completed
+score_confidence: final
+status: archived
+task_type: configuration
+traceability:
+  spec_scenarios: 8
+  tc_cases: 8
+  test_functions: 6
+version: '2.0'

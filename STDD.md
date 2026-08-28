@@ -1,7 +1,7 @@
-# STDD (Spec+Test Driven Development) — 通用流程指引 | Universal Guide
+# STDD (Spec+Test Driven Development) — Codex 项目流程指引 | Codex Project Guide
 
-> 此文件可作为项目规则加载到任何 AI 编程平台（Cursor, Copilot, Windsurf, Aider 等）。
-> This file can be loaded as project rules on any AI coding platform (Cursor, Copilot, Windsurf, Aider, etc.).
+> 本文件是本仓库的 Codex 项目级 STDD 流程说明；Codex 的强制规则入口是根目录 `AGENTS.md`，阶段 Skill 入口位于 `.agents/skills/`。
+> This is the repository-local Codex STDD guide. Codex reads mandatory rules from `AGENTS.md` and phase skills from `.agents/skills/`.
 >
 > 完整设计文档见 / Full design document: [DESIGN.md](DESIGN.md)
 
@@ -13,9 +13,9 @@
 > **This project has `enforce_stdd: true`. All code modifications MUST go through STDD workflow first.**
 >
 > 如果你收到修改代码的请求，请先回复用户：
-> "本项目启用了 STDD 强制门。请先运行 /stdd-understand 启动变更流程。"
+> "本项目启用了 STDD 强制门。请先运行 `$stdd-understand` 启动变更流程。"
 >
-> 如果用户明确要求绕过 STDD（如紧急热修复），请在修改完成后补充 `pending-adjustments.yaml` 记录。
+> 不存在先修改后补流程的绕过路径；紧急变更也必须启动 STDD change，并逐项通过三道 Gate。
 
 ---
 
@@ -50,7 +50,7 @@ Phase 2: SPEC        →  design.md + specs + test-plan.md  →  用户确认 / 
 Phase 3: SLICE       →  tasks.md + slices.md  →  自动 / Auto
 Phase 4: BUILD       →  TDD RED→GREEN→REFACTOR  →  自动(长程)/按需交互(普通)
 Phase 5: VERIFY      →  test-report.md + design-adjustments.md  →  用户确认 / User confirm
-                       (十一类失败模式检查 / Eleven failure mode checks)
+                       (十二类失败模式检查 / Twelve failure mode checks)
 Phase 6: DELIVER     →  archive + merge specs + git tag
 ```
 
@@ -73,8 +73,8 @@ Split test plan into independently implementable vertical slices. Ordered by dep
 Execute RED → GREEN → REFACTOR per slice. Write test first (RED), minimal implementation (GREEN), then refactor (REFACTOR). Auto-loads language standards and relevant experience entries before starting.
 
 **Phase 5: VERIFY — 质量验证 | Quality Verification**
-全量测试 + 覆盖率诊断 + 多版本测试 + E2E 测试（可配置）+ Lint + Diff 审查 + 十一类失败模式检查。普通模式最多 5 轮迭代，长程模式最多 10 轮。汇总设计调整到 design-adjustments.md。
-Full test + coverage diagnostics + multi-version test + E2E tests (configurable) + Lint + Diff review + eleven failure mode checks. Max 5 iterations (normal) or 10 (long-range). Summarize design adjustments to design-adjustments.md.
+全量测试 + 覆盖率诊断 + 多版本测试 + E2E 测试（可配置）+ Lint + Diff 审查 + 十二类失败模式检查。普通模式最多 5 轮迭代，长程模式最多 10 轮。汇总设计调整到 design-adjustments.md。
+Full test + coverage diagnostics + multi-version test + E2E tests (configurable) + Lint + Diff review + twelve failure mode checks. Max 5 iterations (normal) or 10 (long-range). Summarize design adjustments to design-adjustments.md.
 
 **Phase 6: DELIVER — 交付 | Delivery**
 归档到 archive/ → 合并 specs 到 specs/ → Git commit + tag。
@@ -134,7 +134,8 @@ archive/            # 已完成变更 / Completed changes
 
 | 命令 / Command | 说明 / Description |
 |---------------|-------------------|
-| `/stdd-understand` | Phase 1: 需求理解与确认 / Requirement understanding |
-| `/stdd-spec` | Phase 2: 规格设计与测试方案 / Spec & test design |
-| `/stdd-continue` | 从当前阶段继续执行 (Phase 3-5) / Continue from current phase |
-| `/stdd-status` | 查看当前变更状态 / View current change status |
+| `$stdd-understand` | Phase 1: 需求理解与确认 / Requirement understanding |
+| `$stdd-spec` | Phase 2: 规格设计与测试方案 / Spec & test design |
+| `$stdd-slice` / `$stdd-build` / `$stdd-verify` | Phase 3–5: 切片、实现与验证 / Slice, build and verify |
+| `$stdd-deliver` / `$stdd-upgrade` | Phase 6 交付 / 项目 overlay 升级 |
+| `python bin/stdd status <change-id>` | 查看当前变更状态 / View current change status |

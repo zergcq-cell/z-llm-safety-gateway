@@ -1,6 +1,6 @@
 # AGENTS.md — z LLM Safety Gateway 项目记忆文件
 
-> **STDD 强制门已启用**：本项目使用 STDD (Spec+Test Driven Development) 流程。修改代码前必须先走 STDD 流程（/stdd-understand）。
+> **STDD 强制门已启用**：本项目使用 STDD (Spec+Test Driven Development) 流程。修改代码前必须先走 STDD 流程（`$stdd-understand`）。
 > 如果项目未启动 STDD change 而收到代码修改请求，请提示用户先启动 STDD 流程。
 >
 > **四项项目原则是所有工作的前置约束**：开始需求分析、规格设计、切片、实现、验证或架构决策前，必须完整阅读 `PRINCIPLES.md`，并逐项检查当前工作是否符合。若原则之间存在取舍，必须显式记录；不得静默偏离。
@@ -34,20 +34,21 @@ z LLM Safety Gateway 是一个开源、模块化的 LLM 内容安全网关，作
   templates/            # 文档模板
   standards/            # 开发规范（python.md）
   config.d/             # 模块化配置
-  platforms/trae/       # Trae 平台适配
 changes/                # 活跃变更
 specs/                  # 主规范（变更完成后合并）
 archive/                # 已完成变更
-.trae/skills/           # Trae skill 文件（/stdd-xxx 命令）
+.agents/skills/         # Codex 项目级 STDD Skill 薄入口
 ```
 
 ## 常用命令
 
 | 命令 | 用途 |
 |------|------|
-| `/stdd-understand <需求>` | Phase 1: 启动新变更需求理解 |
-| `/stdd-spec` | Phase 2: 进入规格设计 |
-| `/stdd-continue` | 继续执行当前变更（Phase 3-6） |
+| `$stdd-understand <需求>` | Phase 1: 启动新变更需求理解 |
+| `$stdd-spec` | Phase 2: 进入规格设计 |
+| `$stdd-slice` / `$stdd-build` / `$stdd-verify` | 继续 Phase 3–5 |
+| `$stdd-deliver` | Gate 3 确认后执行 Phase 6 |
+| `$stdd-upgrade` | 校验或升级项目级 STDD overlay |
 | `python3 <stdd_path>/bin/stdd status` | 查看变更状态 |
 
 ## 开发约定

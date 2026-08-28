@@ -309,16 +309,11 @@ C. Gate 确认
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-5. **Step 8a.5: 配置 Claude Code 实际权限**（长程模式关键步骤）：
-   - 读取 `.claude/settings.local.json`
-   - 使用 Edit 工具在 `permissions.allow` 数组中添加以下规则：
-     - Bash 规则：`Bash(pytest *)`, `Bash(ruff *)`, `Bash(python *)`, `Bash(pip *)`, `Bash(git *)`, `Bash(mkdir *)`, `Bash(cp *)`, `Bash(ls *)`
-     - 文件规则：`Write(changes/**)`, `Edit(changes/**)`, `Write(app/**)`, `Edit(app/**)`, `Write(tests/**)`, `Edit(tests/**)`, `Write(.stdd/**)`, `Edit(.stdd/**)`, `Write(.claude/skills/**)`, `Edit(.claude/skills/**)`
-     - 读取规则：`Read(.stdd/**)`, `Read(**/*.md)`, `Read(**/*.yaml)`, `Read(**/*.py)`, `Read(**/*.json)`
-     - 搜索规则：`Glob(**)`, `Grep(**)`
-     - Skill 规则：`Skill(stdd-slice)`, `Skill(stdd-build)`, `Skill(stdd-verify)`, `Skill(stdd-deliver)`
-   - 此步骤将概念性预授权转化为 Claude Code 的实际工具权限，消除长程模式下的交互框
-   - 权限配置仅修改项目级 `settings.local.json`，不影响全局配置
+5. **Step 8a.5: 确认 Codex 运行时权限边界**（长程模式关键步骤）：
+   - 将用户确认的长程授权范围记录到 change 的 `.stdd.yaml`，不创建额外的项目权限文件
+   - Codex 只在当前运行时已授予的文件系统、命令和网络边界内执行；运行时拒绝的操作必须显式报告
+   - 不写用户级 Codex 配置；需要扩大运行时权限或外部授权时暂停并请求用户处理
+   - 项目 Skill 只使用 `.agents/skills/stdd-*/SKILL.md` 入口，权限声明不替代实际运行时控制
 6. 用户确认全部授权后：
    - 更新 `.stdd.yaml`，记录长程模式状态：
      ```yaml

@@ -1,0 +1,94 @@
+meta:
+  change_id: 2026-08-28-codex-only-stdd-adaptation
+  title: Codex-only STDD 本地适配
+  created: '2026-08-28T14:12:04+08:00'
+  status: confirmed
+  version: '2.9'
+why:
+  problem: 当前仓库保留多个非 Codex 平台适配副本，而本地 STDD 安装器没有 Codex 原生目标，存在重复配置和版本漂移风险。
+  motivation: 当前开发环境只使用 Codex，应以 AGENTS.md 和项目级 .agents/skills 建立单一、可验证的适配路径。
+what_changes:
+  - id: C1
+    description: 保留 AGENTS.md 作为 Codex 项目规则入口，并新增项目级 .agents/skills STDD Skills
+    type: new
+  - id: C2
+    description: 删除 .trae/skills 与 .stdd/platforms 下非 Codex 平台适配副本
+    type: removed
+  - id: C3
+    description: 将本项目 STDD 安装器的平台目标收敛为 Codex-only，并使旧平台请求明确失败
+    type: modified
+  - id: C4
+    description: 更新相应测试和 STDD 使用文档
+    type: modified
+capabilities:
+  new:
+    - name: codex-stdd-adapter
+      description: Codex 从项目级 .agents/skills 原生发现和加载 STDD 阶段 Skills
+  modified:
+    - name: stdd-platform-installation
+      description: 本项目 STDD 平台安装目标从多平台收敛为 Codex-only
+constraints:
+  - 遵循 Codex 官方 AGENTS.md 和 .agents/skills/<name>/SKILL.md 发现约定
+  - .stdd/skills 保持为 STDD Skill 正文的单一权威来源
+  - 不改变 STDD 六阶段、三道 Gate、TDD 或项目四项原则
+  - 不修改用户级 ~/.codex 配置或其他项目
+stakeholders:
+  - 使用 Codex 开发本项目的维护者
+  - 维护项目内嵌 STDD 工具链的贡献者
+risk_areas:
+  - capability: codex-stdd-adapter
+    risk: Codex Skill 目录或 frontmatter 错误导致无法发现
+    mitigation: 使用官方目录约定和 Skill validator 验证
+  - capability: stdd-platform-installation
+    risk: 收窄平台契约导致旧平台命令失效
+    mitigation: 通过帮助信息、非零退出和测试显式表达
+  - capability: codex-stdd-adapter
+    risk: 符号链接在部分分发环境中丢失
+    mitigation: Phase 2 明确 Git、Codex 扫描和分发契约并验证
+non_goals:
+  - 修改网关运行时、API、Provider、Flow、Pipeline、检测器或 SDK 行为
+  - 修改用户级 ~/.codex 配置或其他项目
+  - 在本 change 中重写产品 roadmap
+critical:
+  is_critical: false
+  risk_assessment:
+    safety_critical: false
+    financial: false
+    cross_system: false
+anchoring:
+  level: L1
+  reference_changes: []
+  anchor_implementations:
+    - AGENTS.md
+    - .stdd/skills
+    - stdd/cli/commands/install.py
+principle_check:
+  plugin_flow: 仅修改开发工具适配，不涉及领域能力、Flow 组合或运行时核心。
+  explicit_policy_failure: Codex 是唯一支持目标；旧平台请求明确失败，不提供静默兼容。
+  transparent_contracts: 有意收窄本地 STDD 安装器的平台契约；网关和 SDK 契约保持不变。
+  evidence_data_protection: 不收集用户内容或敏感数据；通过测试、validator 和 STDD 报告留存证据。
+  tradeoffs_or_departures: none
+success_criteria:
+  - Codex 能从 AGENTS.md 和项目级 .agents/skills 加载 STDD 规则与 Skills
+  - python bin/stdd install codex --dry-run 成功并显示 .agents/skills 目标
+  - 非 Codex 平台不再作为本项目支持目标且相关请求明确失败
+  - 仓库不再包含 .trae/skills 或其他非 Codex 平台适配副本
+  - Codex Skills 通过结构校验且不复制出第二份易漂移的 STDD 正文
+  - STDD CLI、Ruff、Mypy 和完整测试通过
+complexity:
+  score: 7
+  confidence: preliminary
+  recommended_mode: standard
+  dimensions:
+    file_count: 2
+    line_count: 3
+    capability_count: 0
+    risk_level: 2
+    data_api: 0
+    security: 0
+review:
+  dimensions: [completeness, clarity, scope]
+  issues_found: 2
+  issues_auto_fixed: 2
+  unresolved: 0
+  conclusion: passed

@@ -23,7 +23,7 @@ def test_upstream_provenance() -> None:
 
 
 def test_vendored_manifest_matches_upstream() -> None:
-    """TC-STDD-002: every vendored upstream file matches the pinned manifest."""
+    """TC-STDD-002 / TC-CODEX-006: vendored files match the pinned manifest."""
     manifest = PROJECT_ROOT / "stdd-v2.9.5.sha256"
     entries: dict[str, str] = {}
     for line in manifest.read_text(encoding="utf-8").splitlines():

@@ -18,6 +18,6 @@
    - 若 `project_version < skill_version` 且 `locked: true`：
      → 显示告警：`⚠️ [STDD 版本漂移] 项目 .stdd/ 版本为 {project_version}，但当前技能版本为 {skill_version}。项目已锁定，使用 stdd upgrade --unlock 解锁后再升级。`
    - 若 `project_version < skill_version` 且未锁定：
-     → 显示告警：`⚠️ [STDD 版本漂移] 项目 .stdd/ 版本为 {project_version}，当前技能版本为 {skill_version}。建议运行 /stdd-upgrade 同步项目快照。`
+     → 显示告警：`⚠️ [STDD 版本漂移] 项目 .stdd/ 版本为 {project_version}，当前技能版本为 {skill_version}。建议运行 $stdd-upgrade 同步项目快照。`
    - 若 `project_version >= skill_version`：静默继续
 6. **无论何种情况，均不阻断后续步骤的执行。**

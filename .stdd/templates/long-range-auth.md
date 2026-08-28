@@ -60,17 +60,16 @@
 
 ---
 
-## D. 权限配置（Claude Code 平台）
+## D. 权限边界（Codex）
 
-授权确认后，系统将自动配置 Claude Code 项目级权限（`.claude/settings.local.json`），添加以下规则以确保 Phase 3-5 无需逐项手动确认：
+授权确认后，系统把用户选择记录到当前 change 的 `.stdd.yaml`，并在 Codex 当前运行时已经授予的文件系统、命令和网络边界内执行 Phase 3–5：
 
-- **Bash 规则**：`pytest`, `ruff`, `python`, `pip`, `git`, `mkdir`, `cp`, `ls`
-- **文件写入规则**：`Write` / `Edit` 操作覆盖 `changes/`, `app/`, `tests/`, `.stdd/`, `.claude/skills/` 目录
-- **文件读取规则**：`Read` `.stdd/` 下配置、`*.md`、`*.yaml`、`*.py`、`*.json`
-- **搜索规则**：`Glob`、`Grep`
-- **Skill 调用规则**：`stdd-slice`, `stdd-build`, `stdd-verify`, `stdd-deliver`
+- **项目写入范围**：当前 change、项目源码、测试、项目级 STDD overlay 与 `.agents/skills/`
+- **命令范围**：测试、静态检查、类型检查、STDD 脚本和 Git 只读检查
+- **显式失败**：运行时拒绝、缺少凭据或超出授权范围时，必须报告并暂停相关操作
+- **配置保护**：不创建虚构的权限文件，也不修改用户级 Codex 配置
 
-> 权限配置仅修改项目级 `settings.local.json`，不涉及全局 `~/.claude/settings.json`。Phase 5 完成后可选择恢复原始权限配置。
+> 流程预授权用于减少阶段间确认，不会绕过 Codex 运行时权限控制，也不会扩大当前环境能力。
 
 ---
 
