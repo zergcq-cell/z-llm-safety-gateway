@@ -1,8 +1,8 @@
 changes:
 - 2026-08-19-detector-readiness-fail-safe
 meta:
-  last_updated: '2026-08-28T17:34:25.200372'
-  total_changes: 7
+  last_updated: '2026-08-28T22:47:05.498885'
+  total_changes: 8
 modules:
   .github/dependabot.yml:
     changes:
@@ -23,10 +23,12 @@ modules:
     changes:
     - 2026-08-28-codex-only-stdd-adaptation
     - 2026-08-28-codex-only-stdd-adaptation
+    - 2026-08-28-rate-limit-deterministic-concurrency
   GATE2_APPROVED:
     changes:
     - 2026-08-28-codex-only-stdd-adaptation
     - 2026-08-28-codex-only-stdd-adaptation
+    - 2026-08-28-rate-limit-deterministic-concurrency
   archive/2026-08-19-detector-readiness-fail-safe/.stdd.yaml:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -261,6 +263,9 @@ modules:
   src/z_llm_safety_gateway/plugins/grpc/client.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  src/z_llm_safety_gateway/ratelimit/token_bucket.py:
+    changes:
+    - 2026-08-28-rate-limit-deterministic-concurrency
   src/z_llm_safety_gateway/routes/chat.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -285,6 +290,9 @@ modules:
   tests/unit/detectors/test_status_registry.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+  tests/unit/middleware/test_rate_limit.py:
+    changes:
+    - 2026-08-28-rate-limit-deterministic-concurrency
   tests/unit/observability/test_detector_availability_metrics.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe

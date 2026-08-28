@@ -1,0 +1,7 @@
+meta:
+  change_id: 2026-08-28-rate-limit-deterministic-concurrency
+  created: '2026-08-28T19:47:54+08:00'
+  total_adjustments: 0
+  requires_re_spec: false
+  requires_re_build: false
+adjustments: []

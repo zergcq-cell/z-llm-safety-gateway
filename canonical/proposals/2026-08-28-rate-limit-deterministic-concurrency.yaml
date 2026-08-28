@@ -1,0 +1,66 @@
+meta:
+  change_id: 2026-08-28-rate-limit-deterministic-concurrency
+  title: Python 3.11 令牌桶并发测试确定性
+  created: '2026-08-28T18:05:43+08:00'
+  status: confirmed
+why:
+  problem: TC-RL-005 把并发期间的合法持续补充误判为超额消费，导致 Python 3.11 在执行超过 1ms 时出现期望 5、实际 6 的非确定性失败。
+  motivation: 项目公开支持并在 CI 覆盖 Python 3.10–3.12；限流安全契约必须区分原子消费与按时间补充，并提供不依赖主机速度的证据。
+what_changes:
+  - id: C1
+    description: 明确并发安全契约：消费原子、token 不为负，合法成功次数必须考虑测试期间产生的补充额度。
+    type: modified
+  - id: C2
+    description: 为令牌桶测试建立可控的单调时钟边界，分别验证冻结时间下的并发消费和显式时间推进下的持续补充。
+    type: modified
+  - id: C3
+    description: 在 Python 3.10、3.11、3.12 上重复执行相关回归与完整质量门。
+    type: modified
+capabilities:
+  new: []
+  modified:
+    - name: rate-limiting
+      description: 补充确定性的并发安全与时间推进验证，不改变公开配置或 HTTP 契约。
+constraints:
+  - 保持 rate、burst、per、429 和 Retry-After 的公开语义不变。
+  - 严格 RED→GREEN→REFACTOR；不得先假设问题只存在于测试。
+  - 测试不得依赖 wall clock、主机性能或事件循环调度速度。
+stakeholders:
+  - Gateway 维护者
+  - 使用 Python 3.10–3.12 的部署与 CI 使用者
+risk_areas:
+  - capability: rate-limiting
+    risk: 错误冻结或抽象时间可能掩盖真实补充行为，或无意改变生产限流语义。
+    mitigation: 分离冻结时间并发测试与显式推进时间补充测试，并执行三版本完整回归。
+non_goals:
+  - 不实现 Redis 分布式限流。
+  - 不调整默认限流策略、容量或性能目标。
+  - 不修改认证、Flow、Provider 或 detector。
+  - 不处理 Roadmap 文档漂移。
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+anchoring:
+  level: L3
+  reference_changes:
+    - 2026-08-12-v0.0.4-security-observability
+  anchor_implementations:
+    - specs/rate-limiting/spec.yaml
+    - src/z_llm_safety_gateway/ratelimit/token_bucket.py
+    - tests/unit/middleware/test_rate_limit.py
+principle_check:
+  plugin_flow: 不新增领域能力或 Flow 策略；仅收敛现有限流运行机制的时间测试边界，核心职责不扩张。
+  explicit_policy_failure: 明确持续补充、原子消费和失败条件；测试不得把合法补充静默归类为超额消费。
+  transparent_contracts: 保持公开配置、HTTP 429 与 Retry-After 契约兼容，时间边界只用于内部可测试性。
+  evidence_data_protection: 使用确定性多版本测试提供可审计证据，不采集或保存请求内容及其他敏感数据。
+  tradeoffs_or_departures: none；若 Phase 2 发现测试期望与既有规范冲突，必须显式记录设计调整。
+success_criteria:
+  - 冻结时间时，50 个并发消费只能成功消费初始 burst，token 永不为负。
+  - 显式推进时间时，补充 token 符合 rate × elapsed 且不超过 burst。
+  - 相关测试不依赖主机速度或事件循环调度时机。
+  - Python 3.10、3.11、3.12 均稳定通过相关测试。
+  - 完整 pytest、Ruff、Mypy 和覆盖率门通过。
+  - 公开限流配置及 HTTP 契约无变化。

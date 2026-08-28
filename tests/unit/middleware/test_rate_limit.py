@@ -1,10 +1,11 @@
 """Unit tests for TokenBucket and RateLimitMiddleware.
 
-Test cases: TC-RL-001~006
+Test cases: TC-RL-001~011
 Covers: within-burst requests allowed (token consumed), bucket exhaustion
         rejected (429), config parsing of rate/burst/per/storage, 429 with
         Retry-After header and OpenAI-compatible body, concurrent token
-        consumption safety, and per-IP limiting.
+        consumption safety, per-IP limiting, controlled-clock refill, burst
+        capping, default clock compatibility, and lock serialization.
 """
 
 from __future__ import annotations
@@ -19,9 +20,23 @@ from pydantic import ValidationError
 from z_llm_safety_gateway.config.models import ApiKeyConfig, AuthConfig, RateLimitConfig
 from z_llm_safety_gateway.middleware.auth import AuthMiddleware
 from z_llm_safety_gateway.middleware.rate_limit import RateLimitMiddleware
+from z_llm_safety_gateway.ratelimit import token_bucket as token_bucket_module
 from z_llm_safety_gateway.ratelimit.token_bucket import TokenBucket
 
 AUTH_HEADER = {"Authorization": "Bearer sk-a"}
+
+
+class _FakeClock:
+    """A monotonic test clock that advances only when explicitly requested."""
+
+    def __init__(self, now: float = 0.0) -> None:
+        self._now = now
+
+    def __call__(self) -> float:
+        return self._now
+
+    def advance(self, seconds: float) -> None:
+        self._now += seconds
 
 
 def _create_app(
@@ -171,7 +186,8 @@ async def test_concurrent_safety() -> None:
          are consumed and the token count never goes negative
     """
     burst = 5
-    bucket = TokenBucket(rate=1000.0, burst=burst)
+    clock = _FakeClock()
+    bucket = TokenBucket(rate=1000.0, burst=burst, clock=clock)
 
     results = await asyncio.gather(*[bucket.consume() for _ in range(50)])
 
@@ -180,6 +196,79 @@ async def test_concurrent_safety() -> None:
     # Tokens are not over-consumed: count is non-negative and below capacity.
     assert bucket.tokens >= 0.0
     assert bucket.tokens < 1.0
+
+
+# ---------------------------------------------------------------------------
+# TC-RL-007: consume waits for the bucket lock before mutating tokens.
+# ---------------------------------------------------------------------------
+
+
+async def test_consume_waits_for_bucket_lock() -> None:
+    """TC-RL-007: A held lock keeps consume pending and tokens unchanged."""
+    bucket = TokenBucket(rate=1.0, burst=1, clock=_FakeClock())
+
+    await bucket._lock.acquire()
+    consume_task = asyncio.create_task(bucket.consume())
+    try:
+        await asyncio.sleep(0)
+        assert not consume_task.done()
+        assert bucket.tokens == 1.0
+    finally:
+        bucket._lock.release()
+
+    assert await consume_task is True
+    assert bucket.tokens == 0.0
+
+
+# ---------------------------------------------------------------------------
+# TC-RL-008: controlled elapsed time refills exactly rate * elapsed tokens.
+# ---------------------------------------------------------------------------
+
+
+async def test_controlled_clock_refills_exact_elapsed_tokens() -> None:
+    """TC-RL-008: Refill follows rate * elapsed and never uses real time."""
+    clock = _FakeClock()
+    bucket = TokenBucket(rate=2.0, burst=5, clock=clock)
+
+    assert await bucket.consume(amount=5) is True
+    assert await bucket.consume() is False
+    assert bucket.tokens == 0.0
+
+    clock.advance(1.5)
+
+    assert await bucket.consume(amount=3) is True
+    assert bucket.tokens == 0.0
+
+
+# ---------------------------------------------------------------------------
+# TC-RL-009: controlled refill remains capped at burst capacity.
+# ---------------------------------------------------------------------------
+
+
+async def test_controlled_clock_caps_refill_at_burst() -> None:
+    """TC-RL-009: Long elapsed intervals cannot refill beyond burst."""
+    clock = _FakeClock()
+    bucket = TokenBucket(rate=10.0, burst=5, clock=clock)
+
+    assert await bucket.consume(amount=4) is True
+    clock.advance(100.0)
+
+    assert await bucket.consume(amount=5) is True
+    assert bucket.tokens == 0.0
+
+
+# ---------------------------------------------------------------------------
+# TC-RL-010: omitting clock preserves the existing constructor contract.
+# ---------------------------------------------------------------------------
+
+
+async def test_default_clock_keeps_constructor_compatible() -> None:
+    """TC-RL-010: Two-argument construction uses the production clock."""
+    bucket = TokenBucket(rate=2.0, burst=2)
+
+    assert await bucket.consume() is True
+    assert bucket._clock is token_bucket_module.time.monotonic
+    assert 0.0 <= bucket.tokens < 2.0
 
 
 # ---------------------------------------------------------------------------

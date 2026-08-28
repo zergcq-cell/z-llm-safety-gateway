@@ -1,0 +1,254 @@
+active_phase: deliver
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  canonical_code_specs: canonical/specs/code
+  code_structure_delta_md: code-structure-delta.md
+  design_adjustments_md: design-adjustments.md
+  design_adjustments_yaml: design-adjustments.yaml
+  design_md: design.md
+  human_specs: specs
+  phase_context_md: phase-context.md
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-28-rate-limit-deterministic-concurrency.yaml
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+  slices_md: slices.md
+  tasks_md: tasks.md
+change_id: 2026-08-28-rate-limit-deterministic-concurrency
+complexity_score: 8
+confirmed_at:
+  gate1_understand: '2026-08-28T18:05:43+08:00'
+  gate2_spec: '2026-08-28T19:00:51+08:00'
+  gate3_verify: '2026-08-28T22:44:33+08:00'
+critical:
+  cross_system: false
+  financial: false
+  is_critical: true
+  rationale: 令牌桶限流是安全控制边界，错误并发证据可能掩盖超额消费或制造假失败
+  required_anchoring_level: L3
+  safety_critical: true
+current_phase: deliver
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+last_modified: '2026-08-28T22:47:36+08:00'
+long_range:
+  authorization: confirmed_all
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  max_iterations: 10
+  mode: full_auto
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-28T19:18:31+08:00'
+  selection: full_auto
+mode: thorough
+mode_selection: completed
+phase1:
+  capabilities_modified: 1
+  capabilities_new: 0
+  completed_at: '2026-08-28T18:05:43+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 2
+    conclusion: passed
+    dimensions:
+      - completeness
+      - clarity
+      - scope
+    discovered: 2
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L3
+    minimum: L3
+    status: passed
+  canonical_tracks:
+    agent: 1
+    code: 1
+  capabilities: 1
+  completed_at: '2026-08-28T19:00:51+08:00'
+  confidence:
+    high: 6
+    low: 0
+    medium: 0
+  confirmed_at: '2026-08-28T19:00:51+08:00'
+  experiences_loaded:
+    - EXP-2026-0011
+    - EXP-2026-0014
+    - EXP-2026-0006
+    - EXP-2026-0022
+  priority:
+    P0: 5
+    P1: 1
+    P2: 0
+  requirements: 3
+  review:
+    auto_fixed: 3
+    conclusion: passed
+    dimensions:
+      - requirement_coverage
+      - scenario_completeness
+      - tc_id_consistency
+      - document_consistency
+    discovered: 3
+    unresolved: 0
+  scenarios: 6
+  status: completed
+phase3:
+  capabilities: 1
+  completed_at: '2026-08-28T19:18:31+08:00'
+  dependency_cycles: 0
+  dependency_edges: 0
+  requirements_covered: 3
+  scenarios_covered: 6
+  slices: 3
+  status: completed
+phase4:
+  context_budget:
+    decision: continue
+    rationale: 会话已经过压缩且 phase-context 已更新，当前阶段上下文新鲜
+  experiences_loaded:
+    matched_verified_or_settled: 0
+    referenced_discovered_guardrails: 4
+  slices_completed:
+    S1:
+      full_regression: 1070_passed_1_skipped_1_known_unrelated_host_throughput_failure
+      mypy: passed
+      new_tests: 3
+      red: 3_failed_unexpected_clock_keyword_1_existing_default_compatibility_passed
+      ruff: passed
+      status: done
+      targeted_tests: 4_passed_rate_limit_file_10_passed
+      tc_coverage: 4/4
+      verified_at: '2026-08-28T19:22:46+08:00'
+    S2:
+      full_regression: 1070_passed_1_skipped_1_known_host_throughput_test_deselected
+      mypy: passed
+      new_tests: 1
+      red: direct_green_existing_asyncio_lock_behavior
+      ruff: passed
+      status: done
+      targeted_tests: 1_passed_rate_limit_file_10_passed
+      tc_coverage: 1/1
+      verified_at: '2026-08-28T19:24:17+08:00'
+    S3:
+      coverage:
+        python_3_10: 93.34_percent
+        python_3_11: 92.47_percent
+        python_3_12: 93.34_percent
+      full_matrix:
+        python_3_10: 1077_passed_1_skipped
+        python_3_11: 1077_passed_1_skipped
+        python_3_12: 1077_passed_1_skipped
+      mypy: 99_source_files_0_issues
+      new_tests: 1
+      repeated_targeted:
+        python_3_10: 3_runs_30_passed
+        python_3_11: 3_runs_30_passed
+        python_3_12: 3_runs_30_passed
+      ruff: passed
+      status: done
+      tc_coverage: 1/1
+      verified_at: '2026-08-28T19:30:38+08:00'
+  completed_at: '2026-08-28T19:30:38+08:00'
+  status: completed
+phase5:
+  anchoring:
+    actual: L3
+    status: passed
+  checkpoints:
+    local_pytest_nodes: 5
+    programmatic_matrix: 1
+    total: 6
+  completed_at: '2026-08-28T19:47:54+08:00'
+  coverage:
+    python_3_10: 93.34_percent
+    python_3_11: 92.47_percent
+    python_3_12: 93.34_percent
+  design_adjustments:
+    requires_re_build: false
+    requires_re_spec: false
+    total: 0
+  e2e: not_applicable_disabled_by_config
+  experiences:
+    added: 2
+    library_total: 24
+    reused: 4
+  failure_modes:
+    checked: 12/12
+    product_unresolved: 0
+    skipped: 0
+  iteration: 2
+  max_iterations: 10
+  principle_check: completed
+  quality:
+    mypy: 99_source_files_0_issues
+    python_3_10: 1077_passed_1_skipped
+    python_3_11: 1077_passed_1_skipped
+    python_3_12: 1077_passed_1_skipped
+    ruff: passed
+  review:
+    final: C0_H0_M2_L0
+    rounds: 2
+    tracks_per_round: 3
+  confirmed_at: '2026-08-28T22:44:33+08:00'
+  gate3: approved
+  status: completed
+  tc_coverage: 6/6
+phase6:
+  archive: archive/2026-08-28-rate-limit-deterministic-concurrency
+  canonical_agent_specs_merged: 1
+  canonical_code_specs_merged: 1
+  canonical_proposal_merged: true
+  canonical_verify: 2/2_passed
+  code_structure_merge: completed
+  completed_at: '2026-08-28T22:50:01+08:00'
+  experience_upload: skipped_no_deposited_entries
+  git_step: approved
+  git_commit_message: 'fix(rate-limit): make concurrency tests deterministic'
+  git_tag: rate-limit-determinism-2026-08-28
+  push_authorized: true
+  human_spec_merge: completed_requirements_8_scenarios_12
+  principle_check: completed
+  status: completed
+  suggested_commit: 'fix(rate-limit): make concurrency tests deterministic'
+  suggested_tag: rate-limit-determinism-2026-08-28
+phases:
+  build:
+    completed_at: '2026-08-28T19:30:38+08:00'
+    red_green_cycles: 2
+    slices_completed: 3
+    status: completed
+  deliver:
+    completed_at: '2026-08-28T22:50:01+08:00'
+    started_at: '2026-08-28T22:44:33+08:00'
+    status: completed
+  slice:
+    completed_at: '2026-08-28T19:18:31+08:00'
+    slices: 3
+    status: completed
+  spec:
+    confirmed_at: '2026-08-28T19:00:51+08:00'
+    gate2_ready: true
+    status: completed
+  understand:
+    confirmed_at: '2026-08-28T18:05:43+08:00'
+    status: completed
+  verify:
+    completed_at: '2026-08-28T19:47:54+08:00'
+    confirmed_at: '2026-08-28T22:44:33+08:00'
+    started_at: '2026-08-28T19:31:00+08:00'
+    status: completed
+score_confidence: preliminary
+status: archived
+task_type: code
+traceability:
+  programmatic_cases: 1
+  spec_scenarios: 6
+  tc_cases: 6
+  test_functions: 5
+version: '2.0'

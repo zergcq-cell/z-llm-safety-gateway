@@ -1,0 +1,9 @@
+Gate 2 approved by user on 2026-08-28T19:00:51+08:00.
+
+Locked Phase 2 artifacts:
+- design.md
+- canonical/specs/code/rate-limiting.yaml
+- canonical/specs/agent/rate-limiting.yaml
+- specs/rate-limiting/spec.md
+- test-plan.md
+- phase-context.md

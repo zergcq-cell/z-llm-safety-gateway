@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 
 
 class TokenBucket:
@@ -20,9 +21,17 @@ class TokenBucket:
     Args:
         rate: Tokens added per second (replenishment rate).
         burst: Maximum number of tokens the bucket can hold (capacity).
+        clock: Monotonic clock used for refill accounting. Defaults to
+            :func:`time.monotonic`; injectable for deterministic tests.
     """
 
-    def __init__(self, rate: float, burst: int) -> None:
+    def __init__(
+        self,
+        rate: float,
+        burst: int,
+        *,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
         if rate <= 0:
             raise ValueError("rate must be positive")
         if burst <= 0:
@@ -30,7 +39,8 @@ class TokenBucket:
         self._rate: float = float(rate)
         self._burst: int = int(burst)
         self._tokens: float = float(burst)
-        self._last_refill: float = time.monotonic()
+        self._clock = clock if clock is not None else time.monotonic
+        self._last_refill: float = self._clock()
         self._lock: asyncio.Lock = asyncio.Lock()
 
     @property
@@ -40,7 +50,7 @@ class TokenBucket:
 
     def _refill(self) -> None:
         """Add tokens accrued since the last refill, capped at burst."""
-        now = time.monotonic()
+        now = self._clock()
         elapsed = now - self._last_refill
         if elapsed > 0:
             self._tokens = min(float(self._burst), self._tokens + elapsed * self._rate)

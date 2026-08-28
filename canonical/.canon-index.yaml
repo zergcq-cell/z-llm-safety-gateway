@@ -1,4 +1,9 @@
 changes:
+  2026-08-28-rate-limit-deterministic-concurrency:
+    proposal: canonical/proposals/2026-08-28-rate-limit-deterministic-concurrency.yaml
+    capabilities:
+    - rate-limiting
+    verified: true
   2026-08-28-codex-only-stdd-adaptation:
     proposal: canonical/proposals/2026-08-28-codex-only-stdd-adaptation.yaml
     capabilities:

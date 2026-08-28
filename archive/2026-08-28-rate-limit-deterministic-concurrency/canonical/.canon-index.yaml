@@ -1,0 +1,9 @@
+version: '2.9'
+proposals:
+  2026-08-28-rate-limit-deterministic-concurrency: proposals/2026-08-28-rate-limit-deterministic-concurrency.yaml
+specs:
+  code:
+    rate-limiting: specs/code/rate-limiting.yaml
+  agent:
+    rate-limiting: specs/agent/rate-limiting.yaml
+designs: {}

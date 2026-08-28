@@ -1,0 +1,65 @@
+meta:
+  task_id: rate-limiting-deterministic-concurrency
+  change_id: 2026-08-28-rate-limit-deterministic-concurrency
+  task_type: code
+  system: TokenBucket deterministic clock and concurrency verification
+  preconditions:
+    - 项目依赖已安装，pytest 与 pytest-asyncio 可用
+    - TokenBucket 与 RateLimitMiddleware 的现有测试位于 tests/unit/middleware/test_rate_limit.py
+    - Python 3.10、3.11、3.12 验证环境须逐一识别，缺失时显式报告
+steps:
+  - id: CP-RL-007
+    description: 冻结时钟下并发消费只使用初始 burst（SC-RL-007 / TC-RL-005）
+    action: .venv/bin/pytest tests/unit/middleware/test_rate_limit.py::test_concurrent_safety -q
+    assertions:
+      - type: exit_code
+        expected: 0
+      - type: stdout_contains
+        expected: passed
+  - id: CP-RL-008
+    description: 显式时间推进精确补充 rate × elapsed（SC-RL-008 / TC-RL-008）
+    action: .venv/bin/pytest tests/unit/middleware/test_rate_limit.py::test_controlled_clock_refills_exact_elapsed_tokens -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RL-009
+    description: 显式时间推进时补充不超过 burst（SC-RL-009 / TC-RL-009）
+    action: .venv/bin/pytest tests/unit/middleware/test_rate_limit.py::test_controlled_clock_caps_refill_at_burst -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RL-010
+    description: 默认生产时钟与两参数构造保持兼容（SC-RL-010 / TC-RL-010）
+    action: .venv/bin/pytest tests/unit/middleware/test_rate_limit.py::test_default_clock_keeps_constructor_compatible -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RL-011
+    description: 已持锁时 consume 等待且不提前修改 token（SC-RL-011 / TC-RL-007）
+    action: .venv/bin/pytest tests/unit/middleware/test_rate_limit.py::test_consume_waits_for_bucket_lock -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RL-012
+    description: 三版本重复回归与完整质量门通过（SC-RL-012 / TC-RL-011）
+    action: >-
+      for version in 3.10 3.11 3.12; do
+      uv run --isolated --python "$version" --extra dev bash -c
+      'for run in 1 2 3; do python -m pytest tests/unit/middleware/test_rate_limit.py -q || exit 1; done'
+      || exit 1;
+      PYTHONPATH=sdk/src:examples/plugins/python-inprocess/src:examples/plugins/python-grpc/src
+      OPENAI_API_KEY=sk-test uv run --isolated --python "$version" --extra dev --extra grpc
+      python -m pytest tests/ examples/plugins/python-inprocess/tests
+      examples/plugins/python-grpc/tests --cov=src/z_llm_safety_gateway --cov-fail-under=90 -q
+      || exit 1; done &&
+      .venv/bin/ruff check src/ tests/ sdk/src/ tools/ examples/plugins/python-inprocess/src
+      examples/plugins/python-inprocess/tests examples/plugins/python-grpc/src
+      examples/plugins/python-grpc/tests && .venv/bin/mypy src/ sdk/src tools/
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - 恢复 TokenBucket 的构造与内部时钟读取实现，不删除限流模块
+    - 恢复 tests/unit/middleware/test_rate_limit.py 中本 change 修改和新增的测试
+    - 恢复本 change 对 rate-limiting 主规范的增量，不修改既有 REQ-RL-001～005
