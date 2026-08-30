@@ -1,0 +1,227 @@
+active_phase: deliver
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  design_md: design.md
+  human_specs: specs
+  phase_context_md: phase-context.md
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-30-v0.3.0-milestone-roadmap.yaml
+  slices_md: slices.md
+  tasks_md: tasks.md
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+change_id: 2026-08-30-v0.3.0-milestone-roadmap
+complexity_score: 5
+confirmed_at:
+  gate1_understand: '2026-08-30T12:48:26+08:00'
+  gate2_spec: '2026-08-30T16:32:52+08:00'
+  gate3_verify: '2026-08-30T20:43:12+08:00'
+critical:
+  cross_system: false
+  financial: false
+  is_critical: false
+  rationale: 本 change 只定义版本范围和文档契约，不改变安全运行时行为。
+  required_anchoring_level: L2
+  safety_critical: false
+current_phase: deliver
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+last_modified: '2026-08-30T21:28:32+08:00'
+long_range:
+  authorization: confirmed_all
+  authorized_paths:
+  - DESIGN.md
+  - README.md
+  - CHANGELOG.md
+  - AGENTS.md
+  - tests/unit/release/test_documentation_contract.py
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  git_delivery_authorized: false
+  max_iterations: 10
+  mode: full_auto
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-30T16:44:54+08:00'
+  selection: full_auto
+mode: standard
+mode_selection: completed
+phase1:
+  capabilities_modified: 1
+  capabilities_new: 1
+  completed_at: '2026-08-30T12:48:26+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 4
+    conclusion: passed
+    dimensions:
+    - completeness
+    - clarity
+    - scope
+    discovered: 4
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L2
+    minimum: none_noncritical
+    status: passed
+  canonical_tracks:
+    agent: 2
+    code: 0
+  capabilities: 2
+  completed_at: '2026-08-30T16:32:52+08:00'
+  confidence:
+    high: 10
+    low: 0
+    medium: 2
+  confirmed_at: '2026-08-30T16:32:52+08:00'
+  experiences_loaded:
+  - EXP-2026-0019
+  - EXP-2026-0022
+  priority:
+    P0: 8
+    P1: 4
+    P2: 0
+  requirements: 6
+  review:
+    auto_fixed: 5
+    conclusion: passed
+    dimensions:
+    - requirement_coverage
+    - scenario_completeness
+    - tc_id_consistency
+    - document_consistency
+    discovered: 5
+    unresolved: 0
+  scenarios: 12
+  status: completed
+phase3:
+  capabilities: 2
+  completed_at: '2026-08-30T16:44:54+08:00'
+  dependency_cycles: 0
+  dependency_edges: 0
+  requirements_covered: 6
+  scenarios_covered: 12
+  slices: 3
+  status: completed
+phase4:
+  completed_at: '2026-08-30T16:57:31+08:00'
+  context_budget:
+    decision: continue
+    rationale: phase-context 已更新且状态新鲜，当前长程执行可继续
+  experiences_loaded:
+    matched_verified_or_settled: 0
+    referenced_discovered_guardrails: 3
+  slices_completed:
+    S1:
+      full_regression: 1082_passed_1_skipped_coverage_93_34_percent
+      known_host_microbenchmark: tc_pe_003_failed_uninstrumented_then_ci_coverage_command_passed
+      new_tests: 5
+      red: 5_failed_before_authoritative_roadmap_contract
+      status: done
+      targeted_tests: 5_passed_documentation_contract_14_passed
+      tc_coverage: 5/5
+      verified_at: '2026-08-30T16:51:19+08:00'
+    S2:
+      full_regression: 1087_passed_1_skipped_coverage_93_34_percent
+      new_tests: 5
+      red: 3_failed_2_direct_green_existing_equivalent_contracts
+      status: done
+      targeted_tests: 5_passed_documentation_contract_19_passed
+      tc_coverage: 5/5
+      verified_at: '2026-08-30T16:54:29+08:00'
+    S3:
+      checkpoint_collection: 12_nodes_collected
+      full_regression: 1089_passed_1_skipped_coverage_93_34_percent
+      mypy: 99_source_files_0_issues
+      new_tests: 2
+      red: 1_failed_1_direct_green_existing_link_contract
+      ruff: passed
+      status: done
+      targeted_tests: 2_passed_documentation_contract_21_passed
+      tc_coverage: 2/2
+      tc_id_uniqueness: 12_of_12_unique
+      verified_at: '2026-08-30T16:57:31+08:00'
+  status: completed
+phase5:
+  checkpoints:
+    canonical_actions: 8_of_8_passed
+    pytest_targets: 12_of_12_collectable
+    tc_ids: 12_of_12_unique_and_passed
+  completed_at: '2026-08-30T17:20:57+08:00'
+  confirmed_at: '2026-08-30T20:43:12+08:00'
+  design_adjustments: 1_minor_boundary_discovery
+  experiences:
+    new: 0
+    reused: 3
+    total: 24
+  failure_modes: 12_of_12_checked_0_unresolved
+  gate3: approved
+  quality:
+    e2e: skipped_disabled_by_config
+    mypy: 99_source_files_0_issues
+    primary: 1090_passed_1_skipped_coverage_93_34_percent
+    python_3_10: 1084_passed_1_skipped_coverage_93_34_percent
+    python_3_11: 1084_passed_1_skipped_coverage_92_47_percent
+    python_3_12: 1084_passed_1_skipped_coverage_93_34_percent
+    ruff: passed
+  review:
+    final:
+      critical: 0
+      high: 0
+      low: 0
+      medium: 0
+    rounds: 3
+  status: completed
+phase6:
+  started_at: '2026-08-30T20:43:12+08:00'
+  status: completed
+  completed_at: '2026-08-30T21:28:32+08:00'
+  archived_to: archive/2026-08-30-v0.3.0-milestone-roadmap
+  archived_at: '2026-08-30T20:47:21+08:00'
+  canonical_proposal_verified: true
+  canonical_agent_specs_merged: 2
+  human_specs_merged: 2
+  structure_index_merged: true
+  experience_upload: skipped_no_deposited_entries
+  design_adjustments: 2
+  post_delivery_quality:
+    documentation_contract: 22_passed
+    canonical_actions: 8_of_8_passed
+    full_regression: 1090_passed_1_skipped_coverage_93_34_percent
+    ruff: passed
+    mypy: 99_source_files_0_issues
+    diff_check: passed
+  git_step: approved
+  git_authorized_at: '2026-08-30T21:28:32+08:00'
+  push_authorized: true
+  suggested_commit_message: 'docs(roadmap): define v0.3.0 milestone scope'
+  suggested_tag: stdd-v0.3.0-roadmap-2026-08-30
+phases:
+  build:
+    completed_at: '2026-08-30T16:57:31+08:00'
+    status: completed
+  deliver:
+    status: completed
+    completed_at: '2026-08-30T21:28:32+08:00'
+  slice:
+    completed_at: '2026-08-30T16:44:54+08:00'
+    status: completed
+  spec:
+    confirmed_at: '2026-08-30T16:32:52+08:00'
+    status: completed
+  understand:
+    confirmed_at: '2026-08-30T12:48:26+08:00'
+    status: completed
+  verify:
+    completed_at: '2026-08-30T17:20:57+08:00'
+    confirmed_at: '2026-08-30T20:43:12'
+    status: completed
+score_confidence: final
+status: archived
+task_type: documentation
+version: '2.0'

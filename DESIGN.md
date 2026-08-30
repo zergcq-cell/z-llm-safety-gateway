@@ -407,7 +407,7 @@ def apply_output_modifications(
 |----------|---------------|-------|
 | `/v1/completions` | v0.2.0 | Legacy completions API |
 | `/v1/embeddings` | v0.2.0 | Input detection only |
-| `/v1/images/generations` | v0.3.0 | Multimodal content detection |
+| `/v1/images/generations` | Independent STDD change | Multimodal content detection |
 
 ### 4.2 Block Response Format
 
@@ -1014,9 +1014,9 @@ async def detect(self, content: str, context: DetectionContext) -> DetectionResu
 | Jailbreak Detection | Input | Rules + ML model | v0.2 |
 | Hallucination / Fact Check | Output | LLM-as-Judge | v0.2 |
 | Competitor Mention Filter | Output | Rule-based | v0.2 |
-| Bias Detection | Output | ML model | v0.3 |
-| Malicious URL Detection | Output | Rule-based + URL reputation | v0.3 |
-| Factual Consistency | Output | LLM-as-Judge | v0.3 |
+| Bias Detection | Output | ML model | Independent STDD change |
+| Malicious URL Detection | Output | Rule-based + URL reputation | Independent STDD change |
+| Factual Consistency | Output | LLM-as-Judge | Independent STDD change |
 
 ---
 
@@ -1743,8 +1743,8 @@ The gateway forwards provider-specific parameters (e.g., Azure's `api-version` q
 
 | Provider | Target Version | Notes |
 |----------|---------------|-------|
-| Anthropic Claude | v0.3.0 | Requires API format conversion |
-| Google Gemini | v0.3.0 | Requires API format conversion |
+| Anthropic Claude | Independent STDD change | Requires API format conversion |
+| Google Gemini | Independent STDD change | Requires API format conversion |
 | AWS Bedrock | v0.4.0 | Multiple model families |
 
 ### 9.7 Provider Error Handling
@@ -2133,7 +2133,7 @@ When `audit.sanitize_logs: true` (default), the gateway redacts known sensitive 
 |---------|---------------|
 | mTLS (mutual TLS) | v0.2.0 |
 | RBAC (role-based access control) | v0.2.0 |
-| OAuth 2.0 integration | v0.3.0 |
+| OAuth 2.0 integration | Independent STDD change |
 | Redis-backed rate limiting (multi-instance) | v0.2.0 |
 
 ---
@@ -2950,13 +2950,70 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 
 ### Post-v0.1.0 Roadmap (until v1.0.0 GA)
 
-| Version | Focus | Status |
-|---------|-------|--------|
-| v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed |
-| v0.2.1 | Release version hotfix | Released 2026-08-24 |
-| v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 |
-| v0.3.0 | Next functional milestone; scope requires an independent STDD change | Planned |
-| v0.4.0 | Later milestone; scope requires an independent STDD change | Planned |
+**Authoritative source:** This section is the sole project version roadmap. README, CHANGELOG,
+AGENTS, issues, and release notes may summarize or link here, but they do not define independent
+milestone scope or completion commitments.
+
+**Runtime status:** Planning only; no runtime, configuration, API, or package version change.
+
+Internal `v0.0.3` delivered Streaming & Audit during pre-public development. The public `v0.3.0`
+is a distinct future milestone and does not repeat those completed capabilities.
+
+| Version | Focus | Status | Entry criteria | Completion criteria |
+|---------|-------|--------|----------------|---------------------|
+| v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed | v0.1.x production baseline | Flow contracts, runtime, policy, evidence, compatibility, and quality gates completed |
+| v0.2.1 | Release version hotfix | Released 2026-08-24 | Diagnose v0.2.0 release failure | Independent Gateway/SDK version validation repaired and release verified |
+| v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 | v0.2.1 release baseline | Reproducible draft-first release and evidence contracts verified |
+| v0.3.0 | Multi-tenant safety policy isolation foundation | Planned; scope defined, implementation not started | This roadmap contract is delivered and each implementation unit starts an independent STDD change | All four implementation changes below are delivered and aggregate compatibility, failure, resource, evidence, privacy, and quality gates pass |
+| v0.4.0 | Unassigned later milestone | Planned; scope not committed | Independent STDD scope decision | Defined by its future confirmed STDD proposal |
+
+#### v0.3.0 Scope Contract
+
+Public v0.3.0 has one theme: a **multi-tenant safety policy isolation foundation**. It must deliver
+the following externally verifiable outcomes without moving tenant-specific safety logic into the
+Gateway core:
+
+1. trusted tenant identity;
+2. tenant-scoped Flow, policy, detector configuration, and provider routing;
+3. tenant-scoped evidence and observability with bounded, non-secret identity;
+4. explicit failure and resource isolation;
+5. backward-compatible single-tenant operation and transparent provider protocols.
+
+The tenant database, cache technology, control-plane API, tenant identifier representation, and
+specific fail-open/fail-closed defaults are not selected by this roadmap. Each belongs to the
+relevant implementation change and requires explicit specification and tests.
+
+The implementation sequence is:
+
+1. `tenant-identity-config-contract` — identity, configuration schema, startup validation, and a
+   backward-compatible single-tenant entry path.
+2. `tenant-flow-policy-resolution` — tenant-scoped Flow, detector settings, thresholds, word lists,
+   policy, and provider routing resolution.
+3. `tenant-evidence-observability-isolation` — audit evidence, logs, traces, and metrics with
+   isolation, sanitization, and bounded cardinality.
+4. `tenant-resource-failure-compatibility` — capacity and concurrency isolation, explicit failure
+   matrices, compatibility, and aggregate acceptance.
+
+Each implementation change requires explicit Gate 1, Gate 2, and Gate 3 approval. Public v0.3.0
+must not be marked complete or release-ready until all four changes are delivered and the aggregate
+acceptance matrix passes.
+
+#### v0.3 Candidate Classification
+
+| Candidate | Classification | Roadmap meaning |
+|-----------|----------------|-----------------|
+| Streaming, sliding-window detection, post-audit, recall, and audit logging | Completed | Delivered by internal v0.0.3; not public v0.3.0 scope |
+| Active runtime docstrings/comments under app, audit, config, post_audit, providers, recall, and streaming, plus legacy config-test annotations | Completed internal annotations | `v0.3.0` records the original internal implementation label; it is not a public milestone claim |
+| Flow Foundation | Completed | Delivered by public v0.2.0; prerequisite for tenant-scoped composition |
+| Multi-tenancy configuration and policy isolation | In public v0.3.0 | The sole public v0.3.0 theme, delivered through the four changes above |
+| Anthropic Claude and Google Gemini providers | Deferred to independent STDD | No target version is committed |
+| Multimodal content detection and image generation endpoint | Deferred to independent STDD | No target version is committed |
+| OAuth 2.0 integration | Deferred to independent STDD | No target version is committed |
+| Bias, malicious URL, and factual-consistency detectors | Deferred to independent STDD | No target version is committed |
+
+Historical v0.3 references in archive changes, canonical proposals, merged historical specs, and
+release notes are `immutable-historical-reference` evidence. They remain unchanged and do not
+define the current public v0.3.0 scope.
 
 ---
 
@@ -3196,7 +3253,7 @@ The following items are identified but not yet decided. They are deferred to fut
 | 1 | Plugin marketplace | Should the gateway host a plugin registry/catalog for discovery, installation, and rating of detectors? (Like VS Code marketplace) | v0.4.0+ |
 | 2 | Multi-tenancy config isolation | How should different tenants have different detector configurations, thresholds, and word lists? Current API Key model has no tenant concept. | v0.3.0 |
 | 3 | Agent execution rails | How should the gateway handle agent/tool-use workflows where the LLM makes multiple tool calls? Detect each tool call? Detect the full agent trajectory? | v0.4.0 |
-| 4 | Multimodal content detection | How to detect unsafe content in image inputs (GPT-4V) and image outputs (DALL-E)? | v0.3.0+ |
+| 4 | Multimodal content detection | How to detect unsafe content in image inputs (GPT-4V) and image outputs (DALL-E)? | Independent STDD change |
 | 5 | Embedding endpoint detection | Should `/v1/embeddings` requests be checked? What would input detection look like for embeddings (no generation, but could leak PII)? | v0.2.0+ |
 | 6 | Pluggable tokenizer | Which tokenizers to support for sliding window? tiktoken (OpenAI), SentencePiece (Gemini), or a generic fallback? | v1.1+ |
 | 7 | Hot reload | Should configuration hot reload be supported? What about reloading detectors without dropping connections? | v1.1+ (if requested) |

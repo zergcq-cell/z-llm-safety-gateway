@@ -1,0 +1,51 @@
+meta:
+  task_id: milestone-scope-governance
+  change_id: 2026-08-30-v0.3.0-milestone-roadmap
+  created: '2026-08-30T16:32:52+08:00'
+  task_type: documentation
+  system: Public milestone scope, version history, candidate classification, and roadmap governance
+  preconditions:
+    - Gateway v0.2.2 and Detector SDK v0.1.1 release facts remain unchanged.
+    - Archived changes, canonical history, merged historical specs, and release notes are immutable evidence.
+steps:
+  - id: CP-RMAP-001
+    description: DESIGN is the sole authoritative roadmap and secondary surfaces cannot diverge.
+    action: .venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_v030_roadmap_has_one_authoritative_source tests/unit/release/test_documentation_contract.py::test_v030_secondary_surfaces_are_bounded_summaries -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RMAP-002
+    description: Internal v0.0.3, public v0.3.0, and v0.2.x release states remain distinct.
+    action: .venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_v030_version_taxonomy_is_unambiguous tests/unit/release/test_documentation_contract.py::test_v030_roadmap_preserves_release_history -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RMAP-003
+    description: Public v0.3.0 has one multi-tenant isolation theme and four gated implementation changes.
+    action: .venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_v030_scope_has_one_theme_and_bounded_outcomes tests/unit/release/test_documentation_contract.py::test_v030_delivery_is_split_into_independent_stdd_changes -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-RMAP-004
+    description: Every active v0.3 candidate is classified while immutable historical references remain untouched.
+    action: >-
+      bash -c 'test -z "$(git status --porcelain=v1 --
+      archive/2026-08-11-v0.0.2-pipeline-detectors
+      archive/2026-08-12-v0.0.3-streaming-audit
+      archive/2026-08-12-v0.0.4-security-observability
+      archive/2026-08-25-v0.2.2-release-reproducibility
+      archive/2026-08-28-codex-only-stdd-adaptation/potential-requirements.md
+      canonical/proposals/2026-08-25-v0.2.2-release-reproducibility.yaml
+      canonical/specs/code/project-docs.yaml specs/config-system/spec.yaml
+      RELEASE_NOTES_v0.1.0.md)" &&
+      .venv/bin/pytest
+      tests/unit/release/test_documentation_contract.py::test_v030_active_candidates_are_completely_classified
+      tests/unit/release/test_documentation_contract.py::test_v030_historical_references_are_accounted_for_without_rewrite
+      -q'
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - Preserve all archived and released history; revert only current roadmap documentation and its contract tests.
+    - Keep Gateway v0.2.2 and Detector SDK v0.1.1 version surfaces unchanged.

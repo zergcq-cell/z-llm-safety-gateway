@@ -1,0 +1,9 @@
+version: '2.9'
+proposals:
+  2026-08-30-v0.3.0-milestone-roadmap: proposals/2026-08-30-v0.3.0-milestone-roadmap.yaml
+designs: {}
+specs:
+  code: {}
+  agent:
+    milestone-scope-governance: specs/agent/milestone-scope-governance.yaml
+    project-docs: specs/agent/project-docs.yaml

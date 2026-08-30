@@ -1,0 +1,60 @@
+meta:
+  change_id: 2026-08-30-v0.3.0-milestone-roadmap
+  created: '2026-08-30T16:57:31+08:00'
+  updated: '2026-08-30T20:50:34+08:00'
+  status: verified_with_adjustment
+  total: 2
+  requires_re_spec: false
+  requires_re_build: false
+adjustments:
+  - id: DA-001
+    type: boundary_discovery
+    severity: minor
+    discovered_in_phase: verify
+    resolved_in_phase: verify
+    original_design: >-
+      Roadmap verification classified archive, canonical specifications, release notes, and
+      product documentation as historical or current evidence, but did not explicitly account
+      for active runtime docstrings/comments that retain the internal v0.3.0 implementation label.
+    adjusted_design: >-
+      DESIGN.md classifies active runtime annotations as completed internal annotations rather
+      than public milestone claims, and TC-RMAP-007 verifies both the exact classification and
+      the current runtime module set. Runtime files remain unchanged under the confirmed scope.
+    reason: >-
+      Phase 5 documentation review found that repository-wide searches could otherwise make the
+      internal implementation label look like a delivered public milestone.
+    affected_capabilities:
+      - milestone-scope-governance
+      - project-docs
+    principle_impact:
+      plugin_flow: No runtime or capability placement changes.
+      explicit_policy_failure: The version-evidence classification is now explicit.
+      transparency_contracts: The public/internal version boundary is made testable.
+      evidence_data: Existing evidence is classified without collecting or changing runtime data.
+    follow_up: >-
+      Clean up the legacy runtime annotations in an independently authorized STDD change or in
+      the first public v0.3.0 implementation change.
+  - id: DA-002
+    type: delivery_lifecycle_correction
+    severity: minor
+    discovered_in_phase: deliver
+    resolved_in_phase: deliver
+    original_design: >-
+      TC-RMAP-008 required the cumulative specs/project-docs/spec.md file to remain completely
+      clean in Git while also requiring Phase 6 to append the current project-docs requirements.
+    adjusted_design: >-
+      The contract verifies that historical REQ-DOCS-011, REQ-DOCS-012, and REQ-DOCS-013 remain
+      present after the append-only merge. Git status protection remains on immutable historical
+      archives, canonical evidence, config spec, and release notes.
+    reason: >-
+      A cumulative master specification must change during a legitimate Deliver, so path-level
+      cleanliness would create an unavoidable pre-commit regression.
+    affected_capabilities:
+      - milestone-scope-governance
+      - project-docs
+    principle_impact:
+      plugin_flow: No runtime or capability placement changes.
+      explicit_policy_failure: The delivery lifecycle exception is explicit and tested.
+      transparency_contracts: Historical requirements are protected by semantic preservation.
+      evidence_data: Existing specification evidence remains auditable without runtime data.
+    follow_up: None.

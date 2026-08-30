@@ -62,16 +62,20 @@ archive/                # 已完成变更
 - DESIGN.md 是项目级 master spec，每个 STDD 变更从中提取相关需求
 - PRINCIPLES.md 是项目级最高设计约束，每次变更和决策必须逐项检查
 
-## 开发阶段（对应 STDD 变更）
+## 开发阶段与公开 Roadmap
 
-| 变更 | 版本 | 内容 | 预计工期 |
+`DESIGN.md` 的 `Post-v0.1.0 Roadmap` 是版本路线的唯一权威来源；本表只保留开发记忆摘要。
+
+| 变更 | 版本 | 内容 | 状态 |
 |------|------|------|---------|
-| v0.1.0 | Framework Skeleton | FastAPI server, Config, Provider proxy, Content extractor | 2-3 days |
-| v0.2.0 | Pipeline & Detectors | Pipeline engine, 5 MVP detectors, Circuit breaker | 3-4 days |
-| v0.3.0 | Streaming & Audit | SSE streaming, Sliding window, Post-audit, Recall, Audit log | 3-4 days |
-| v0.4.0 | Security & Observability | Auth, Rate limit, TLS, Prometheus, OpenTelemetry | 2-3 days |
-| v0.5.0 | Plugin Ecosystem | gRPC sidecar, Plugin loader, Detector SDK | 3-4 days |
-| v1.0.0 | Production Ready | Documentation, Test coverage, Docker Compose, CI | 2-3 days |
+| v0.0.1 | Framework Skeleton | FastAPI server, Config, Provider proxy, Content extractor | 已完成 |
+| v0.0.2 | Pipeline & Detectors | Pipeline engine, 5 MVP detectors, Circuit breaker | 已完成 |
+| v0.0.3 | Streaming & Audit | SSE streaming, Sliding window, Post-audit, Recall, Audit log | 已完成 |
+| v0.0.4 | Security & Observability | Auth, Rate limit, TLS, Prometheus, OpenTelemetry | 已完成 |
+| v0.0.5 | Plugin Ecosystem | gRPC sidecar, Plugin loader, Detector SDK | 已完成 |
+| v0.1.0 | First Public Test Release | Documentation, Test coverage, Docker Compose, CI | 已完成 |
+| v0.2.0 | Flow Foundation | Flow contracts, runtime, policy, evidence and compatibility | 已完成 |
+| v0.3.0 | Multi-tenant Safety Policy Isolation | 四个独立 STDD changes，详见 DESIGN 权威 Roadmap | 已规划，未实现 |
 
 ## STDD 强制性约束
 

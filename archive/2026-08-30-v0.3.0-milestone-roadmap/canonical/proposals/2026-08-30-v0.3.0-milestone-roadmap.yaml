@@ -1,0 +1,119 @@
+meta:
+  change_id: 2026-08-30-v0.3.0-milestone-roadmap
+  title: v0.3.0 里程碑范围定义与 Roadmap 统一
+  created: '2026-08-30T12:48:26+08:00'
+  status: confirmed
+why:
+  problem: >-
+    当前公开版本为 v0.2.2，但 v0.3.0 仍只有“下一功能里程碑”的占位描述；同时 DESIGN.md
+    中的早期内部 v0.0.3、以及多租户、Anthropic/Gemini、多模态、OAuth 等候选项仍带有
+    相互重叠的 v0.3 标签，缺少单一主题、范围边界、实施顺序和权威路线图来源。
+  motivation: >-
+    在启动下一项功能实现前，先消除版本名称与范围歧义，避免重复实现已有能力、把多个跨领域
+    功能塞进同一版本，或让公开文档形成冲突承诺。
+what_changes:
+  - id: C1
+    description: 将 DESIGN.md 的 Post-v0.1.0 Roadmap 确立为版本路线的权威来源，其他文档仅保留一致摘要与链接。
+    type: modified
+  - id: C2
+    description: 明确区分内部开发阶段 v0.0.3 与新的公共里程碑 v0.3.0，并盘点仓库现存 v0.3/v0.3.0 标记。
+    type: modified
+  - id: C3
+    description: 将公共 v0.3.0 的单一主题确定为“多租户安全策略隔离基础”，定义边界、进入条件和完成条件。
+    type: new
+  - id: C4
+    description: 将 v0.3.0 拆分为租户身份与配置契约、租户级 Flow/策略/Provider 解析、证据与可观测性隔离、资源边界与兼容性验证等独立后续 STDD changes。
+    type: new
+  - id: C5
+    description: 将 Anthropic/Gemini、多模态、OAuth、额外检测器等候选能力显式延后，并要求各自通过独立 STDD change 决策。
+    type: modified
+  - id: C6
+    description: 同步 README.md、CHANGELOG.md 及相关公开文档的路线图摘要，不形成第二套权威路线图。
+    type: modified
+capabilities:
+  new:
+    - name: milestone-scope-governance
+      description: 为公共里程碑建立单一、可验证且可追溯的范围契约。
+  modified:
+    - name: project-docs
+      description: 统一版本历史、路线图、候选能力归属及公开文档引用关系。
+constraints:
+  - 本 change 仅定义和统一路线图，不修改业务代码、运行时测试逻辑或公共 API。
+  - 不修改 YAML 配置契约、CI、发布流程、部署设施或制品版本。
+  - 已发布版本历史保持不可变，既有能力只能按证据标记为已完成，不得重新归入公共 v0.3.0。
+  - 后续每个实施单元必须重新走完整 STDD 流程和三道显式 Gate。
+stakeholders:
+  - Gateway 维护者与贡献者
+  - 依赖公开 Roadmap 规划集成或部署的使用者
+  - 后续多租户能力的应用与平台团队
+risk_areas:
+  - capability: milestone-scope-governance
+    risk: 路线图可能把尚未规格化的技术选择误写成已承诺契约，或把多个候选能力重新扩张进 v0.3.0。
+    mitigation: 只锁定用户价值、能力边界、依赖顺序和可验证结果；具体运行时契约留给独立 STDD changes。
+  - capability: project-docs
+    risk: 批量更新版本标签可能改写历史事实、遗留冲突表述或制造第二个权威来源。
+    mitigation: 逐项分类全部 v0.3 标记，保留历史章节原意，并以 DESIGN.md 路线图为唯一权威来源。
+non_goals:
+  - 不在本 change 中实现多租户功能。
+  - 不实现 Anthropic、Gemini、新端点或协议转换。
+  - 不实现多模态、OAuth、Redis、UI 或新检测器。
+  - 不重写已发布版本历史。
+  - 不预先决定租户配置存储、缓存或控制面的具体实现。
+critical:
+  is_critical: false
+  risk_assessment:
+    safety_critical: false
+    financial: false
+    cross_system: false
+anchoring:
+  level: L2
+  reference_changes:
+    - 2026-08-22-v0.2.0-flow-foundation
+    - 2026-08-25-v0.2.2-release-reproducibility
+  anchor_implementations:
+    - DESIGN.md
+    - CHANGELOG.md
+    - specs/project-docs/spec.yaml
+principle_check:
+  plugin_flow: >-
+    v0.3.0 只定义租户选择哪些 Flow、策略和能力；领域检测仍属于插件，组合仍由 Flow 管理，
+    不把租户专属安全逻辑塞入核心。
+  explicit_policy_failure: >-
+    后续实施必须明确未知租户、无效租户配置、策略缺失、隔离失败和降级行为；不得静默回退到默认租户。
+  transparent_contracts: >-
+    租户解析不得意外改变上游 Provider 协议；现有无租户配置需要明确兼容策略，资源与延迟成本必须有界。
+  evidence_data_protection: >-
+    后续审计应能说明租户、Flow 和策略来源，但不得记录 API Key 或不必要的原始内容；
+    指标标签必须避免敏感信息和无界基数。
+  tradeoffs_or_departures: >-
+    本次先建立多租户隔离基础，将 Provider 扩展与多模态延后，以控制跨协议和敏感数据风险；无原则偏离。
+success_criteria:
+  - DESIGN.md 明确标注唯一的权威路线图来源。
+  - 内部 v0.0.3 与公共 v0.3.0 不再混淆。
+  - v0.3.0 具有单一主题、明确边界和可验证的完成条件。
+  - v0.3.0 被拆成至少三个可独立执行和验证的后续 STDD changes。
+  - 仓库中现存的 v0.3/v0.3.0 候选项均被标记为已完成、纳入或延后。
+  - README、CHANGELOG 和相关文档与权威路线图一致。
+  - 文档没有暗示本 change 已实现多租户或其他新运行时能力。
+  - 不改变代码、配置、API、制品版本或已发布历史。
+  - 文档检查及路线图一致性检查通过。
+complexity:
+  score: 5
+  confidence: preliminary
+  recommended_mode: standard
+  dimensions:
+    file_count: 1
+    line_count: 1
+    capability_count: 1
+    risk_level: 2
+    data_api: 0
+    security: 0
+review:
+  dimensions:
+    - completeness
+    - clarity
+    - scope
+  issues_found: 4
+  issues_auto_fixed: 4
+  unresolved: 0
+  conclusion: passed

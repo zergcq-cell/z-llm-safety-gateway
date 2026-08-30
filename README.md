@@ -101,6 +101,11 @@ development environments.
 
 **Versioning policy** (SemVer): `v0.0.x` = internal development · `v0.x.y` = public test releases · `v1.0.0` = general availability (when the API is stable and validated).
 
+Next planned milestone: **v0.3.0**, the multi-tenant safety policy isolation foundation. This is
+planning only; no multi-tenant runtime behavior is implemented yet. Scope, implementation units,
+entry criteria, and completion criteria are maintained in the
+[authoritative project roadmap](DESIGN.md#post-v010-roadmap-until-v100-ga).
+
 ## License
 
 [Apache License 2.0](LICENSE)
