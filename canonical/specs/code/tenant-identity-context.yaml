@@ -1,0 +1,62 @@
+meta:
+  capability: tenant-identity-context
+  change_id: 2026-08-30-tenant-identity-config-contract
+  created: '2026-08-30T22:00:00+08:00'
+  confidence: high
+requirements:
+  - id: REQ-TIC-001
+    description: Every admitted request SHALL carry a frozen versioned tenant identity derived from trusted server-side state
+    scenarios:
+      - id: SC-TIC-001
+        confidence: high
+        evidence: proposal.yaml what_changes C2/C3; design.md Decisions 3/5
+        given: multi-tenancy is enabled and a Bearer token matches an API Key bound to tenant acme
+        when: AuthMiddleware admits the request
+        then: request.state.tenant_context SHALL contain contract_version 1.0, tenant_id acme, and identity_source api_key
+        and:
+          - the TenantContext value SHALL be immutable
+          - the Context SHALL NOT contain the Bearer token or configured API Key value
+          - existing request.state.api_key_name SHALL remain available
+      - id: SC-TIC-002
+        confidence: high
+        evidence: proposal.yaml success_criteria 3; design.md Decisions 5/8; EXP-2026-0001
+        given: two concurrent requests authenticated with keys bound to different tenants
+        when: both requests pass through AuthMiddleware into downstream handlers
+        then: each request SHALL observe only its own immutable TenantContext
+        and:
+          - one request SHALL NOT mutate or replace the other request's Context value
+          - RateLimitMiddleware and the route SHALL execute after the Context is assigned
+  - id: REQ-TIC-002
+    description: Untrusted client input SHALL NOT select or override tenant identity
+    scenarios:
+      - id: SC-TIC-003
+        confidence: high
+        evidence: proposal.yaml success_criteria 2; design.md Decision 6
+        given: a valid tenant acme API Key and an X-Tenant-ID header claiming tenant globex
+        when: the request is admitted
+        then: the resolved TenantContext SHALL remain bound to tenant acme
+        and:
+          - X-Tenant-ID SHALL NOT be read into or copied into TenantContext
+          - the gateway SHALL NOT introduce a public tenant-selection Header contract
+          - Provider request semantics SHALL remain unchanged
+      - id: SC-TIC-004
+        confidence: high
+        evidence: proposal.yaml what_changes C5; design.md Decisions 3/5
+        given: multi-tenancy is enabled and a request has a missing or invalid Bearer token
+        when: AuthMiddleware evaluates the request
+        then: the request SHALL receive the existing OpenAI-compatible HTTP 401 response
+        and:
+          - the middleware SHALL NOT create a default or alternative tenant context
+          - the response and logs SHALL NOT expose the supplied or configured token
+  - id: REQ-TIC-003
+    description: Trusted tenant resolution SHALL have bounded request-time cost and a stable consumer contract
+    scenarios:
+      - id: SC-TIC-005
+        confidence: medium
+        evidence: proposal.yaml constraints 6; design.md Decisions 2/5
+        given: a valid configuration at the supported tenant and API Key limits
+        when: AuthMiddleware resolves an admitted request
+        then: tenant resolution SHALL use a startup-built key lookup with O(1) expected request-time lookup
+        and:
+          - request admission SHALL NOT scan all tenants or all API Keys
+          - downstream code SHALL consume TenantContext rather than raw credentials

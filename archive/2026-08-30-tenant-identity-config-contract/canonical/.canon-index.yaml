@@ -1,0 +1,15 @@
+designs: {}
+proposals:
+  2026-08-30-tenant-identity-config-contract: proposals/2026-08-30-tenant-identity-config-contract.yaml
+specs:
+  agent:
+    authentication: specs/agent/authentication.yaml
+    config-system: specs/agent/config-system.yaml
+    tenant-config-contract: specs/agent/tenant-config-contract.yaml
+    tenant-identity-context: specs/agent/tenant-identity-context.yaml
+  code:
+    authentication: specs/code/authentication.yaml
+    config-system: specs/code/config-system.yaml
+    tenant-config-contract: specs/code/tenant-config-contract.yaml
+    tenant-identity-context: specs/code/tenant-identity-context.yaml
+version: '2.9'

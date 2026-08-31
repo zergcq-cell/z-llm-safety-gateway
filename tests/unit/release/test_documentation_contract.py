@@ -203,8 +203,8 @@ def test_design_roadmap_matches_release_history() -> None:
         "| v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed |",
         "| v0.2.1 | Release version hotfix | Released 2026-08-24 |",
         "| v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 |",
-        "| v0.3.0 | Multi-tenant safety policy isolation foundation | Planned; scope defined, "
-        "implementation not started |",
+        "| v0.3.0 | Multi-tenant safety policy isolation foundation | In progress; change 1/4 "
+        "`tenant-identity-config-contract` active |",
     ):
         assert required in roadmap
     for non_goal in ("K8s Helm Chart", "Redis rate limiting", "provider failover", "SBOM"):
@@ -426,33 +426,35 @@ def test_v030_historical_references_are_accounted_for_without_rewrite() -> None:
 
 
 def test_v030_readme_summary_links_to_authoritative_roadmap() -> None:
-    """TC-DOCS-014: README presents v0.3.0 as planned and links to DESIGN."""
+    """TC-DOCS-014: README reports active work and links to DESIGN."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     project_status = readme.split("## Project Status", 1)[1].split("## License", 1)[0]
 
     assert "Next planned milestone: **v0.3.0**" in project_status
     assert "multi-tenant safety policy isolation foundation" in project_status
-    assert "planning only; no multi-tenant runtime behavior is implemented yet" in project_status
+    assert "first of four implementation changes" in project_status
+    assert "tenant-scoped policy isolation is not complete" in project_status
     assert "DESIGN.md#post-v010-roadmap-until-v100-ga" in project_status
 
 
 def test_v030_changelog_and_project_memory_are_planning_only() -> None:
-    """TC-DOCS-015: CHANGELOG and AGENTS record scope, not delivered behavior."""
+    """TC-DOCS-015: Secondary summaries report active but incomplete work."""
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     unreleased = changelog.split("## [Unreleased]", 1)[1].split("## [0.2.2]", 1)[0]
 
     assert "v0.3.0 里程碑范围与 Roadmap" in unreleased
-    assert "多租户运行时尚未实现" in unreleased
+    assert "可信租户身份与配置契约" in unreleased
+    assert "租户级策略隔离尚未完成" in unreleased
     assert "| v0.3.0 | Multi-tenant Safety Policy Isolation |" in agents
-    assert "已规划，未实现" in agents
+    assert "进行中：change 1/4 active" in agents
     for false_claim in ("Anthropic/Gemini 已实现", "多模态已实现", "OAuth 已实现"):
         assert false_claim not in unreleased
         assert false_claim not in agents
 
 
 def test_v030_scope_change_preserves_runtime_and_version_surfaces() -> None:
-    """TC-DOCS-016: roadmap scope does not silently implement or version runtime behavior."""
+    """TC-DOCS-016: roadmap tracks active runtime work without premature version claims."""
     design = (ROOT / "DESIGN.md").read_text(encoding="utf-8")
     gateway_project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     sdk_project = (ROOT / "sdk" / "pyproject.toml").read_text(encoding="utf-8")
@@ -460,19 +462,16 @@ def test_v030_scope_change_preserves_runtime_and_version_surfaces() -> None:
         path.read_text(encoding="utf-8")
         for path in sorted((ROOT / "src" / "z_llm_safety_gateway").rglob("*.py"))
     )
-    active_config = "\n".join(
-        path.read_text(encoding="utf-8") for path in sorted((ROOT / "config").glob("*.yaml"))
-    )
-
     roadmap = _post_v01_roadmap(design)
     assert (
-        "**Runtime status:** Planning only; no runtime, configuration, API, or package version "
-        "change." in roadmap
+        "**Runtime status:** Implementation in progress through change 1/4\n"
+        "(`tenant-identity-config-contract`); no package version change or completed-milestone "
+        "claim." in roadmap
     )
     assert 'version = "0.2.2"' in gateway_project
     assert 'version = "0.1.1"' in sdk_project
-    assert "tenant_id" not in runtime
-    assert "tenants:" not in active_config
+    assert "tenant_id" in runtime
+    assert "All four implementation changes below are delivered" in roadmap
 
 
 def test_v030_documentation_contract_has_no_false_runtime_claims() -> None:

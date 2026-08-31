@@ -9,10 +9,18 @@ Covers: valid Bearer token allowed and injected, unknown token rejected (401),
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from z_llm_safety_gateway.config.models import ApiKeyConfig, AuthConfig
+from z_llm_safety_gateway.config.models import (
+    ApiKeyConfig,
+    AuthConfig,
+    TenancyConfig,
+    TenantConfig,
+)
 from z_llm_safety_gateway.middleware.auth import AuthMiddleware
 from z_llm_safety_gateway.middleware.request_id import RequestIDMiddleware
 
@@ -200,3 +208,135 @@ def test_middleware_order() -> None:
     allowed = client.get("/test", headers=AUTH_HEADER)
     assert allowed.status_code == 200
     assert "X-Request-ID" in allowed.headers
+
+
+def test_legacy_auth_adds_default_tenant_context() -> None:
+    """TC-AUTH-008: Legacy auth gains only the internal default tenant Context."""
+    app = FastAPI()
+    auth = AuthConfig(
+        enabled=True,
+        api_keys=[ApiKeyConfig(key="sk-legacy", name="legacy-app")],
+    )
+    app.add_middleware(AuthMiddleware, config=auth)
+
+    @app.get("/legacy")
+    async def legacy_endpoint(request: Request) -> dict[str, str]:
+        context = request.state.tenant_context
+        return {
+            "api_key_name": request.state.api_key_name,
+            "tenant_id": context.tenant_id,
+            "identity_source": context.identity_source,
+        }
+
+    response = TestClient(app).get(
+        "/legacy",
+        headers={"Authorization": "Bearer sk-legacy"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "api_key_name": "legacy-app",
+        "tenant_id": "default",
+        "identity_source": "legacy_single_tenant",
+    }
+
+    duplicate_legacy = AuthConfig(
+        enabled=False,
+        api_keys=[
+            ApiKeyConfig(key="same-legacy-key", name="first"),
+            ApiKeyConfig(key="same-legacy-key", name="second"),
+        ],
+    )
+    AuthMiddleware(FastAPI(), config=duplicate_legacy)
+
+
+def test_multi_tenant_auth_compiles_validated_lookup() -> None:
+    """TC-AUTH-009: Lookup compiles once and duplicate keys never overwrite."""
+    tenancy = TenancyConfig(
+        enabled=True,
+        tenants=(TenantConfig(id="acme"), TenantConfig(id="globex")),
+    )
+    auth = AuthConfig(
+        enabled=True,
+        api_keys=[
+            ApiKeyConfig(key="sk-acme", name="acme-app", tenant_id="acme"),
+            ApiKeyConfig(key="sk-globex", name="globex-app", tenant_id="globex"),
+        ],
+    )
+    middleware = AuthMiddleware(FastAPI(), config=auth, tenancy=tenancy)
+
+    assert middleware._tenant_contexts["sk-acme"].tenant_id == "acme"
+    assert middleware._tenant_contexts["sk-globex"].tenant_id == "globex"
+
+    duplicate_auth = AuthConfig(
+        enabled=True,
+        api_keys=[
+            ApiKeyConfig(key="same-key", name="a", tenant_id="acme"),
+            ApiKeyConfig(key="same-key", name="b", tenant_id="globex"),
+        ],
+    )
+    with pytest.raises(ValueError, match="duplicate_api_key"):
+        AuthMiddleware(FastAPI(), config=duplicate_auth, tenancy=tenancy)
+
+
+def test_tenant_auth_middleware_order_and_secret_safety(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """TC-AUTH-010: Production chain resolves tenant before rate limiting."""
+    from z_llm_safety_gateway.app import create_app
+
+    config_path = tmp_path / "multi-tenant.yaml"
+    config_path.write_text(
+        """
+server: {host: 127.0.0.1, port: 8080}
+providers:
+  - {name: local, type: openai_compatible, base_url: http://localhost:11434/v1}
+routing:
+  rules: [{pattern: "*", provider: local}]
+tenancy:
+  enabled: true
+  tenants: [{id: acme}, {id: globex}]
+security:
+  auth:
+    enabled: true
+    api_keys:
+      - {key: secret-acme, name: acme-app, tenant_id: acme}
+      - {key: secret-globex, name: globex-app, tenant_id: globex}
+  rate_limit: {enabled: true, rate: 1, burst: 1, per: api_key}
+"""
+    )
+    app = create_app(str(config_path))
+
+    @app.get("/tenant-order")
+    async def tenant_order(request: Request) -> dict[str, str]:
+        return {"tenant_id": request.state.tenant_context.tenant_id}
+
+    auth_registration = next(
+        middleware
+        for middleware in app.user_middleware
+        if middleware.cls is AuthMiddleware
+    )
+
+    assert auth_registration.kwargs["tenancy"] is app.state.config.tenancy
+
+    client = TestClient(app)
+    for secret in ("secret-acme", "secret-globex"):
+        response = client.get(
+            "/tenant-order",
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["tenant_id"] in {"acme", "globex"}
+        assert secret not in response.text
+
+    rejected = client.get("/health")
+    assert rejected.status_code == 401
+    assert "X-Request-ID" in rejected.headers
+    assert "secret-acme" not in rejected.text
+    assert "secret-globex" not in rejected.text
+    captured = capsys.readouterr()
+    assert "secret-acme" not in captured.out
+    assert "secret-acme" not in captured.err
+    assert "secret-globex" not in captured.out
+    assert "secret-globex" not in captured.err

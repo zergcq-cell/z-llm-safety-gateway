@@ -2954,7 +2954,8 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 AGENTS, issues, and release notes may summarize or link here, but they do not define independent
 milestone scope or completion commitments.
 
-**Runtime status:** Planning only; no runtime, configuration, API, or package version change.
+**Runtime status:** Implementation in progress through change 1/4
+(`tenant-identity-config-contract`); no package version change or completed-milestone claim.
 
 Internal `v0.0.3` delivered Streaming & Audit during pre-public development. The public `v0.3.0`
 is a distinct future milestone and does not repeat those completed capabilities.
@@ -2964,7 +2965,7 @@ is a distinct future milestone and does not repeat those completed capabilities.
 | v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed | v0.1.x production baseline | Flow contracts, runtime, policy, evidence, compatibility, and quality gates completed |
 | v0.2.1 | Release version hotfix | Released 2026-08-24 | Diagnose v0.2.0 release failure | Independent Gateway/SDK version validation repaired and release verified |
 | v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 | v0.2.1 release baseline | Reproducible draft-first release and evidence contracts verified |
-| v0.3.0 | Multi-tenant safety policy isolation foundation | Planned; scope defined, implementation not started | This roadmap contract is delivered and each implementation unit starts an independent STDD change | All four implementation changes below are delivered and aggregate compatibility, failure, resource, evidence, privacy, and quality gates pass |
+| v0.3.0 | Multi-tenant safety policy isolation foundation | In progress; change 1/4 `tenant-identity-config-contract` active | This roadmap contract is delivered and each implementation unit starts an independent STDD change | All four implementation changes below are delivered and aggregate compatibility, failure, resource, evidence, privacy, and quality gates pass |
 | v0.4.0 | Unassigned later milestone | Planned; scope not committed | Independent STDD scope decision | Defined by its future confirmed STDD proposal |
 
 #### v0.3.0 Scope Contract

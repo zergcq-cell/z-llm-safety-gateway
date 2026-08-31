@@ -1,0 +1,131 @@
+# proposal.yaml — Canonical 格式
+
+meta:
+  change_id: "2026-08-30-tenant-identity-config-contract"
+  title: "v0.3.0 租户身份与配置契约"
+  created: "2026-08-30T21:49:22+08:00"
+  status: confirmed
+
+why:
+  problem: >
+    v0.3.0 已确定为多租户安全策略隔离基础，但当前网关只有 API Key 名称，
+    没有可信、稳定且可验证的租户身份契约。若直接实现租户级 Flow 或策略解析，
+    可能出现租户身份伪造、配置歧义或静默落入其他租户策略。
+  motivation: >
+    本 change 是 v0.3.0 四个运行时实施单元中的第一个。先稳定租户身份、配置 schema、
+    启动期校验和单租户兼容入口，才能为后续 Flow/策略解析、证据隔离与资源隔离提供
+    可复用且可审计的信任边界。
+
+what_changes:
+  - id: C1
+    description: "建立有界、非秘密、稳定的租户标识与配置 schema"
+    type: new
+  - id: C2
+    description: "将 API Key 等可信认证结果显式绑定到租户，禁止依据客户端自声明 Header 直接信任租户身份"
+    type: modified
+  - id: C3
+    description: "建立请求级、不可变的租户身份上下文，供后续 v0.3.0 changes 消费"
+    type: new
+  - id: C4
+    description: "在启动阶段拒绝重复租户、悬空绑定、矛盾默认租户及其他歧义配置"
+    type: modified
+  - id: C5
+    description: "对缺失、未知或无法解析的租户身份提供明确、可观测的失败行为，禁止静默跨租户回退"
+    type: new
+  - id: C6
+    description: "保留现有单租户配置入口，未启用多租户时无需迁移即可继续工作"
+    type: modified
+  - id: C7
+    description: "更新配置、认证和请求上下文契约的规格、示例及测试"
+    type: modified
+
+capabilities:
+  new:
+    - name: tenant-identity-context
+      description: "从可信认证结果解析并传播唯一、稳定且不可变的请求级租户身份"
+    - name: tenant-config-contract
+      description: "定义租户声明、身份绑定、默认入口与启动期一致性校验"
+  modified:
+    - name: api-key-authentication
+      description: "认证成功结果可以关联租户，但不得泄露凭据或信任客户端自声明租户"
+    - name: config-system
+      description: "支持多租户配置 schema，同时兼容现有单租户配置"
+
+constraints:
+  - "严格 TDD：每个实施切片必须遵循 RED→GREEN→REFACTOR"
+  - "租户身份只能来自经过验证的服务端配置和可信认证结果"
+  - "客户端自声明 Header 不得成为可信租户身份来源"
+  - "未知、缺失或歧义身份不得静默落入其他租户或共享默认策略"
+  - "现有单租户配置无需修改即可加载，OpenAI-compatible HTTP/SSE 与 Provider 协议语义保持不变"
+  - "租户标识必须有格式和长度边界，且不得包含、记录或暴露 API Key 等认证秘密"
+  - "本 change 不引入数据库、缓存服务或独立控制面"
+
+stakeholders:
+  - "网关部署与配置维护者"
+  - "调用网关的应用和平台团队"
+  - "安全策略与租户治理维护者"
+  - "后续 Flow、可观测性及资源隔离能力开发者"
+
+risk_areas:
+  - capability: tenant-identity-context
+    risk: "身份来源或传播边界错误可能造成跨租户策略越权"
+    mitigation: "只接受可信认证绑定，使用不可变上下文，并覆盖伪造、缺失、未知和并发请求场景"
+  - capability: tenant-config-contract
+    risk: "重复、悬空或歧义配置可能在运行期产生不确定租户解析"
+    mitigation: "将全部可静态发现的矛盾前移到启动期拒绝，并提供稳定、脱敏的错误码"
+  - capability: config-system
+    risk: "新增 schema 可能破坏现有单租户部署"
+    mitigation: "保留兼容入口并以现有配置夹具和全量回归证明无需迁移"
+  - capability: api-key-authentication
+    risk: "租户标识或凭据进入日志、错误响应或无界标签"
+    mitigation: "租户标识设定格式与长度边界，禁止记录凭据；可观测性详细隔离留给后续独立 change"
+
+non_goals:
+  - "不实现租户级 Flow、Detector 设置、阈值、词表、策略或 Provider 路由解析"
+  - "不实现租户级审计、日志、Trace 或 Metrics 隔离"
+  - "不实现租户级并发、容量、限流、缓存或其他资源隔离"
+  - "不引入租户数据库、控制面 API、配置热更新或动态租户生命周期"
+  - "不实现 OAuth、JWT 或新的认证协议"
+  - "不增加 Anthropic、Gemini、多模态或新检测器能力"
+  - "不修改 Gateway/SDK 制品版本或执行发布"
+
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+
+anchoring:
+  level: L3
+  reference_changes:
+    - "2026-08-12-v0.0.4-security-observability"
+    - "2026-08-22-v0.2.0-flow-foundation"
+    - "2026-08-30-v0.3.0-milestone-roadmap"
+  anchor_implementations: []
+
+principle_check:
+  plugin_flow: >
+    租户身份属于核心运行时上下文；检测能力仍在插件，组合仍由 Flow 管理。
+    本 change 不加入租户专属检测逻辑，也不提前实现租户级 Flow 解析。
+  explicit_policy_failure: >
+    未知身份、无绑定、重复配置、默认入口和兼容行为均须显式定义并可观测；
+    禁止跨租户静默回退。
+  transparent_contracts: >
+    现有单租户配置、客户端 HTTP/SSE 和 Provider 协议保持兼容；
+    租户标识长度、解析步骤和每请求成本必须有界。
+  evidence_data_protection: >
+    只传播有界、非秘密租户标识，不记录 API Key 或原始认证材料；
+    完整证据与可观测性隔离由后续独立 change 实现。
+  tradeoffs_or_departures: "无原则偏离；本 change 有意只建立身份信任边界，延后策略、证据和资源隔离。"
+
+success_criteria:
+  - "租户身份只能来自经过验证的服务端配置和可信认证结果"
+  - "客户端不能通过自声明租户 Header 越权切换租户"
+  - "每个成功认证的多租户请求都获得唯一、稳定、不可变的租户上下文"
+  - "重复租户、悬空认证绑定和歧义默认配置在启动阶段被拒绝，并给出脱敏错误"
+  - "未知或无法解析的租户不会落入其他租户或共享默认策略"
+  - "现有单租户配置无需修改即可加载，现有请求协议和行为保持兼容"
+  - "租户标识受到格式、长度和基数入口约束，且不得包含或暴露认证密钥"
+  - "新增单元、集成和失败路径测试；全量 pytest、ruff、mypy 通过，覆盖率不下降"
+  - "不提前实现后续三个 v0.3.0 change 的能力"

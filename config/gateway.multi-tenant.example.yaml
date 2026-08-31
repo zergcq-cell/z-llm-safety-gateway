@@ -1,0 +1,60 @@
+# z LLM Safety Gateway — v0.3.0 multi-tenant identity example
+#
+# Export distinct gateway credentials before starting:
+#   export ZLG_ACME_API_KEY='replace-with-a-strong-secret'
+#   export ZLG_GLOBEX_API_KEY='replace-with-a-different-strong-secret'
+#   z-safety-gateway --config config/gateway.multi-tenant.example.yaml
+#
+# Tenant identity is selected only from the authenticated API-key binding.
+# Client-supplied tenant headers are not trusted.
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+providers:
+  - name: "local"
+    type: "openai_compatible"
+    base_url: "http://localhost:11434/v1"
+
+routing:
+  rules:
+    - pattern: "*"
+      provider: "local"
+
+pipeline:
+  mode: "sync"
+  detectors:
+    input: []
+    output: []
+
+tenancy:
+  enabled: true
+  tenants:
+    - id: "acme"
+    - id: "globex"
+
+security:
+  auth:
+    enabled: true
+    api_keys:
+      - key: "${ZLG_ACME_API_KEY}"
+        name: "acme-app"
+        tenant_id: "acme"
+      - key: "${ZLG_GLOBEX_API_KEY}"
+        name: "globex-app"
+        tenant_id: "globex"
+  rate_limit:
+    enabled: true
+    rate: 100
+    burst: 200
+    per: "api_key"
+
+audit:
+  enabled: true
+  sanitize_logs: true
+  store_content: false
+
+logging:
+  level: "INFO"
+  format: "json"

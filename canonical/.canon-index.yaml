@@ -1,4 +1,12 @@
 changes:
+  2026-08-30-tenant-identity-config-contract:
+    proposal: canonical/proposals/2026-08-30-tenant-identity-config-contract.yaml
+    capabilities:
+    - authentication
+    - config-system
+    - tenant-config-contract
+    - tenant-identity-context
+    verified: true
   2026-08-30-v0.3.0-milestone-roadmap:
     proposal: canonical/proposals/2026-08-30-v0.3.0-milestone-roadmap.yaml
     capabilities:

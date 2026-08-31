@@ -1,0 +1,43 @@
+meta:
+  task_id: tenant-identity-context
+  change_id: 2026-08-30-tenant-identity-config-contract
+  task_type: code
+  system: Frozen request-scoped tenant identity resolved from trusted authentication state
+  preconditions:
+    - The startup tenant configuration contract has passed.
+    - AuthMiddleware receives only validated Gateway tenancy and authentication configuration.
+steps:
+  - id: CP-TIC-001
+    description: A valid bound key produces a frozen secret-free TenantContext v1.0.
+    action: .venv/bin/pytest tests/unit/middleware/test_tenant_identity.py::test_bound_key_assigns_frozen_tenant_context -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TIC-002
+    description: Concurrent requests retain independent tenant contexts before downstream processing.
+    action: .venv/bin/pytest tests/unit/middleware/test_tenant_identity.py::test_concurrent_requests_keep_tenant_context_isolated -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TIC-003
+    description: A client tenant header cannot override the authenticated tenant.
+    action: .venv/bin/pytest tests/unit/middleware/test_tenant_identity.py::test_untrusted_tenant_header_cannot_override_identity -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TIC-004
+    description: Missing or invalid credentials return 401 with no default tenant fallback.
+    action: .venv/bin/pytest tests/unit/middleware/test_tenant_identity.py::test_invalid_credentials_never_create_tenant_context -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TIC-005
+    description: Request admission uses a startup-built O(1) lookup and downstream consumes Context only.
+    action: .venv/bin/pytest tests/unit/middleware/test_tenant_identity.py::test_tenant_resolution_uses_precompiled_lookup -q
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - Revert TenantContext and middleware identity propagation together to avoid a partial trust boundary.
+    - Re-run authentication, rate-limit, request-ID, and HTTP integration regressions.

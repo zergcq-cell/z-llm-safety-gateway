@@ -75,7 +75,7 @@ archive/                # 已完成变更
 | v0.0.5 | Plugin Ecosystem | gRPC sidecar, Plugin loader, Detector SDK | 已完成 |
 | v0.1.0 | First Public Test Release | Documentation, Test coverage, Docker Compose, CI | 已完成 |
 | v0.2.0 | Flow Foundation | Flow contracts, runtime, policy, evidence and compatibility | 已完成 |
-| v0.3.0 | Multi-tenant Safety Policy Isolation | 四个独立 STDD changes，详见 DESIGN 权威 Roadmap | 已规划，未实现 |
+| v0.3.0 | Multi-tenant Safety Policy Isolation | 四个独立 STDD changes，详见 DESIGN 权威 Roadmap | 进行中：change 1/4 active |
 
 ## STDD 强制性约束
 

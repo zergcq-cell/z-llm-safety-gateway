@@ -1,0 +1,39 @@
+meta:
+  capability: authentication
+  change_id: 2026-08-30-tenant-identity-config-contract
+  created: '2026-08-30T22:00:00+08:00'
+  confidence: high
+requirements:
+  - id: REQ-AUTH-006
+    description: Existing API Key authentication SHALL add an optional tenant binding without changing legacy credentials
+    scenarios:
+      - id: SC-AUTH-008
+        confidence: high
+        evidence: proposal.yaml what_changes C2/C6; design.md Decisions 1/3/7
+        given: tenancy is absent and security.auth contains an existing key/name pair without tenant_id
+        when: a request authenticates with that key
+        then: AuthMiddleware SHALL preserve the existing allow and api_key_name behavior
+        and:
+          - the request SHALL receive the legacy default TenantContext
+          - the client-visible authentication response SHALL remain unchanged
+      - id: SC-AUTH-009
+        confidence: high
+        evidence: proposal.yaml success_criteria 1/5; design.md Decisions 3/4
+        given: tenancy.enabled=true and each configured API Key has a validated tenant_id
+        when: AuthMiddleware is constructed during create_app
+        then: AuthMiddleware SHALL compile the validated key to TenantContext lookup before admitting requests
+        and:
+          - an unbound or unknown tenant mapping SHALL have already failed startup
+          - duplicate key values SHALL NOT silently overwrite an earlier tenant binding
+  - id: REQ-AUTH-007
+    description: Authentication failure and middleware ordering SHALL remain explicit, compatible, and secret-safe
+    scenarios:
+      - id: SC-AUTH-010
+        confidence: high
+        evidence: proposal.yaml success_criteria 4/7; design.md Decisions 4/5
+        given: create_app is configured for multi-tenancy and API Key authentication
+        when: valid and invalid requests traverse the production middleware chain
+        then: RequestIDMiddleware SHALL run before AuthMiddleware and AuthMiddleware SHALL assign TenantContext before RateLimitMiddleware and routing
+        and:
+          - invalid credentials SHALL retain the existing OpenAI-compatible 401 body and request ID response header
+          - no response, configuration error, or authentication log SHALL expose API Key values

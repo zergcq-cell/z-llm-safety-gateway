@@ -524,7 +524,11 @@ def create_app(config_path: str) -> FastAPI:
     app.add_middleware(SafetyHeadersMiddleware)
     app.add_middleware(RequestSizeMiddleware, max_request_size=config.security.max_request_size)
     app.add_middleware(RateLimitMiddleware, config=config.security.rate_limit)
-    app.add_middleware(AuthMiddleware, config=config.security.auth)
+    app.add_middleware(
+        AuthMiddleware,
+        config=config.security.auth,
+        tenancy=config.tenancy,
+    )
     app.add_middleware(
         RequestIDMiddleware,
         header_name=config.security.request_id.header,

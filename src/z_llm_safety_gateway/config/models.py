@@ -66,11 +66,34 @@ class ServerConfig(BaseModel):
     stop_timeout: str = "30s"
 
 
+TENANT_ID_PATTERN = r"^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$"
+MAX_TENANTS = 1024
+MAX_TENANT_API_KEYS = 4096
+
+
+class TenantConfig(BaseModel):
+    """A declared tenant identity with no tenant-specific policy."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    id: str = Field(min_length=1, max_length=64, pattern=TENANT_ID_PATTERN)
+
+
+class TenancyConfig(BaseModel):
+    """Trusted tenant identity configuration, disabled for legacy deployments."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    enabled: bool = Field(default=False, strict=True)
+    tenants: tuple[TenantConfig, ...] = ()
+
+
 class ApiKeyConfig(BaseModel):
     """A single API key credential for gateway authentication."""
 
     key: str
     name: str = ""
+    tenant_id: str | None = None
 
 
 class AuthConfig(BaseModel):
@@ -723,6 +746,7 @@ class GatewayConfig(BaseModel):
     providers: list[ProviderConfig]
     routing: RoutingConfig
     pipeline: PipelineConfig = PipelineConfig()
+    tenancy: TenancyConfig = TenancyConfig()
     security: SecurityConfig = SecurityConfig()
     audit: AuditConfig = AuditConfig()
     logging: LoggingConfig = LoggingConfig()
@@ -731,6 +755,24 @@ class GatewayConfig(BaseModel):
     flow_runtime: FlowRuntimeConfig = FlowRuntimeConfig()
     capabilities: tuple[CapabilityBindingConfig, ...] = ()
     flows: tuple[FlowDefinition, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_tenancy_limit_overflow(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        tenancy = data.get("tenancy")
+        if not isinstance(tenancy, dict) or tenancy.get("enabled") is not True:
+            return data
+        tenants = tenancy.get("tenants")
+        if isinstance(tenants, (list, tuple)) and len(tenants) > MAX_TENANTS:
+            raise ValueError("tenant_limit_exceeded")
+        security = data.get("security")
+        auth = security.get("auth") if isinstance(security, dict) else None
+        api_keys = auth.get("api_keys") if isinstance(auth, dict) else None
+        if isinstance(api_keys, (list, tuple)) and len(api_keys) > MAX_TENANT_API_KEYS:
+            raise ValueError("tenant_api_key_limit_exceeded")
+        return data
 
     @model_validator(mode="before")
     @classmethod

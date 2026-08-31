@@ -1,0 +1,45 @@
+meta:
+  change_id: 2026-08-30-tenant-identity-config-contract
+  created: '2026-08-31T20:35:00+08:00'
+  updated: '2026-08-31T22:00:00+08:00'
+adjustments:
+  - id: ADJ-001
+    original_design_ref: design.md Decision 8; roadmap contract TC-DOCS-012 and TC-DOCS-016
+    actual_change: >-
+      Advance DESIGN.md v0.3.0 status from planning-only to implementation-in-progress for
+      change 1/4, and evolve the documentation contract from forbidding tenant_id in runtime to
+      requiring active implementation status without package-version or completion claims.
+    reason: >-
+      The prior roadmap change intentionally proved that its documentation-only scope had not
+      implemented runtime behavior. The first runtime implementation change makes that negative
+      assertion obsolete; leaving it unchanged would permanently block every planned v0.3.0
+      implementation unit.
+    impact_scope: DESIGN.md roadmap lifecycle text and existing documentation contract tests only
+    principle_impact: >-
+      Plugin/Flow scope is unchanged; lifecycle policy becomes explicit; public version and
+      completion boundaries remain transparent; no secret or additional user data is collected.
+    severity: minor
+    affected_capabilities:
+      - project-docs
+      - tenant-config-contract
+    exp_id: EXP-2026-0019
+    resolved: true
+  - id: ADJ-002
+    original_design_ref: design.md Decision 4 startup failure matrix
+    actual_change: >-
+      Reject empty or outer-whitespace multi-tenant API keys at startup with the stable,
+      secret-free reason code invalid_api_key.
+    reason: >-
+      Environment interpolation maps an unset variable to an empty string, and Bearer parsing
+      strips outer whitespace. Accepting either form would create a declared tenant that can
+      never authenticate even though startup reports success.
+    impact_scope: Multi-tenant startup validation and its failure-matrix test only; legacy mode remains unchanged.
+    principle_impact: >-
+      Makes failure explicit and preserves a reachable authentication contract without logging
+      credentials or changing public HTTP behavior.
+    severity: minor
+    affected_capabilities:
+      - tenant-config-contract
+      - authentication
+    exp_id: EXP-2026-0025
+    resolved: true

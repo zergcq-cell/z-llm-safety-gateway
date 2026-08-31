@@ -1,0 +1,31 @@
+meta:
+  task_id: config-system
+  change_id: 2026-08-30-tenant-identity-config-contract
+  task_type: code
+  system: Backward-compatible YAML loading and production request-path consumption of tenant identity
+  preconditions:
+    - Existing gateway configuration fixtures remain available.
+    - Provider calls in integration tests use local fakes and require no paid external service.
+steps:
+  - id: CP-CFG-701
+    description: Existing single-tenant YAML and HTTP/SSE behavior remain compatible.
+    action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_legacy_config_files_and_protocol_remain_compatible -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-CFG-702
+    description: The documented environment-backed multi-tenant YAML validates without exposing keys.
+    action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_documented_multi_tenant_yaml_loads_with_environment_keys -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-CFG-703
+    description: create_app production middleware consumes distinct YAML tenant bindings end to end.
+    action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_create_app_resolves_distinct_tenants_over_http -q
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - Revert tenancy YAML examples and runtime config wiring together.
+    - Re-run the complete configuration, chat, streaming, Flow, and Provider regression suite.

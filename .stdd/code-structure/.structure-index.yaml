@@ -1,8 +1,8 @@
 changes:
 - 2026-08-19-detector-readiness-fail-safe
 meta:
-  last_updated: '2026-08-30T20:47:02.565642'
-  total_changes: 9
+  last_updated: '2026-08-31T21:43:25.855466'
+  total_changes: 10
 modules:
   .github/dependabot.yml:
     changes:
@@ -24,11 +24,13 @@ modules:
     - 2026-08-28-codex-only-stdd-adaptation
     - 2026-08-28-codex-only-stdd-adaptation
     - 2026-08-28-rate-limit-deterministic-concurrency
+    - 2026-08-30-tenant-identity-config-contract
   GATE2_APPROVED:
     changes:
     - 2026-08-28-codex-only-stdd-adaptation
     - 2026-08-28-codex-only-stdd-adaptation
     - 2026-08-28-rate-limit-deterministic-concurrency
+    - 2026-08-30-tenant-identity-config-contract
   archive/2026-08-19-detector-readiness-fail-safe/.stdd.yaml:
     changes:
     - 2026-08-19-detector-readiness-fail-safe

@@ -75,3 +75,36 @@ requirements:
           - "关键策略字段 SHALL 出现在正确层级"
           - "未知安全字段 SHALL NOT 被静默忽略"
           - "示例 SHALL NOT 需要真实密钥"
+  - id: REQ-CFG-701
+    description: Gateway configuration loading SHALL add tenancy without migrating or reinterpreting existing single-tenant YAML
+    scenarios:
+      - id: SC-CFG-701
+        confidence: high
+        evidence: proposal.yaml what_changes C6; success_criteria 6; design.md Decision 7
+        given: the existing gateway.yaml, gateway.prod.yaml, and representative v0.2.2 single-tenant fixtures contain no tenancy block or API Key tenant_id
+        when: each configuration is loaded and create_app handles its existing request cases
+        then: every previously valid configuration SHALL remain valid without edits or warnings
+        and:
+          - HTTP status, response body, response headers, SSE events, Provider selection, Flow execution, and Detector behavior SHALL remain compatible
+          - admitted requests SHALL gain only the internal legacy default TenantContext
+      - id: SC-CFG-702
+        confidence: high
+        evidence: proposal.yaml constraints 5; design.md Decisions 1/7; EXP-2026-0005
+        given: a documented multi-tenant YAML example uses environment interpolation for API Key values and valid literal tenant IDs
+        when: load_config parses the example with the referenced environment variables set
+        then: the example SHALL validate through the production GatewayConfig and cross-field validators
+        and:
+          - documentation SHALL place tenancy and tenant_id at the exact runtime model paths
+          - rendered or logged configuration evidence SHALL NOT expose interpolated key values
+  - id: REQ-CFG-702
+    description: Configuration acceptance SHALL be proven through the real application request path
+    scenarios:
+      - id: SC-CFG-703
+        confidence: high
+        evidence: proposal.yaml success_criteria 1/3; design.md Decision 8; EXP-2026-0008
+        given: create_app loads a YAML file with tenants acme and globex and distinct bound API Keys
+        when: real HTTP requests for each key reach a downstream inspection route or the chat route
+        then: the production middleware chain SHALL expose the corresponding tenant-specific Context to downstream code
+        and:
+          - the two requests SHALL not share or overwrite tenant identity
+          - the configured global Provider and Flow behavior SHALL remain unchanged in this change

@@ -1,0 +1,55 @@
+meta:
+  task_id: tenant-config-contract
+  change_id: 2026-08-30-tenant-identity-config-contract
+  task_type: code
+  system: Strict bounded multi-tenant declarations and startup identity-binding validation
+  preconditions:
+    - Phase 2 tenant-config-contract spec is confirmed.
+    - Tests are written before implementation and each checkpoint names a real pytest node.
+steps:
+  - id: CP-TCC-001
+    description: Valid multi-tenant declarations parse with strict bounded IDs.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_valid_multi_tenant_config_contract -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TCC-002
+    description: Invalid tenant identifier formats fail before startup.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_tenant_id_rejects_invalid_values -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TCC-003
+    description: Tenant and API Key declaration cardinality is bounded.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_tenant_and_key_limits -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TCC-004
+    description: Required multi-tenant auth and binding fields fail closed.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_required_multi_tenant_fields_fail_closed -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TCC-005
+    description: Duplicate, unknown, empty, or unreachable bindings fail without secret leakage.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_ambiguous_bindings_fail_closed_without_secret_leak -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TCC-006
+    description: Disabled tenancy rejects contradictory fields but accepts unchanged legacy config.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_disabled_tenancy_rejects_tenant_fields_and_accepts_legacy -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-TCC-007
+    description: The tenant schema remains identity-only and does not absorb later v0.3 policy fields.
+    action: .venv/bin/pytest tests/unit/config/test_tenancy.py::test_tenancy_contract_contains_identity_only -q
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - Revert tenant configuration model and validator implementation while preserving confirmed STDD artifacts.
+    - Re-run the existing config-system and authentication regressions before retrying.

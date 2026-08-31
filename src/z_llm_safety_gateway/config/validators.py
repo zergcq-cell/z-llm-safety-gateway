@@ -57,10 +57,56 @@ def validate_config(config: GatewayConfig) -> None:
     Raises:
         ConfigValidationError: If any cross-field validation rule fails.
     """
+    _validate_tenancy(config)
     _validate_detectors_v2(config)
     _validate_flag_escalation(config)
     _validate_providers(config)
     _validate_routing(config)
+
+
+def _validate_tenancy(config: GatewayConfig) -> None:
+    """Validate trusted tenant declarations and API-key bindings in O(T+K)."""
+    tenancy = config.tenancy
+    api_keys = config.security.auth.api_keys
+
+    if not tenancy.enabled:
+        if tenancy.tenants or any(key.tenant_id is not None for key in api_keys):
+            raise ConfigValidationError(
+                "tenancy_disabled_with_tenant_configuration"
+            )
+        return
+
+    if not config.security.auth.enabled:
+        raise ConfigValidationError("tenancy_enabled_requires_auth")
+    if not tenancy.tenants:
+        raise ConfigValidationError("tenancy_requires_tenants")
+
+    tenant_ids = [tenant.id for tenant in tenancy.tenants]
+    declared_tenants = set(tenant_ids)
+    if len(declared_tenants) != len(tenant_ids):
+        raise ConfigValidationError("duplicate_tenant_id")
+
+    seen_keys: set[str] = set()
+    seen_names: set[str] = set()
+    bound_tenants: set[str] = set()
+    for api_key in api_keys:
+        if not api_key.key or api_key.key != api_key.key.strip():
+            raise ConfigValidationError("invalid_api_key")
+        if api_key.tenant_id is None:
+            raise ConfigValidationError("api_key_tenant_required")
+        if api_key.tenant_id not in declared_tenants:
+            raise ConfigValidationError("unknown_api_key_tenant")
+        if api_key.key in seen_keys:
+            raise ConfigValidationError("duplicate_api_key")
+        seen_keys.add(api_key.key)
+        name = api_key.name.strip()
+        if not name or name in seen_names:
+            raise ConfigValidationError("invalid_api_key_name")
+        seen_names.add(name)
+        bound_tenants.add(api_key.tenant_id)
+
+    if bound_tenants != declared_tenants:
+        raise ConfigValidationError("tenant_without_api_key")
 
 
 # --------------------------------------------------------------------------- #

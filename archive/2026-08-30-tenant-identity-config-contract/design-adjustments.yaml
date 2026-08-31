@@ -1,0 +1,43 @@
+meta:
+  change_id: 2026-08-30-tenant-identity-config-contract
+  created: '2026-08-31T22:20:00+08:00'
+  total_adjustments: 2
+  requires_re_spec: false
+  requires_re_build: false
+
+adjustments:
+  - id: ADJ-001
+    category: boundary_discovery
+    original: >-
+      The roadmap-only documentation contract prohibited tenant_id runtime symbols and described
+      v0.3.0 as planning-only.
+    adjusted: >-
+      DESIGN, README, CHANGELOG and AGENTS now state that change 1/4 is active while the package
+      version remains v0.2.2 and tenant policy isolation remains incomplete.
+    reason: >-
+      The first runtime implementation necessarily advances the roadmap lifecycle; retaining the
+      negative runtime assertion would permanently block the implementation units it planned.
+    principle_impact: >-
+      Plugin/Flow scope stays unchanged; milestone state is explicit; public version and
+      completion boundaries remain transparent; no additional data is collected.
+    affected_capabilities:
+      - project-docs
+      - tenant-config-contract
+    resolved_in_phase: build
+  - id: ADJ-002
+    category: boundary_discovery
+    original: >-
+      The startup failure matrix did not explicitly classify empty or outer-whitespace API keys.
+    adjusted: >-
+      Multi-tenant startup rejects those unreachable credentials with the stable, secret-free
+      reason code invalid_api_key; legacy parsing remains unchanged.
+    reason: >-
+      Environment interpolation can produce an empty string and Bearer parsing strips outer
+      whitespace, so accepting either form creates a tenant that can never authenticate.
+    principle_impact: >-
+      Core remains limited to identity propagation; failure becomes explicit; the authentication
+      contract stays reachable and bounded; credentials are never included in errors or logs.
+    affected_capabilities:
+      - tenant-config-contract
+      - authentication
+    resolved_in_phase: verify

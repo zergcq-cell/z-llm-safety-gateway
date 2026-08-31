@@ -1,0 +1,252 @@
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  canonical_code_specs: canonical/specs/code
+  design_md: design.md
+  human_specs: specs
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-08-30-tenant-identity-config-contract.yaml
+  test_plan_md: test-plan.md
+change_id: 2026-08-30-tenant-identity-config-contract
+complexity_score: 14
+confirmed_at:
+  gate1_understand: '2026-08-30T21:50:10+08:00'
+  gate2_spec: '2026-08-30T23:41:16+08:00'
+  gate3_verify: '2026-08-31T22:40:00+08:00'
+critical:
+  cross_system: false
+  financial: false
+  is_critical: true
+  rationale: 租户身份与认证绑定属于安全边界，错误可能造成跨租户策略越权。
+  required_anchoring_level: L3
+  safety_critical: true
+current_phase: deliver
+design_adjustments:
+  count: 2
+  requires_re_build: false
+  requires_re_spec: false
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+long_range:
+  authorization: confirmed_all
+  authorized_paths:
+  - .stdd/experiences
+  - AGENTS.md
+  - CHANGELOG.md
+  - DESIGN.md
+  - README.md
+  - changes/2026-08-30-tenant-identity-config-contract
+  - src/z_llm_safety_gateway/tenancy
+  - src/z_llm_safety_gateway/config
+  - src/z_llm_safety_gateway/middleware/auth.py
+  - src/z_llm_safety_gateway/app.py
+  - tests/unit/config
+  - tests/unit/middleware
+  - tests/unit/release/test_documentation_contract.py
+  - tests/integration
+  - config
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  git_delivery_authorized: true
+  max_iterations: 10
+  mode: full_auto
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-08-31T20:23:12+08:00'
+  selection: full_auto
+mode: thorough
+mode_selection: completed
+phase1:
+  capabilities_modified: 2
+  capabilities_new: 2
+  completed_at: '2026-08-30T21:50:10+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 3
+    conclusion: passed
+    dimensions:
+    - completeness
+    - clarity
+    - scope
+    discovered: 3
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L3
+    minimum: L3_safety_critical
+    references:
+    - 2026-08-12-v0.0.4-security-observability
+    - 2026-08-22-v0.2.0-flow-foundation
+    - 2026-08-30-v0.3.0-milestone-roadmap
+    status: passed
+  canonical_tracks:
+    agent: 4
+    code: 4
+  capabilities: 4
+  completed_at: '2026-08-30T23:41:16+08:00'
+  confidence:
+    high: 16
+    low: 0
+    medium: 2
+  confirmed_at: '2026-08-30T23:41:16+08:00'
+  experiences_loaded:
+  - EXP-2026-0001
+  - EXP-2026-0005
+  - EXP-2026-0008
+  - EXP-2026-0022
+  - EXP-2026-0023
+  priority:
+    P0: 15
+    P1: 3
+    P2: 0
+  requirements: 10
+  review:
+    auto_fixed: 3
+    conclusion: passed_with_documented_tool_fallback
+    dimensions:
+    - requirement_coverage
+    - scenario_completeness
+    - tc_id_consistency
+    - document_consistency
+    discovered: 4
+    tool_limitations:
+    - canon_generate_spec_routes_to_proposal_renderer; deterministic canonical copies
+      and human views generated without changing STDD CLI
+    unresolved: 0
+  scenarios: 18
+  status: completed
+phase3:
+  capabilities: 4
+  completed_at: '2026-08-31T20:26:07+08:00'
+  dependency_cycles: 0
+  dependency_edges_cli: 0
+  requirements_covered: 10
+  scenarios_covered: 18
+  slices: 5
+  status: completed
+phase4:
+  completed_at: '2026-08-31T21:30:00+08:00'
+  context_budget:
+    decision: continue
+    rationale: phase-context 已更新且状态新鲜，当前长程执行可继续
+  experiences_loaded:
+    matched_verified_or_settled: 0
+    referenced_discovered_guardrails: 5
+  slices_completed:
+    S1:
+      full_regression: 1096_passed_1_skipped_coverage_93_percent
+      known_host_microbenchmark: tc_pe_003_failed_uninstrumented_then_coverage_command_passed
+      new_tests: 12
+      red: import_error_tenant_models_missing
+      status: done
+      targeted_tests: 34_passed
+      tc_coverage: 4/4
+      verified_at: '2026-08-31T20:38:00+08:00'
+    S2:
+      full_regression: 1100_passed_1_skipped_coverage_93_37_percent
+      new_tests: 4
+      red: auth_middleware_rejected_tenancy_argument_and_legacy_context_missing
+      status: done
+      targeted_tests: 11_passed
+      tc_coverage: 4/4
+      verified_at: '2026-08-31T21:00:00+08:00'
+    S3:
+      full_regression: 1111_passed_1_skipped_coverage_93_41_percent
+      new_tests: 12
+      red: 11_failure_matrix_cases_did_not_raise
+      status: done
+      targeted_tests: 154_passed
+      tc_coverage: 4/4
+      verified_at: '2026-08-31T21:10:00+08:00'
+    S4:
+      full_regression: 1114_passed_1_skipped_coverage_93_41_percent
+      new_tests: 3
+      red: production_auth_registration_missing_validated_tenancy
+      status: done
+      targeted_tests: 39_passed
+      tc_coverage: 3/3
+      verified_at: '2026-08-31T21:20:00+08:00'
+    S5:
+      full_regression: 1117_passed_1_skipped_coverage_93_41_percent
+      new_tests: 3
+      red: documented_multi_tenant_example_missing
+      status: done
+      targeted_tests: 22_passed
+      tc_coverage: 3/3
+      verified_at: '2026-08-31T21:30:00+08:00'
+  status: completed
+phase5:
+  completed_at: '2026-08-31T22:30:00+08:00'
+  coverage_percent: 93.41
+  design_adjustments: 2
+  e2e: disabled_by_project_config
+  experiences:
+    added:
+    - EXP-2026-0025
+    reused:
+    - EXP-2026-0006
+    - EXP-2026-0019
+    - EXP-2026-0022
+    total: 25
+  failure_modes:
+    checked: 12
+    hit_and_fixed: 4
+    skipped: 0
+  final_quality:
+    lint: passed
+    mypy_source_files: 101
+    tests_failed: 0
+    tests_passed: 1128
+    tests_skipped: 1
+  python_matrix:
+    '3.10': 1121_passed_1_skipped_coverage_mode
+    '3.11': 1121_passed_1_skipped_coverage_mode
+    '3.12': 1128_passed_1_skipped_full_quality
+  review:
+    final:
+      critical: 0
+      high: 0
+      low: 0
+      medium: 0
+    rounds: 3
+  status: completed
+  tc_coverage: 18/18
+phases:
+  build:
+    completed_at: '2026-08-31T21:30:00+08:00'
+    status: completed
+  deliver:
+    archive_completed_at: '2026-08-31T22:50:00+08:00'
+    canonical_merged: true
+    experience_upload: no_deposited_experiences
+    specs_merged: true
+    completed_at: '2026-09-01T00:05:00+08:00'
+    commit_message: 'feat(tenancy): add trusted tenant identity contract'
+    git_commit: authorized
+    git_push: not_authorized
+    status: completed
+    structure_merged: true
+  slice:
+    completed_at: '2026-08-31T20:26:07+08:00'
+    status: completed
+  spec:
+    confirmed_at: '2026-08-30T23:41:16'
+    status: completed
+  understand:
+    confirmed_at: '2026-08-30T21:50:10'
+    status: completed
+  verify:
+    completed_at: '2026-08-31T22:30:00+08:00'
+    confirmed_at: '2026-08-31T22:40:00+08:00'
+    status: completed
+score_confidence: final
+status: archived
+task_type: code
+traceability:
+  spec_scenarios: 18
+  tc_cases: 18
+  test_functions: 18
+version: '2.0'

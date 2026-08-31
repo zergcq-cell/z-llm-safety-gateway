@@ -1,0 +1,31 @@
+meta:
+  task_id: authentication
+  change_id: 2026-08-30-tenant-identity-config-contract
+  task_type: code
+  system: Backward-compatible API Key authentication extended with validated tenant bindings
+  preconditions:
+    - Existing SC-AUTH-001 through SC-AUTH-007 remain authoritative.
+    - Multi-tenant cross-field validation completes before AuthMiddleware construction.
+steps:
+  - id: CP-AUTH-008
+    description: Legacy API Key authentication preserves behavior and adds only default internal context.
+    action: .venv/bin/pytest tests/unit/middleware/test_auth.py::test_legacy_auth_adds_default_tenant_context -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-AUTH-009
+    description: Validated tenant bindings compile once without silent duplicate overwrite.
+    action: .venv/bin/pytest tests/unit/middleware/test_auth.py::test_multi_tenant_auth_compiles_validated_lookup -q
+    assertions:
+      - type: exit_code
+        expected: 0
+  - id: CP-AUTH-010
+    description: Production middleware order, 401 compatibility, request ID, and secret safety are preserved.
+    action: .venv/bin/pytest tests/unit/middleware/test_auth.py::test_tenant_auth_middleware_order_and_secret_safety -q
+    assertions:
+      - type: exit_code
+        expected: 0
+rollback:
+  steps:
+    - Revert authentication tenant binding as one unit with app middleware wiring.
+    - Preserve the original API Key 401 and api_key_name behavior throughout rollback.
