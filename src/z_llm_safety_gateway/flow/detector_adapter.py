@@ -205,7 +205,6 @@ class DetectorCapabilityCoordinator:
                 )
             try:
                 await detector.initialize(dict(registrations[0].config))
-                healthy = await detector.health_check()
             except asyncio.CancelledError:
                 await self._safe_bounded_shutdown(
                     detector, registrations[0].timeout_seconds
@@ -226,9 +225,29 @@ class DetectorCapabilityCoordinator:
 
             self._initialized_ids.add(detector_id)
             self._initialized.append(detector)
-            state = DetectorState.HEALTHY if healthy else DetectorState.UNHEALTHY
-            reason = None if healthy else DetectorReasonCode.HEALTH_CHECK_FAILED
             adapter = DetectorCapabilityAdapter(detector)
+            reason: DetectorReasonCode | None
+            try:
+                healthy = await asyncio.wait_for(
+                    detector.health_check(),
+                    timeout=registrations[0].timeout_seconds,
+                )
+            except asyncio.CancelledError:
+                await self._safe_bounded_shutdown(
+                    detector, registrations[0].timeout_seconds
+                )
+                self._initialized.remove(detector)
+                self._initialized_ids.remove(detector_id)
+                raise
+            except asyncio.TimeoutError:
+                state = DetectorState.UNHEALTHY
+                reason = DetectorReasonCode.HEALTH_CHECK_TIMEOUT
+            except Exception:
+                state = DetectorState.UNHEALTHY
+                reason = DetectorReasonCode.HEALTH_CHECK_ERROR
+            else:
+                state = DetectorState.HEALTHY if healthy else DetectorState.UNHEALTHY
+                reason = None if healthy else DetectorReasonCode.HEALTH_CHECK_FAILED
             for registration in registrations:
                 self._status_registry.transition(
                     registration.direction,

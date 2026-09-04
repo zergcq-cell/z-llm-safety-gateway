@@ -79,3 +79,12 @@ changes:
     - project-docs
     - release-hardening
     verified: true
+  2026-09-01-tenant-flow-policy-resolution:
+    proposal: canonical/proposals/2026-09-01-tenant-flow-policy-resolution.yaml
+    capabilities:
+    - config-system
+    - default-detector-flow
+    - provider-proxy
+    - tenant-config-contract
+    - tenant-policy-resolution
+    verified: true

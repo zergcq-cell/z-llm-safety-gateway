@@ -22,10 +22,24 @@ def _gateway_data(*, tenant_ids: tuple[str, ...] = ("acme",)) -> dict[str, Any]:
                 "base_url": "http://localhost:11434/v1",
             }
         ],
-        "routing": {"rules": [{"pattern": "*", "provider": "local"}]},
+        "routing": {},
         "tenancy": {
             "enabled": True,
-            "tenants": [{"id": tenant_id} for tenant_id in tenant_ids],
+            "tenants": [
+                {"id": tenant_id, "policy_id": "default-policy"}
+                for tenant_id in tenant_ids
+            ],
+            "policies": [
+                {
+                    "id": "default-policy",
+                    "input_flow": None,
+                    "output_flow": None,
+                    "routing": {
+                        "models_provider": "local",
+                        "rules": [{"pattern": "*", "provider": "local"}],
+                    },
+                }
+            ],
         },
         "security": {
             "auth": {
@@ -126,17 +140,15 @@ def test_tenancy_enabled_rejects_coerced_boolean(coerced_enabled: object) -> Non
 
 
 def test_tenancy_contract_contains_identity_only() -> None:
-    """TC-TCC-007: Tenant schema cannot absorb later v0.3 policy fields."""
-    assert set(TenancyConfig.model_fields) == {"enabled", "tenants"}
-    assert set(TenantConfig.model_fields) == {"id"}
+    """TC-TCC-007: Tenant identity stays separate from policy details."""
+    assert set(TenancyConfig.model_fields) == {"enabled", "tenants", "policies"}
+    assert set(TenantConfig.model_fields) == {"id", "policy_id"}
 
     forbidden_policy_fields = {
-        "flows",
-        "detectors",
-        "provider",
         "audit",
         "metrics",
         "rate_limit",
+        "resources",
     }
     assert forbidden_policy_fields.isdisjoint(TenancyConfig.model_fields)
 
@@ -190,7 +202,10 @@ def test_ambiguous_bindings_fail_closed_without_secret_leak(
     keys = data["security"]["auth"]["api_keys"]
     keys[0]["key"] = secret
     if invalid_case == "duplicate_tenant":
-        data["tenancy"]["tenants"] = [{"id": "acme"}, {"id": "acme"}]
+        data["tenancy"]["tenants"] = [
+            {"id": "acme", "policy_id": "default-policy"},
+            {"id": "acme", "policy_id": "default-policy"},
+        ]
     elif invalid_case == "unknown_tenant":
         keys[0]["tenant_id"] = "unknown"
     elif invalid_case == "duplicate_key":
@@ -219,7 +234,10 @@ def test_ambiguous_bindings_fail_closed_without_secret_leak(
 def test_disabled_tenancy_rejects_tenant_fields_and_accepts_legacy() -> None:
     """TC-TCC-006: Disabled tenancy rejects contradictions, not legacy config."""
     with_tenants = _gateway_data()
-    with_tenants["tenancy"]["enabled"] = False
+    with_tenants["tenancy"] = {
+        "enabled": False,
+        "tenants": [{"id": "acme"}],
+    }
     with_binding = _gateway_data()
     with_binding["tenancy"] = {"enabled": False}
 

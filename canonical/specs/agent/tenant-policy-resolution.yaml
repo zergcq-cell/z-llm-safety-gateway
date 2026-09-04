@@ -1,0 +1,37 @@
+meta:
+  task_id: tenant-policy-resolution
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  task_type: code
+  system: Trusted request-scoped tenant policy lookup and immutable runtime bundle selection
+  preconditions:
+    - Phase 2 tenant-policy-resolution spec is confirmed.
+    - Every checkpoint is implemented as a real pytest node through RED before production code.
+steps:
+  - id: CP-TPR-001
+    description: Trusted TenantContext selects the bound immutable policy context and runtime bundle.
+    action: .venv/bin/pytest tests/unit/tenancy/test_policy_resolver.py::test_trusted_context_selects_safe_frozen_policy_and_private_bundle -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-TPR-002
+    description: Untrusted tenant, policy, and Provider hints cannot override policy selection.
+    action: .venv/bin/pytest tests/unit/tenancy/test_policy_resolver.py::test_resolution_ignores_untrusted_policy_and_provider_hints -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-TPR-003
+    description: Missing runtime policy invariants fail 503 without fallback or secret leakage.
+    action: .venv/bin/pytest tests/unit/tenancy/test_policy_resolver.py::test_runtime_policy_invariants_return_safe_503 -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-TPR-004
+    description: Legacy single-tenant requests preserve the global execution path.
+    action: .venv/bin/pytest tests/unit/tenancy/test_policy_resolver.py::test_legacy_resolution_preserves_global_runtime_path -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-TPR-005
+    description: Concurrent and background stages retain the originating request policy snapshot.
+    action: .venv/bin/pytest tests/unit/routes/test_tenant_policy_snapshot.py tests/integration/test_tenant_policy_runtime.py::test_concurrent_requests_keep_sync_output_policy_snapshots_isolated tests/integration/test_tenant_policy_runtime.py::test_tenant_bundle_drives_streaming_output_paths tests/integration/test_tenant_policy_runtime.py::test_tenant_bundle_drives_async_output_and_recall -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-TPR-006
+    description: Maximum declarations use one policy lookup and at most 256 route comparisons.
+    action: .venv/bin/pytest tests/unit/tenancy/test_policy_resolver.py::test_policy_resolution_uses_only_precompiled_mapping_lookups tests/unit/providers/test_tenant_router.py::test_router_views_reuse_private_provider_instances -q
+    assertions: [{type: exit_code, expected: 0}]
+rollback:
+  steps:
+    - Revert policy resolver and request Context wiring as one unit while preserving trusted TenantContext.
+    - Re-run tenant identity and legacy request regressions before retrying.

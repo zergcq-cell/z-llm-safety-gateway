@@ -149,7 +149,7 @@ def test_tenant_resolution_uses_precompiled_lookup() -> None:
     middleware._tenant_contexts = LookupOnlyDict(middleware._tenant_contexts)
 
     auth.api_keys.clear()
-    tenancy.tenants = ()
+    object.__setattr__(tenancy, "tenants", ())
     response = client.get(
         "/inspect",
         headers={"Authorization": "Bearer secret-4095"},

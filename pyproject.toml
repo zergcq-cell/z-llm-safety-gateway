@@ -63,6 +63,8 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = [
     "error::DeprecationWarning",
+    # Starlette <= 1.6 references this compatibility alias on Python 3.10/3.11.
+    "ignore:The anyio\\.abc\\.BlockingPortal alias is deprecated.*:DeprecationWarning",
 ]
 
 [tool.ruff]

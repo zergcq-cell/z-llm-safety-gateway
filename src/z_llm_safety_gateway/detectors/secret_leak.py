@@ -97,7 +97,7 @@ class SecretLeakDetector(Detector):
         self._compiled_patterns = compiled
         logger.info(
             "SecretLeakDetector initialized",
-            active_patterns=list(compiled.keys()),
+            pattern_count=len(compiled),
         )
 
     async def detect(

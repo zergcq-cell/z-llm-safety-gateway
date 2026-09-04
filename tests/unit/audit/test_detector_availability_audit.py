@@ -143,6 +143,7 @@ def test_lifecycle_event_schema_and_state_change_deduplication() -> None:
     assert event.event_type == "detector_lifecycle"
     assert event.model_dump(exclude={"timestamp"}) == {
         "event_type": "detector_lifecycle",
+        "policy_id": "legacy",
         "detector_name": "guard",
         "direction": "input",
         "detector_type": "builtin",

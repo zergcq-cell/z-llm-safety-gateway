@@ -1,110 +1,153 @@
 meta:
-  capability: "config-system"
-  change_id: "2026-08-22-v0.2.0-flow-foundation"
-  created: "2026-08-22T22:10:50+08:00"
+  capability: config-system
+  change_id: 2026-08-22-v0.2.0-flow-foundation
+  created: '2026-08-22T22:10:50+08:00'
   confidence: high
 requirements:
-  - id: REQ-CFG-001
-    description: "配置系统解析严格的新 Flow schema 与 stage 引用"
-    scenarios:
-      - id: SC-CFG-001
-        confidence: medium
-        evidence: "proposal C1/C8; design D1/D6"
-        given: "gateway YAML 含 flow_runtime、flows、pipeline.input_flow/output_flow"
-        when: "load_config 解析配置"
-        then: "配置 SHALL 生成严格类型的 FlowRuntimeConfig、FlowDefinition 和 NodeDefinition"
-        and:
-          - "stage ref SHALL 精确解析已定义 Flow ID"
-          - "Node kind SHALL 使用 discriminated union"
-          - "所有缺省策略 SHALL 在规范化结果中显式存在"
-      - id: SC-CFG-002
-        confidence: high
-        evidence: "proposal C8; success_criteria 5; design D6"
-        given: "原始 YAML 同时显式包含 flows 与 pipeline.detectors"
-        when: "配置加载器检查原始键存在性"
-        then: "启动 SHALL 失败并报告 conflicting_flow_sources"
-        and:
-          - "Pydantic 默认空 detectors SHALL NOT 误报冲突"
-          - "系统 SHALL NOT 选择静默优先级"
-  - id: REQ-CFG-002
-    description: "旧 YAML 保持加载并编译为等价 Flow"
-    scenarios:
-      - id: SC-CFG-003
-        confidence: high
-        evidence: "proposal success_criteria 4; legacy config specs; design D6"
-        given: "v0.1.x/v0.2-style flat或input/output detector YAML 且无 flows"
-        when: "load_config 完成"
-        then: "配置 SHALL 继续加载并进入 LegacyDetectorFlowCompiler"
-        and:
-          - "legacy threshold 正规化 SHALL 保持"
-          - "required/on_error/circuit breaker SHALL 保持"
-          - "不要求新增 flow_runtime 字段"
-      - id: SC-CFG-004
-        confidence: high
-        evidence: "proposal C4/C8; design D4/D6"
-        given: "旧配置省略 timeout、required、priority、on_error 和 short_circuit_on"
-        when: "编译 resolved Flow"
-        then: "resolved policy SHALL 分别使用现有默认值并标记 source=legacy_default"
-        and:
-          - "Detector timeout SHALL 继承 security.timeout.detector"
-          - "output sync deadline SHALL 继承 sync_timeout"
-          - "默认 short circuit SHALL 仅匹配 block"
-  - id: REQ-CFG-003
-    description: "跨 Flow 验证在启动阶段拒绝不安全或不确定配置"
-    scenarios:
-      - id: SC-CFG-005
-        confidence: high
-        evidence: "proposal C2/C4/C8; success_criteria 1/2/12; design D1/D4/D5"
-        given: "配置含未知 ref、重复 ID、循环、超限、版本不兼容、schema 不匹配或 policy conflict"
-        when: "validate_config 执行图与策略验证"
-        then: "网关 SHALL 在创建 Provider 或接受流量前拒绝配置"
-        and:
-          - "错误 SHALL 使用稳定 code 与 Flow/Node 定位"
-          - "配置异常 SHALL NOT 包含 secret values"
-          - "所有错误顺序 SHALL 确定"
-  - id: REQ-CFG-004
-    description: "安全配置文档示例由真实运行时模型反向验证"
-    scenarios:
-      - id: SC-CFG-006
-        confidence: high
-        evidence: "EXP-2026-0005; proposal compatibility; design D6"
-        given: "README、DESIGN 和 configuration 文档中的 legacy/new Flow YAML 示例"
-        when: "文档契约测试提取并调用 load_config/Pydantic"
-        then: "每个示例 SHALL 成功解析为预期结构或作为明确 invalid 示例失败"
-        and:
-          - "关键策略字段 SHALL 出现在正确层级"
-          - "未知安全字段 SHALL NOT 被静默忽略"
-          - "示例 SHALL NOT 需要真实密钥"
-  - id: REQ-CFG-701
-    description: Gateway configuration loading SHALL add tenancy without migrating or reinterpreting existing single-tenant YAML
-    scenarios:
-      - id: SC-CFG-701
-        confidence: high
-        evidence: proposal.yaml what_changes C6; success_criteria 6; design.md Decision 7
-        given: the existing gateway.yaml, gateway.prod.yaml, and representative v0.2.2 single-tenant fixtures contain no tenancy block or API Key tenant_id
-        when: each configuration is loaded and create_app handles its existing request cases
-        then: every previously valid configuration SHALL remain valid without edits or warnings
-        and:
-          - HTTP status, response body, response headers, SSE events, Provider selection, Flow execution, and Detector behavior SHALL remain compatible
-          - admitted requests SHALL gain only the internal legacy default TenantContext
-      - id: SC-CFG-702
-        confidence: high
-        evidence: proposal.yaml constraints 5; design.md Decisions 1/7; EXP-2026-0005
-        given: a documented multi-tenant YAML example uses environment interpolation for API Key values and valid literal tenant IDs
-        when: load_config parses the example with the referenced environment variables set
-        then: the example SHALL validate through the production GatewayConfig and cross-field validators
-        and:
-          - documentation SHALL place tenancy and tenant_id at the exact runtime model paths
-          - rendered or logged configuration evidence SHALL NOT expose interpolated key values
-  - id: REQ-CFG-702
-    description: Configuration acceptance SHALL be proven through the real application request path
-    scenarios:
-      - id: SC-CFG-703
-        confidence: high
-        evidence: proposal.yaml success_criteria 1/3; design.md Decision 8; EXP-2026-0008
-        given: create_app loads a YAML file with tenants acme and globex and distinct bound API Keys
-        when: real HTTP requests for each key reach a downstream inspection route or the chat route
-        then: the production middleware chain SHALL expose the corresponding tenant-specific Context to downstream code
-        and:
-          - the two requests SHALL not share or overwrite tenant identity
-          - the configured global Provider and Flow behavior SHALL remain unchanged in this change
+- id: REQ-CFG-001
+  description: 配置系统解析严格的新 Flow schema 与 stage 引用
+  scenarios:
+  - id: SC-CFG-001
+    confidence: medium
+    evidence: proposal C1/C8; design D1/D6
+    given: gateway YAML 含 flow_runtime、flows、pipeline.input_flow/output_flow
+    when: load_config 解析配置
+    then: 配置 SHALL 生成严格类型的 FlowRuntimeConfig、FlowDefinition 和 NodeDefinition
+    and:
+    - stage ref SHALL 精确解析已定义 Flow ID
+    - Node kind SHALL 使用 discriminated union
+    - 所有缺省策略 SHALL 在规范化结果中显式存在
+  - id: SC-CFG-002
+    confidence: high
+    evidence: proposal C8; success_criteria 5; design D6
+    given: 原始 YAML 同时显式包含 flows 与 pipeline.detectors
+    when: 配置加载器检查原始键存在性
+    then: 启动 SHALL 失败并报告 conflicting_flow_sources
+    and:
+    - Pydantic 默认空 detectors SHALL NOT 误报冲突
+    - 系统 SHALL NOT 选择静默优先级
+- id: REQ-CFG-002
+  description: 旧 YAML 保持加载并编译为等价 Flow
+  scenarios:
+  - id: SC-CFG-003
+    confidence: high
+    evidence: proposal success_criteria 4; legacy config specs; design D6
+    given: v0.1.x/v0.2-style flat或input/output detector YAML 且无 flows
+    when: load_config 完成
+    then: 配置 SHALL 继续加载并进入 LegacyDetectorFlowCompiler
+    and:
+    - legacy threshold 正规化 SHALL 保持
+    - required/on_error/circuit breaker SHALL 保持
+    - 不要求新增 flow_runtime 字段
+  - id: SC-CFG-004
+    confidence: high
+    evidence: proposal C4/C8; design D4/D6
+    given: 旧配置省略 timeout、required、priority、on_error 和 short_circuit_on
+    when: 编译 resolved Flow
+    then: resolved policy SHALL 分别使用现有默认值并标记 source=legacy_default
+    and:
+    - Detector timeout SHALL 继承 security.timeout.detector
+    - output sync deadline SHALL 继承 sync_timeout
+    - 默认 short circuit SHALL 仅匹配 block
+- id: REQ-CFG-003
+  description: 跨 Flow 验证在启动阶段拒绝不安全或不确定配置
+  scenarios:
+  - id: SC-CFG-005
+    confidence: high
+    evidence: proposal C2/C4/C8; success_criteria 1/2/12; design D1/D4/D5
+    given: 配置含未知 ref、重复 ID、循环、超限、版本不兼容、schema 不匹配或 policy conflict
+    when: validate_config 执行图与策略验证
+    then: 网关 SHALL 在创建 Provider 或接受流量前拒绝配置
+    and:
+    - 错误 SHALL 使用稳定 code 与 Flow/Node 定位
+    - 配置异常 SHALL NOT 包含 secret values
+    - 所有错误顺序 SHALL 确定
+- id: REQ-CFG-004
+  description: 安全配置文档示例由真实运行时模型反向验证
+  scenarios:
+  - id: SC-CFG-006
+    confidence: high
+    evidence: EXP-2026-0005; proposal compatibility; design D6
+    given: README、DESIGN 和 configuration 文档中的 legacy/new Flow YAML 示例
+    when: 文档契约测试提取并调用 load_config/Pydantic
+    then: 每个示例 SHALL 成功解析为预期结构或作为明确 invalid 示例失败
+    and:
+    - 关键策略字段 SHALL 出现在正确层级
+    - 未知安全字段 SHALL NOT 被静默忽略
+    - 示例 SHALL NOT 需要真实密钥
+- id: REQ-CFG-701
+  description: Gateway configuration loading SHALL add tenancy without migrating or reinterpreting existing single-tenant YAML
+  scenarios:
+  - id: SC-CFG-701
+    confidence: high
+    evidence: proposal.yaml what_changes C6; success_criteria 6; design.md Decision 7
+    given: the existing gateway.yaml, gateway.prod.yaml, and representative v0.2.2 single-tenant fixtures contain no tenancy block or API Key tenant_id
+    when: each configuration is loaded and create_app handles its existing request cases
+    then: every previously valid configuration SHALL remain valid without edits or warnings
+    and:
+    - HTTP status, response body, response headers, SSE events, Provider selection, Flow execution, and Detector behavior SHALL remain compatible
+    - admitted requests SHALL gain only the internal legacy default TenantContext
+  - id: SC-CFG-702
+    confidence: high
+    evidence: proposal.yaml constraints 5; design.md Decisions 1/7; EXP-2026-0005
+    given: a documented multi-tenant YAML example uses environment interpolation for API Key values and valid literal tenant IDs
+    when: load_config parses the example with the referenced environment variables set
+    then: the example SHALL validate through the production GatewayConfig and cross-field validators
+    and:
+    - documentation SHALL place tenancy and tenant_id at the exact runtime model paths
+    - rendered or logged configuration evidence SHALL NOT expose interpolated key values
+- id: REQ-CFG-702
+  description: Configuration acceptance SHALL be proven through the real application request path
+  scenarios:
+  - id: SC-CFG-703
+    confidence: high
+    evidence: proposal.yaml success_criteria 1/3; design.md Decision 8; EXP-2026-0008
+    given: create_app loads a YAML file with tenants acme and globex and distinct bound API Keys
+    when: real HTTP requests for each key reach a downstream inspection route or the chat route
+    then: the production middleware chain SHALL expose the corresponding tenant-specific Context to downstream code
+    and:
+    - the two requests SHALL not share or overwrite tenant identity
+    - the configured global Provider and Flow behavior SHALL remain unchanged in this change
+- id: REQ-CFG-703
+  description: Accepted tenant policy configuration SHALL be compiled and consumed by the real application request path
+  scenarios:
+  - id: SC-CFG-704
+    confidence: high
+    evidence: proposal.yaml C1-C6 and success criteria 1/2/6; EXP-2026-0008; design Decisions 4/5/10
+    given: create_app loads a YAML file with two tenants, two policies, distinct Flows and bindings, and tenant-specific routes for the same model
+    when: real authenticated HTTP requests enter chat sync and streaming paths
+    then: production wiring SHALL resolve the corresponding policy, execute its Flow/config, and call its authorized Provider end to end
+    and:
+    - the two requests SHALL not share policy Context, Detector state, or Provider selection
+    - SSE and non-streaming public contracts SHALL remain compatible
+  - id: SC-CFG-705
+    confidence: high
+    evidence: proposal.yaml constraints and success criterion 4; EXP-2026-0005/0025; design Decisions 9/10
+    given: the documented multi-tenant policy YAML uses real environment interpolation for Gateway and Provider Keys plus valid literal policy references
+    when: load_config and create_app consume the example
+    then: the example SHALL validate and compile through production models, validators, Detector factories, and Router construction
+    and:
+    - every security-relevant field SHALL exist at the documented runtime path
+    - canonical, human docs, errors, logs, repr, and policy Context SHALL NOT expose interpolated secrets
+- id: REQ-CFG-704
+  description: The change SHALL preserve legacy contracts and accurately report v0.3.0 progress without implementing later isolation phases
+  scenarios:
+  - id: SC-CFG-706
+    confidence: high
+    evidence: proposal.yaml C7 and success criteria 8/10; design Decisions 8/10
+    given: gateway.yaml, gateway.prod.yaml, representative v0.2.2 fixtures, existing explicit Flow configs, and their HTTP/SSE tests contain no tenant policy fields
+    when: full configuration and request regressions run
+    then: every previously valid single-tenant configuration and public HTTP/SSE/Provider/Flow behavior SHALL remain compatible
+    and:
+    - no legacy file SHALL require policy_id, policies, models_provider, or tenant-local bindings
+    - existing error status, body, headers, payload forwarding, and SSE chunk order SHALL remain unchanged
+  - id: SC-CFG-707
+    confidence: high
+    evidence: proposal.yaml C7/non_goals; v0.3.0 roadmap; design Context
+    given: Phase 2 scope and eventual implementation are reflected in DESIGN, README, CHANGELOG, AGENTS, specs, and canonical indexes
+    when: documentation contract tests inspect current milestone state
+    then: project surfaces SHALL state that change 1/4 is delivered and change 2/4 is active or delivered according to lifecycle state
+    and:
+    - v0.3.0 SHALL NOT be marked complete or release-ready
+    - tenant evidence/observability and resource/failure aggregate isolation SHALL remain explicitly pending
+    - no v0.3.0 tag or artifact version SHALL be created by this change

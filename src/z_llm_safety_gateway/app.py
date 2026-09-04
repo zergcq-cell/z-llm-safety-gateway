@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from typing import Any, Literal, cast
 
 import structlog
@@ -29,7 +30,6 @@ from z_llm_safety_gateway.detectors import create_default_registry
 from z_llm_safety_gateway.detectors.status import (
     DetectorReasonCode,
     DetectorState,
-    DetectorStatus,
     DetectorStatusRegistry,
 )
 from z_llm_safety_gateway.exceptions import (
@@ -41,6 +41,9 @@ from z_llm_safety_gateway.exceptions import (
     SafetyUnavailableError,
 )
 from z_llm_safety_gateway.middleware.auth import AuthMiddleware
+from z_llm_safety_gateway.middleware.policy_resolution import (
+    TenantPolicyResolutionMiddleware,
+)
 from z_llm_safety_gateway.middleware.rate_limit import RateLimitMiddleware
 from z_llm_safety_gateway.middleware.request_id import RequestIDMiddleware
 from z_llm_safety_gateway.middleware.request_size import RequestSizeMiddleware
@@ -55,8 +58,31 @@ from z_llm_safety_gateway.routes.chat import router as chat_router
 from z_llm_safety_gateway.routes.health import router as health_router
 from z_llm_safety_gateway.routes.health import set_ready
 from z_llm_safety_gateway.routes.models import router as models_router
+from z_llm_safety_gateway.tenancy import TenantPolicyResolver, TenantRuntimeBundle
+from z_llm_safety_gateway.tenancy.runtime import TenantRuntimeCompiler
 
 logger = structlog.get_logger()
+
+
+def _identity_tenant_bundles(config: Any) -> tuple[TenantRuntimeBundle, ...]:
+    """Build secret-free bundle identities before runtime compilation."""
+    return tuple(
+        TenantRuntimeBundle(
+            policy_id=policy.id,
+            input_flow_identity=(
+                (policy.input_flow.flow_id, policy.input_flow.version)
+                if policy.input_flow is not None
+                else None
+            ),
+            output_flow_identity=(
+                (policy.output_flow.flow_id, policy.output_flow.version)
+                if policy.output_flow is not None
+                else None
+            ),
+            routing_profile_id=policy.id,
+        )
+        for policy in config.tenancy.policies
+    )
 
 
 def _explicit_flow_detector_configs(
@@ -204,6 +230,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "detector_shutdown_failed", detector=getattr(detector, "name", "?"),
                 exc_info=True,
             )
+    tenant_runtime_compiler = getattr(
+        app.state, "tenant_runtime_compiler", None
+    )
+    tenant_runtime_bundles = getattr(app.state, "tenant_runtime_bundles", ())
+    if tenant_runtime_compiler is not None:
+        await tenant_runtime_compiler.shutdown(tenant_runtime_bundles)
     logger.info("graceful_shutdown_complete")
 
 
@@ -378,11 +410,21 @@ def _flush_and_close_audit(audit_logger: Any | None) -> None:
         logger.warning("audit_startup_cleanup_failed", error_type="audit_close_error")
 
 
-def _build_detector_transition_handler(audit_logger: Any) -> Any:
+def _build_detector_transition_handler(
+    audit_logger: Any,
+    *,
+    default_policy_id: str | None = None,
+) -> Any:
     """Create the shared lifecycle audit/log callback for a status registry."""
 
-    def _handle(old: DetectorStatus, new: DetectorStatus) -> None:
+    def _handle(*args: Any) -> None:
+        if len(args) == 3:
+            policy_id, old, new = args
+        else:
+            old, new = args
+            policy_id = default_policy_id or "legacy"
         event = DetectorLifecycleEvent(
+            policy_id=policy_id,
             detector_name=new.name,
             direction=new.direction,
             detector_type=new.detector_type,
@@ -398,10 +440,12 @@ def _build_detector_transition_handler(audit_logger: Any) -> Any:
             direction=new.direction,
             detector_type=new.detector_type,
             is_up=new.state is DetectorState.HEALTHY,
+            policy_id=policy_id,
         )
         logger.info(
             "detector_lifecycle",
             detector_name=event.detector_name,
+            policy_id=event.policy_id,
             direction=event.direction,
             detector_type=event.detector_type,
             old_state=event.old_state,
@@ -517,13 +561,23 @@ def create_app(config_path: str) -> FastAPI:
     # 2b. Initialize optional OpenTelemetry tracing (best effort, off by default).
     observability_tracing.setup_tracing(config.observability.tracing, app=app)
 
+    tenant_policy_resolver = TenantPolicyResolver(
+        config.tenancy,
+        _identity_tenant_bundles(config),
+    )
+    app.state.tenant_policy_resolver = tenant_policy_resolver
+
     # 3. Register middleware (order matters in Starlette!)
     #    add_middleware() adds to the *outer* end, so we register inner-first.
     #    Final request chain (outer->inner):
-    #    RequestID -> Auth -> RateLimit -> RequestSize -> SafetyHeaders
+    #    RequestID -> Auth -> TenantPolicy -> RateLimit -> RequestSize -> SafetyHeaders
     app.add_middleware(SafetyHeadersMiddleware)
     app.add_middleware(RequestSizeMiddleware, max_request_size=config.security.max_request_size)
     app.add_middleware(RateLimitMiddleware, config=config.security.rate_limit)
+    app.add_middleware(
+        TenantPolicyResolutionMiddleware,
+        resolver=tenant_policy_resolver,
+    )
     app.add_middleware(
         AuthMiddleware,
         config=config.security.auth,
@@ -573,6 +627,45 @@ def create_app(config_path: str) -> FastAPI:
     from z_llm_safety_gateway.plugins.loader import load_plugins
 
     load_plugins(registry)
+
+    if config.tenancy.enabled:
+        def tenant_detector_factory(binding: Any) -> Any:
+            if binding.type == "grpc":
+                from z_llm_safety_gateway.plugins.grpc.client import GRPCDetector
+
+                return GRPCDetector(name=binding.detector_name)
+            return registry.get(binding.detector_name)()
+
+        tenant_runtime_compiler = TenantRuntimeCompiler(
+            flows=config.flows,
+            resolved_policies=config.resolved_flow_policies,
+            runtime=config.flow_runtime,
+            detector_factory=tenant_detector_factory,
+            on_status_transition=_build_detector_transition_handler(audit_logger),
+        )
+        compiled_bundles: tuple[Any, ...] = ()
+        try:
+            compiled_bundles = asyncio.run(
+                tenant_runtime_compiler.compile(config.tenancy.policies)
+            )
+            policy_by_id = {policy.id: policy for policy in config.tenancy.policies}
+            tenant_runtime_bundles = tuple(
+                replace(
+                    bundle,
+                    router_view=router.tenant_view(
+                        policy_by_id[bundle.policy_id].routing
+                    ),
+                )
+                for bundle in compiled_bundles
+            )
+            tenant_policy_resolver.install_bundles(tenant_runtime_bundles)
+        except BaseException:
+            if compiled_bundles:
+                asyncio.run(tenant_runtime_compiler.shutdown(compiled_bundles))
+            _flush_and_close_audit(audit_logger)
+            raise
+        app.state.tenant_runtime_compiler = tenant_runtime_compiler
+        app.state.tenant_runtime_bundles = tenant_runtime_bundles
 
     # After Pydantic validation, detectors is always a DetectorsConfig
     # (the model_validator converts legacy list format).

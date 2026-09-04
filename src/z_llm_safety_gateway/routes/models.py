@@ -1,8 +1,8 @@
 """Models listing endpoint — GET /v1/models.
 
-Forwards a GET /models request to the first configured provider and passes
-the response through to the client. Only the first provider is queried;
-results are NOT aggregated across multiple providers.
+Forwards GET /models to the tenant policy's explicit models Provider, or to
+the first configured Provider on the legacy single-tenant path. Results are
+never aggregated across Providers.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ router = APIRouter(tags=["models"])
 
 @router.get("/v1/models")
 async def list_models(request: Request) -> Response:
-    """Forward a GET /models request to the first configured provider.
+    """Forward GET /models through the request's resolved Provider domain.
 
-    Only the first provider in the configuration is queried. The response
-    body and status code are passed through to the client without modification.
+    Tenant mode uses its explicit models Provider; legacy mode uses the first
+    configured Provider. The upstream response is passed through unchanged.
 
     Raises:
         ProviderError: If the provider returns an HTTP error or a network
@@ -41,7 +41,21 @@ async def list_models(request: Request) -> Response:
         )
         return JSONResponse(status_code=500, content=body.model_dump())
 
-    provider_config = config.providers[0]
+    tenant_bundle = getattr(request.state, "_tenant_runtime_bundle", None)
+    if tenant_bundle is not None and tenant_bundle.router_view is None:
+        body = OpenAIErrorBody(
+            error=OpenAIErrorDetail(
+                message="Tenant policy is temporarily unavailable",
+                type="service_unavailable",
+                code="tenant_policy_unavailable",
+            )
+        )
+        return JSONResponse(status_code=503, content=body.model_dump())
+    if tenant_bundle is not None:
+        provider = tenant_bundle.router_view.models_provider
+    else:
+        provider = request.app.state.router.models_provider()
+    provider_config = provider.config
     url = f"{provider_config.base_url}/models"
 
     # Build headers

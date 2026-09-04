@@ -1,0 +1,70 @@
+meta:
+  capability: tenant-policy-resolution
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  created: '2026-09-01T22:58:16+08:00'
+  confidence: high
+requirements:
+  - id: REQ-TPR-001
+    description: Trusted TenantContext SHALL select one immutable, secret-free request policy context and its private runtime bundle
+    scenarios:
+      - id: SC-TPR-001
+        confidence: high
+        evidence: proposal.yaml C2/C6 and success criteria 1/6; design Decisions 1/4/5
+        given: tenants acme and globex are authenticated and bound to two valid compiled policy IDs
+        when: each request enters policy resolution after AuthMiddleware
+        then: the resolver SHALL select the runtime bundle referenced only by that request's trusted TenantContext
+        and:
+          - request.state SHALL receive a frozen TenantPolicyContext contract version 1.0 with tenant_id and policy_id
+          - the Context SHALL identify selected input/output Flow and routing profile without containing raw Detector config or Provider objects
+          - resolution SHALL occur before Detector availability checks and Provider selection
+      - id: SC-TPR-002
+        confidence: high
+        evidence: proposal.yaml C4 and success criterion 3; design Decisions 5/6
+        given: an acme-authenticated request includes Header or body values naming globex, another policy, or another Provider
+        when: the route resolves its policy and Provider
+        then: the selected policy SHALL remain the policy bound to acme's trusted TenantContext
+        and:
+          - untrusted tenant, policy, and provider fields SHALL NOT participate in lookup
+          - no public tenant-policy selection protocol SHALL be introduced
+  - id: REQ-TPR-002
+    description: Missing or inconsistent runtime policy state SHALL fail closed without fallback or secret disclosure
+    scenarios:
+      - id: SC-TPR-003
+        confidence: medium
+        evidence: proposal.yaml C5 and failure policy; design Decision 9
+        given: tenancy is enabled but an admitted request lacks TenantContext, references an absent policy, or encounters a missing compiled bundle invariant
+        when: tenant policy resolution runs
+        then: the request SHALL fail with OpenAI-compatible HTTP 503 code tenant_policy_unavailable
+        and:
+          - the resolver SHALL NOT use a global, legacy, first, or other tenant policy
+          - the public response and logs SHALL NOT contain API Keys, Provider Keys, Detector config, word-list content, or unfiltered exception text
+      - id: SC-TPR-004
+        confidence: high
+        evidence: proposal.yaml C7 and success criterion 8; design Decision 8
+        given: tenancy is absent or disabled and an unchanged legacy configuration is loaded
+        when: an admitted request reaches policy resolution
+        then: the request SHALL use the existing global Flow, Detector, result policy, and ModelRouter behavior
+        and:
+          - the internal legacy TenantContext SHALL remain available
+          - no tenant policy configuration SHALL be required
+  - id: REQ-TPR-003
+    description: Policy selection SHALL be request-isolated, stable across asynchronous stages, and structurally bounded
+    scenarios:
+      - id: SC-TPR-005
+        confidence: high
+        evidence: proposal.yaml C2/C6 and success criterion 6; EXP-2026-0001; design Decision 5
+        given: concurrent acme and globex requests enter input, sync or async output, SSE, buffer, sliding-window, and post-audit paths
+        when: downstream work and background tasks execute
+        then: every stage SHALL consume the policy bundle and FlowExecutionSnapshot captured for its originating request
+        and:
+          - one request SHALL NOT replace, mutate, or re-resolve the other request's policy
+          - background tasks SHALL NOT read the global default engine or Detector collection
+      - id: SC-TPR-006
+        confidence: medium
+        evidence: proposal.yaml C6 and success criterion 7; design Decisions 1/6/10
+        given: configuration is at 1024 policies with 256 routing rules and 256 capability bindings per policy
+        when: an authenticated request resolves its policy and routes one model
+        then: policy selection SHALL use an expected O(1) precompiled mapping lookup and routing SHALL inspect at most 256 ordered rules
+        and:
+          - request-time resolution SHALL NOT scan tenant or policy declarations
+          - deterministic operation-count tests SHALL be authoritative instead of coverage-instrumented wall-clock microbenchmarks

@@ -539,7 +539,7 @@ def test_tc_ddf_004() -> None:
 
 
 def test_tc_ddf_007() -> None:
-    """TC-DDF-007: reducer is versioned and Flow core has no Detector domain imports."""
+    """TC-DDF-012: reducer is versioned and Flow core stays domain-neutral."""
     reducer = DetectorResultReducer()
     assert reducer.descriptor.contract_version == "1.0"
     assert reducer.descriptor.capability_id == "detector-result-reducer"
@@ -557,7 +557,10 @@ def test_tc_ddf_007() -> None:
             for node in ast.walk(tree)
             if isinstance(node, ast.ImportFrom)
         }
-        assert not any("detectors" in item or "pipeline" in item for item in imports)
+        prohibited_domains = ("detectors", "pipeline", "tenancy", "providers")
+        assert not any(
+            any(domain in item for domain in prohibited_domains) for item in imports
+        )
 
 
 def test_tc_ddf_005() -> None:

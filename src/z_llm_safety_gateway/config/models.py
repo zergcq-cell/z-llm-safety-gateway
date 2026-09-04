@@ -69,29 +69,15 @@ class ServerConfig(BaseModel):
 TENANT_ID_PATTERN = r"^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$"
 MAX_TENANTS = 1024
 MAX_TENANT_API_KEYS = 4096
-
-
-class TenantConfig(BaseModel):
-    """A declared tenant identity with no tenant-specific policy."""
-
-    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
-
-    id: str = Field(min_length=1, max_length=64, pattern=TENANT_ID_PATTERN)
-
-
-class TenancyConfig(BaseModel):
-    """Trusted tenant identity configuration, disabled for legacy deployments."""
-
-    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
-
-    enabled: bool = Field(default=False, strict=True)
-    tenants: tuple[TenantConfig, ...] = ()
+MAX_TENANT_POLICIES = 1024
+MAX_TENANT_POLICY_CAPABILITIES = 256
+MAX_TENANT_POLICY_ROUTES = 256
 
 
 class ApiKeyConfig(BaseModel):
     """A single API key credential for gateway authentication."""
 
-    key: str
+    key: str = Field(repr=False)
     name: str = ""
     tenant_id: str | None = None
 
@@ -289,7 +275,7 @@ class ProviderConfig(BaseModel):
     name: str
     type: str  # "openai" | "openai_compatible" | "azure_openai"
     base_url: str
-    api_key: str = ""
+    api_key: str = Field(default="", repr=False)
     api_version: str = ""  # for azure_openai
 
 
@@ -637,6 +623,71 @@ class CapabilityBindingConfig(BaseModel):
         )
 
 
+class TenantRoutingRuleConfig(BaseModel):
+    """One strict model-to-Provider rule inside a tenant policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    pattern: str = Field(min_length=1, max_length=256)
+    provider: str = Field(min_length=1, max_length=64)
+
+
+class TenantPolicyRoutingConfig(BaseModel):
+    """Bounded Provider routing domain for one tenant policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    models_provider: str = Field(min_length=1, max_length=64)
+    rules: tuple[TenantRoutingRuleConfig, ...]
+
+
+class TenantResultPolicyConfig(BaseModel):
+    """Tenant-specific reducer settings not represented by Flow Node policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    flag_escalation: FlagEscalationConfig | None = None
+
+
+class TenantPolicyConfig(BaseModel):
+    """Strict references and plugin bindings for one reusable tenant policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    id: str = Field(min_length=1, max_length=64, pattern=TENANT_ID_PATTERN)
+    input_flow: FlowStageReference | None
+    output_flow: FlowStageReference | None
+    capabilities: tuple[CapabilityBindingConfig, ...] = ()
+    result_policy: TenantResultPolicyConfig = Field(
+        default_factory=TenantResultPolicyConfig
+    )
+    routing: TenantPolicyRoutingConfig
+
+
+class TenantConfig(BaseModel):
+    """A declared tenant identity and its explicit policy reference."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    id: str = Field(min_length=1, max_length=64, pattern=TENANT_ID_PATTERN)
+    policy_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        pattern=TENANT_ID_PATTERN,
+    )
+
+
+class TenancyConfig(BaseModel):
+    """Trusted tenant identity and policy configuration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    enabled: bool = Field(default=False, strict=True)
+    tenants: tuple[TenantConfig, ...] = ()
+    policies: tuple[TenantPolicyConfig, ...] = ()
+
+
 PipelineConfig.model_rebuild()
 
 
@@ -767,6 +818,26 @@ class GatewayConfig(BaseModel):
         tenants = tenancy.get("tenants")
         if isinstance(tenants, (list, tuple)) and len(tenants) > MAX_TENANTS:
             raise ValueError("tenant_limit_exceeded")
+        policies = tenancy.get("policies")
+        if isinstance(policies, (list, tuple)):
+            if len(policies) > MAX_TENANT_POLICIES:
+                raise ValueError("tenant_policy_limit_exceeded")
+            for policy in policies:
+                if not isinstance(policy, dict):
+                    continue
+                capabilities = policy.get("capabilities")
+                if (
+                    isinstance(capabilities, (list, tuple))
+                    and len(capabilities) > MAX_TENANT_POLICY_CAPABILITIES
+                ):
+                    raise ValueError("tenant_policy_capability_limit_exceeded")
+                routing = policy.get("routing")
+                rules = routing.get("rules") if isinstance(routing, dict) else None
+                if (
+                    isinstance(rules, (list, tuple))
+                    and len(rules) > MAX_TENANT_POLICY_ROUTES
+                ):
+                    raise ValueError("tenant_policy_route_limit_exceeded")
         security = data.get("security")
         auth = security.get("auth") if isinstance(security, dict) else None
         api_keys = auth.get("api_keys") if isinstance(auth, dict) else None
@@ -776,11 +847,41 @@ class GatewayConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
+    def _reject_conflicting_tenant_policy_sources(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        tenancy = data.get("tenancy")
+        policies = tenancy.get("policies") if isinstance(tenancy, dict) else None
+        if not policies:
+            return data
+        routing = data.get("routing")
+        pipeline = data.get("pipeline")
+        has_global_selector = (
+            (isinstance(routing, dict) and "rules" in routing)
+            or (
+                isinstance(pipeline, dict)
+                and any(
+                    selector in pipeline
+                    for selector in ("detectors", "input_flow", "output_flow")
+                )
+            )
+            or "capabilities" in data
+        )
+        if has_global_selector:
+            raise ValueError("conflicting_tenant_policy_sources")
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
     def _reject_conflicting_flow_sources(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
         pipeline = data.get("pipeline")
         explicit_detectors = isinstance(pipeline, dict) and "detectors" in pipeline
+        tenancy = data.get("tenancy")
+        policies = tenancy.get("policies") if isinstance(tenancy, dict) else None
+        if policies and explicit_detectors:
+            raise ValueError("conflicting_tenant_policy_sources")
         if "flows" in data and explicit_detectors:
             raise ValueError("conflicting_flow_sources")
         return data
@@ -850,9 +951,11 @@ class GatewayConfig(BaseModel):
                     )
                 except PolicyConflictError as exc:
                     raise ValueError(str(exc)) from exc
+        tenant_policy_mode = bool(self.tenancy.policies)
         if self.flows and not (
             self.pipeline.input_flow is not None
             or self.pipeline.output_flow is not None
+            or tenant_policy_mode
         ):
             raise ValueError("explicit_flow_stage_reference_required")
         self._resolved_flow_policies = resolved

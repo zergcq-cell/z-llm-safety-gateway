@@ -25,6 +25,11 @@ from z_llm_safety_gateway.config.models import (
     GatewayConfig,
 )
 from z_llm_safety_gateway.exceptions import ConfigValidationError
+from z_llm_safety_gateway.flow.contracts import (
+    CapabilityNodeDefinition,
+    FlowDefinition,
+    FlowNodeDefinition,
+)
 
 # Provider types that require a non-empty api_key.
 _PROVIDER_TYPES_REQUIRING_API_KEY = frozenset({"openai", "azure_openai"})
@@ -58,6 +63,7 @@ def validate_config(config: GatewayConfig) -> None:
         ConfigValidationError: If any cross-field validation rule fails.
     """
     _validate_tenancy(config)
+    _validate_tenant_policies(config)
     _validate_detectors_v2(config)
     _validate_flag_escalation(config)
     _validate_providers(config)
@@ -70,6 +76,10 @@ def _validate_tenancy(config: GatewayConfig) -> None:
     api_keys = config.security.auth.api_keys
 
     if not tenancy.enabled:
+        if tenancy.policies or any(
+            tenant.policy_id is not None for tenant in tenancy.tenants
+        ):
+            raise ConfigValidationError("tenancy_disabled_with_tenant_policy")
         if tenancy.tenants or any(key.tenant_id is not None for key in api_keys):
             raise ConfigValidationError(
                 "tenancy_disabled_with_tenant_configuration"
@@ -80,11 +90,22 @@ def _validate_tenancy(config: GatewayConfig) -> None:
         raise ConfigValidationError("tenancy_enabled_requires_auth")
     if not tenancy.tenants:
         raise ConfigValidationError("tenancy_requires_tenants")
+    if not tenancy.policies or any(
+        tenant.policy_id is None for tenant in tenancy.tenants
+    ):
+        raise ConfigValidationError("tenant_policy_required")
 
     tenant_ids = [tenant.id for tenant in tenancy.tenants]
     declared_tenants = set(tenant_ids)
     if len(declared_tenants) != len(tenant_ids):
         raise ConfigValidationError("duplicate_tenant_id")
+
+    policy_ids = [policy.id for policy in tenancy.policies]
+    declared_policies = set(policy_ids)
+    if len(declared_policies) != len(policy_ids):
+        raise ConfigValidationError("duplicate_tenant_policy_id")
+    if any(tenant.policy_id not in declared_policies for tenant in tenancy.tenants):
+        raise ConfigValidationError("unknown_tenant_policy")
 
     seen_keys: set[str] = set()
     seen_names: set[str] = set()
@@ -107,6 +128,73 @@ def _validate_tenancy(config: GatewayConfig) -> None:
 
     if bound_tenants != declared_tenants:
         raise ConfigValidationError("tenant_without_api_key")
+
+
+def _validate_tenant_policies(config: GatewayConfig) -> None:
+    """Validate tenant-selected Flow bindings and Provider routing domains."""
+    if not config.tenancy.enabled:
+        return
+
+    flows = {(flow.flow_id, flow.version): flow for flow in config.flows}
+    providers = {provider.name for provider in config.providers}
+
+    def collect_capabilities(flow: FlowDefinition) -> set[str]:
+        collected: set[str] = set()
+        active: set[tuple[str, str]] = set()
+
+        def visit(current: FlowDefinition) -> None:
+            identity = (current.flow_id, current.version)
+            if identity in active:
+                return
+            active.add(identity)
+            for node in current.nodes:
+                if isinstance(node, CapabilityNodeDefinition):
+                    collected.add(node.capability_id)
+                elif isinstance(node, FlowNodeDefinition):
+                    child = flows.get((node.flow_id, node.flow_version))
+                    if child is not None:
+                        visit(child)
+
+        visit(flow)
+        return collected
+
+    for policy in config.tenancy.policies:
+        selected_capabilities: set[str] = set()
+        for reference in (policy.input_flow, policy.output_flow):
+            if reference is None:
+                continue
+            flow = flows.get((reference.flow_id, reference.version))
+            if flow is None:
+                raise ConfigValidationError("tenant_policy_flow_not_found")
+            selected_capabilities.update(collect_capabilities(flow))
+
+        binding_ids = [binding.capability_id for binding in policy.capabilities]
+        if len(binding_ids) != len(set(binding_ids)):
+            raise ConfigValidationError("duplicate_capability_binding")
+        bound_capabilities = set(binding_ids)
+        if selected_capabilities - bound_capabilities:
+            raise ConfigValidationError("tenant_policy_capability_binding_missing")
+        if bound_capabilities - selected_capabilities:
+            raise ConfigValidationError("tenant_policy_capability_binding_unused")
+
+        seen_patterns: dict[str, str] = {}
+        allowed_providers: set[str] = set()
+        for rule in policy.routing.rules:
+            if rule.provider not in providers:
+                raise ConfigValidationError(
+                    "tenant_policy_route_provider_not_found"
+                )
+            existing = seen_patterns.get(rule.pattern)
+            if existing is not None and existing != rule.provider:
+                raise ConfigValidationError("tenant_policy_route_conflict")
+            seen_patterns[rule.pattern] = rule.provider
+            allowed_providers.add(rule.provider)
+        if policy.routing.models_provider not in providers:
+            raise ConfigValidationError("tenant_policy_route_provider_not_found")
+        if policy.routing.models_provider not in allowed_providers:
+            raise ConfigValidationError(
+                "tenant_policy_models_provider_not_allowed"
+            )
 
 
 # --------------------------------------------------------------------------- #
@@ -145,21 +233,25 @@ def _validate_detectors_v2(config: GatewayConfig) -> None:
     if not isinstance(detectors, DetectorsConfig):
         return
 
-    all_detectors: list[tuple[str, DetectorConfig]] = [
-        ("input", d) for d in detectors.input
+    all_detectors: list[tuple[str, DetectorConfig, bool]] = [
+        ("input", d, False) for d in detectors.input
     ] + [
-        ("output", d) for d in detectors.output
+        ("output", d, False) for d in detectors.output
     ] + [
-        ("capability", binding.detector_config())
+        ("capability", binding.detector_config(), True)
         for binding in config.capabilities
+    ] + [
+        ("tenant-capability", binding.detector_config(), True)
+        for policy in config.tenancy.policies
+        for binding in policy.capabilities
     ]
 
-    for _direction, detector in all_detectors:
+    for _direction, detector, private_config in all_detectors:
         _validate_required_policy(detector)
-        _validate_thresholds(detector)
+        _validate_thresholds(detector, private_config=private_config)
         _validate_detector_name(detector)
         _validate_grpc_detector(detector)
-        _validate_word_list_file(detector)
+        _validate_word_list_file(detector, private_config=private_config)
 
 
 def _validate_required_policy(detector: DetectorConfig) -> None:
@@ -176,7 +268,11 @@ def _validate_required_policy(detector: DetectorConfig) -> None:
         )
 
 
-def _validate_thresholds(detector: DetectorConfig) -> None:
+def _validate_thresholds(
+    detector: DetectorConfig,
+    *,
+    private_config: bool = False,
+) -> None:
     """Verify confidence and count thresholds independently (v0.4.0).
 
     Threshold namespace separation (DESIGN 5.3.1):
@@ -199,6 +295,10 @@ def _validate_thresholds(detector: DetectorConfig) -> None:
     block = cfg.get("block_threshold")
     flag = cfg.get("flag_threshold")
     if block is not None and flag is not None and block <= flag:
+        if private_config:
+            raise ConfigValidationError(
+                f"tenant_detector_threshold_conflict: detector={detector.name}"
+            )
         raise ConfigValidationError(
             f"Detector '{detector.name}': block_threshold ({block}) "
             f"must be strictly greater than flag_threshold ({flag})"
@@ -212,6 +312,10 @@ def _validate_thresholds(detector: DetectorConfig) -> None:
         and count_flag is not None
         and count_block <= count_flag
     ):
+        if private_config:
+            raise ConfigValidationError(
+                f"tenant_detector_count_threshold_conflict: detector={detector.name}"
+            )
         raise ConfigValidationError(
             f"Detector '{detector.name}': count_block_threshold ({count_block}) "
             f"must be strictly greater than count_flag_threshold ({count_flag})"
@@ -281,7 +385,11 @@ def _validate_grpc_detector(detector: DetectorConfig) -> None:
         )
 
 
-def _validate_word_list_file(detector: DetectorConfig) -> None:
+def _validate_word_list_file(
+    detector: DetectorConfig,
+    *,
+    private_config: bool = False,
+) -> None:
     """Check that word_list_file exists for sensitive_words detectors.
 
     Emits a warning (not an error) if the file is missing, as per v0.2.0
@@ -298,6 +406,13 @@ def _validate_word_list_file(detector: DetectorConfig) -> None:
         return
 
     if not os.path.isfile(word_list_file):
+        if private_config:
+            warnings.warn(
+                f"tenant_detector_word_list_missing: detector={detector.name}",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
         warnings.warn(
             f"Detector '{detector.name}' references missing word_list_file: "
             f"{word_list_file}",
@@ -328,16 +443,28 @@ def _validate_flag_escalation(config: GatewayConfig) -> None:
         ConfigValidationError: If the rule has invalid syntax.
     """
     fe = config.pipeline.flag_escalation
-    if fe is None or not fe.enabled:
-        return
+    if fe is not None and fe.enabled:
+        rule = fe.rule.strip()
+        if not rule:
+            raise ConfigValidationError(
+                "flag_escalation.rule is empty but flag_escalation is enabled"
+            )
+        _parse_flag_escalation_rule(rule)
 
-    rule = fe.rule.strip()
-    if not rule:
-        raise ConfigValidationError(
-            "flag_escalation.rule is empty but flag_escalation is enabled"
-        )
-
-    _parse_flag_escalation_rule(rule)
+    for policy in config.tenancy.policies:
+        tenant_fe = policy.result_policy.flag_escalation
+        if tenant_fe is None or not tenant_fe.enabled:
+            continue
+        if tenant_fe.action != "block" or not tenant_fe.rule.strip():
+            raise ConfigValidationError(
+                f"tenant_flag_escalation_invalid: policy_id={policy.id}"
+            )
+        try:
+            _parse_flag_escalation_rule(tenant_fe.rule.strip())
+        except ConfigValidationError:
+            raise ConfigValidationError(
+                f"tenant_flag_escalation_invalid: policy_id={policy.id}"
+            ) from None
 
 
 def _parse_flag_escalation_rule(rule: str) -> None:

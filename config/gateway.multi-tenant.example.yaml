@@ -1,8 +1,10 @@
-# z LLM Safety Gateway — v0.3.0 multi-tenant identity example
+# z LLM Safety Gateway — v0.3.0 tenant policy resolution example
 #
 # Export distinct gateway credentials before starting:
 #   export ZLG_ACME_API_KEY='replace-with-a-strong-secret'
 #   export ZLG_GLOBEX_API_KEY='replace-with-a-different-strong-secret'
+#   export ZLG_ACME_PROVIDER_API_KEY='replace-with-provider-secret'
+#   export ZLG_GLOBEX_PROVIDER_API_KEY='replace-with-provider-secret'
 #   z-safety-gateway --config config/gateway.multi-tenant.example.yaml
 #
 # Tenant identity is selected only from the authenticated API-key binding.
@@ -13,26 +15,85 @@ server:
   port: 8080
 
 providers:
-  - name: "local"
+  - name: "acme-local"
     type: "openai_compatible"
     base_url: "http://localhost:11434/v1"
+    api_key: "${ZLG_ACME_PROVIDER_API_KEY}"
+  - name: "globex-local"
+    type: "openai_compatible"
+    base_url: "http://localhost:11435/v1"
+    api_key: "${ZLG_GLOBEX_PROVIDER_API_KEY}"
 
-routing:
-  rules:
-    - pattern: "*"
-      provider: "local"
+routing: {}
 
 pipeline:
   mode: "sync"
-  detectors:
-    input: []
-    output: []
+
+flows:
+  - contract_version: "1.0"
+    flow_id: "tenant-input-safety"
+    version: "1.0.0"
+    input_schema: "safety.text.v1"
+    output_schema: "safety.detector-result.v1"
+    reducer_capability_id: "detector-result-reducer"
+    nodes:
+      - kind: "capability"
+        contract_version: "1.0"
+        node_id: "sensitive-words"
+        capability_id: "detector.sensitive_words"
+        input_schema: "safety.text.v1"
+        output_schema: "safety.detector-result.v1"
+        policy:
+          timeout: {seconds: 5, action: "fail_closed"}
+          failure: {action: "fail_closed"}
+          availability:
+            required: true
+            on_unavailable: "fail_closed"
+            on_circuit_open: "fail_closed"
+          degradation:
+            allowed: false
+            emit_evidence: true
+            emit_metrics: true
+          stop: {signals: ["safety.block"]}
 
 tenancy:
   enabled: true
   tenants:
     - id: "acme"
+      policy_id: "acme-policy"
     - id: "globex"
+      policy_id: "globex-policy"
+  policies:
+    - id: "acme-policy"
+      input_flow: {flow_id: "tenant-input-safety", version: "1.0.0"}
+      output_flow: null
+      capabilities:
+        - capability_id: "detector.sensitive_words"
+          detector_name: "sensitive_words"
+          config:
+            words: ["acme-restricted"]
+            block_threshold: 1
+            flag_threshold: 0.5
+      routing:
+        models_provider: "acme-local"
+        rules:
+          - pattern: "*"
+            provider: "acme-local"
+    - id: "globex-policy"
+      input_flow: {flow_id: "tenant-input-safety", version: "1.0.0"}
+      output_flow: null
+      capabilities:
+        - capability_id: "detector.sensitive_words"
+          detector_name: "sensitive_words"
+          config:
+            words: ["globex-restricted"]
+            block_threshold: 1
+            flag_threshold: 0.5
+      routing:
+        models_provider: "globex-local"
+        rules:
+          - pattern: "*"
+            provider: "globex-local"
 
 security:
   auth:

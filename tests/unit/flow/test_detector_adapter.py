@@ -17,7 +17,11 @@ from z_llm_safety_gateway_sdk import (
 )
 
 from z_llm_safety_gateway.detectors.base import Detector
-from z_llm_safety_gateway.detectors.status import DetectorState, DetectorStatusRegistry
+from z_llm_safety_gateway.detectors.status import (
+    DetectorReasonCode,
+    DetectorState,
+    DetectorStatusRegistry,
+)
 from z_llm_safety_gateway.flow.contracts import FlowContext, FlowItem
 from z_llm_safety_gateway.flow.detector_adapter import (
     DetectorCapabilityAdapter,
@@ -245,6 +249,33 @@ async def test_tc_dca_004() -> None:
 
     await coordinator.shutdown_all()
     assert shared.shutdown_calls == 1
+
+
+async def test_health_check_error_is_not_reported_as_initialization_error() -> None:
+    """TC-DCA-004: evidence distinguishes lifecycle and health-check failures."""
+
+    class HealthErrorDetector(RecordingDetector):
+        shutdown_calls = 0
+
+        async def health_check(self) -> bool:
+            raise RuntimeError("private health detail")
+
+        async def shutdown(self) -> None:
+            self.shutdown_calls += 1
+
+    detector = HealthErrorDetector()
+    statuses = DetectorStatusRegistry()
+    coordinator = DetectorCapabilityCoordinator(statuses)
+    coordinator.register(direction="input", detector=detector, config={})
+
+    await coordinator.initialize_all()
+    status = statuses.get("input", detector.name)
+
+    assert status.state is DetectorState.UNHEALTHY
+    assert status.reason_code is DetectorReasonCode.HEALTH_CHECK_ERROR
+    assert status.loaded is True
+    await coordinator.shutdown_all()
+    assert detector.shutdown_calls == 1
 
 
 async def test_tc_dca_005() -> None:

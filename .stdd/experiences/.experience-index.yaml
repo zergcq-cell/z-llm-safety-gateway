@@ -19,14 +19,17 @@ by_category:
   coverage_vacuum:
   - EXP-2026-0006
   - EXP-2026-0023
+  - EXP-2026-0027
   pipeline_break:
   - EXP-2026-0001
   - EXP-2026-0004
   - EXP-2026-0020
   - EXP-2026-0021
+  - EXP-2026-0028
   runtime_deviation:
   - EXP-2026-0007
   - EXP-2026-0008
+  - EXP-2026-0026
   tool_misuse:
   - EXP-2026-0011
   - EXP-2026-0014
@@ -58,6 +61,9 @@ by_language:
   - EXP-2026-0023
   - EXP-2026-0024
   - EXP-2026-0025
+  - EXP-2026-0026
+  - EXP-2026-0027
+  - EXP-2026-0028
 by_lifecycle:
   discovered:
   - EXP-2026-0001
@@ -85,6 +91,9 @@ by_lifecycle:
   - EXP-2026-0023
   - EXP-2026-0024
   - EXP-2026-0025
+  - EXP-2026-0026
+  - EXP-2026-0027
+  - EXP-2026-0028
 by_severity:
   high:
   - EXP-2026-0001
@@ -108,10 +117,13 @@ by_severity:
   - EXP-2026-0021
   - EXP-2026-0022
   - EXP-2026-0025
+  - EXP-2026-0026
+  - EXP-2026-0027
+  - EXP-2026-0028
   medium:
   - EXP-2026-0011
   - EXP-2026-0014
   - EXP-2026-0023
   - EXP-2026-0024
-last_id: 25
-total: 25
+last_id: 28
+total: 28

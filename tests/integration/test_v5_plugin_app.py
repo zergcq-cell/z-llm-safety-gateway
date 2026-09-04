@@ -97,6 +97,65 @@ pipeline:
     return cfg_path
 
 
+def _write_tenant_grpc_config(tmp_path: Path, grpc_port: int) -> Path:
+    cfg_path = tmp_path / "tenant-grpc.yaml"
+    cfg_path.write_text(
+        f"""
+server: {{host: 127.0.0.1, port: 8080}}
+providers:
+  - name: local
+    type: openai_compatible
+    base_url: https://provider.invalid/v1
+routing: {{}}
+flows:
+  - contract_version: "1.0"
+    flow_id: tenant-input
+    version: 1.0.0
+    input_schema: safety.text.v1
+    output_schema: safety.detector-result.v1
+    reducer_capability_id: detector-result-reducer
+    nodes:
+      - kind: capability
+        contract_version: "1.0"
+        node_id: remote-guard
+        capability_id: detector.acme_guard
+        input_schema: safety.text.v1
+        output_schema: safety.detector-result.v1
+        policy:
+          availability:
+            required: true
+            on_unavailable: fail_closed
+            on_circuit_open: fail_closed
+tenancy:
+  enabled: true
+  tenants: [{{id: acme, policy_id: acme-policy}}]
+  policies:
+    - id: acme-policy
+      input_flow: {{flow_id: tenant-input, version: 1.0.0}}
+      output_flow: null
+      capabilities:
+        - capability_id: detector.acme_guard
+          detector_name: acme_guard
+          type: grpc
+          config: {{endpoint: "127.0.0.1:{grpc_port}"}}
+          circuit_breaker:
+            enabled: true
+            failure_threshold: 2
+            recovery_timeout: 1s
+            fallback_action: fail_closed
+      routing:
+        models_provider: local
+        rules: [{{pattern: "*", provider: local}}]
+security:
+  auth:
+    enabled: true
+    api_keys: [{{key: tenant-key, name: app, tenant_id: acme}}]
+audit: {{enabled: false, stdout: false, file: {{enabled: false}}}}
+"""
+    )
+    return cfg_path
+
+
 # --------------------------------------------------------------------------- #
 # TC-FSA-501: create_app integrates plugin + gRPC detectors
 # --------------------------------------------------------------------------- #
@@ -113,6 +172,18 @@ def test_create_app_initializes_grpc_detector(tmp_path, grpc_sidecar, monkeypatc
     # gRPC detector present in the input detector set.
     names = [d.name for d in app.state.input_detectors]
     assert "acme_guard" in names
+
+
+def test_create_app_initializes_named_tenant_grpc_binding(
+    tmp_path, grpc_sidecar, monkeypatch
+) -> None:
+    """TC-DDF-009/011: configured gRPC identity compiles before sidecar discovery."""
+    monkeypatch.setattr("importlib.metadata.entry_points", lambda *, group=None: ())
+    app = create_app(str(_write_tenant_grpc_config(tmp_path, grpc_sidecar.port)))
+
+    bundle = app.state.tenant_runtime_bundles[0]
+    assert [detector.name for detector in bundle.input_detectors] == ["acme_guard"]
+    assert bundle.input_detector_configs["acme_guard"]["circuit_breaker"] is not None
 
 
 # --------------------------------------------------------------------------- #

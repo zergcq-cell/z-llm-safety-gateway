@@ -1,0 +1,62 @@
+meta:
+  capability: default-detector-flow
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  created: '2026-09-01T22:58:16+08:00'
+  confidence: high
+requirements:
+  - id: REQ-DDF-005
+    description: Selected tenant policies SHALL drive Flow topology, Detector bindings, thresholds, word lists, and result policy
+    scenarios:
+      - id: SC-DDF-008
+        confidence: high
+        evidence: proposal.yaml C3 and success criterion 1; design Decisions 2/3/5
+        given: acme and globex policies select different input/output Flows whose Nodes produce different safety actions for the same content
+        when: authenticated requests execute through the production PipelineEngine facade
+        then: each request SHALL execute only its selected policy's Flow identities and resolved Node policies
+        and:
+          - action, risk, modification, stop, timeout, availability, and failure behavior SHALL follow that selected Flow
+          - Flow Runtime SHALL remain tenant-domain neutral
+      - id: SC-DDF-009
+        confidence: high
+        evidence: proposal.yaml C3 and success criterion 1; design Decisions 2/3
+        given: two policies bind the same Detector capability with different thresholds, sensitive-word lists, and flag_escalation settings
+        when: identical content is processed for each tenant
+        then: each result SHALL reflect only the binding and reducer policy compiled for that tenant policy
+        and:
+          - raw word-list or Detector configuration SHALL NOT enter TenantPolicyContext, public errors, or routine logs
+          - one policy's initialized Detector SHALL NOT be substituted for the other policy's differently configured instance
+  - id: REQ-DDF-006
+    description: Every pipeline path SHALL retain the selected policy's immutable execution snapshot and isolated lifecycle state
+    scenarios:
+      - id: SC-DDF-010
+        confidence: high
+        evidence: proposal.yaml C2/C6 and success criterion 6; EXP-2026-0001; design Decision 5
+        given: one tenant request exercises input, sync/async output, sliding-window, buffer, and post-audit execution
+        when: stages and background tasks read Detector instances, configs, Flow identities, and Node policies
+        then: all stages SHALL use values captured from the same tenant runtime bundle at request admission
+        and:
+          - no stage SHALL reintroduce app-global Detectors or Flow identities
+          - background async output SHALL retain its captured bundle after the request handler returns
+          - existing HTTP and SSE ordering SHALL remain compatible
+      - id: SC-DDF-011
+        confidence: high
+        evidence: proposal.yaml success criterion 6; design Decisions 4/5
+        given: two policies contain same-named Detector instances and only policy acme reports that Detector unavailable
+        when: acme and globex requests capture availability snapshots
+        then: acme SHALL apply its configured availability policy and globex SHALL retain its healthy Detector
+        and:
+          - status identity SHALL be isolated per compiled policy bundle
+          - a required Detector initialization failure in any declared policy SHALL prevent Gateway readiness
+  - id: REQ-DDF-007
+    description: Tenant selection SHALL not move Detector domain behavior or composition into the Flow core
+    scenarios:
+      - id: SC-DDF-012
+        confidence: medium
+        evidence: proposal.yaml principle_check and C3; design Decisions 2/3
+        given: tenant policy compilation and execution are implemented
+        when: dependency boundaries and runtime branches are inspected
+        then: Flow core SHALL NOT import tenancy, Detector, Provider, or tenant policy modules to decide domain behavior
+        and:
+          - tenant-specific thresholds and word lists SHALL remain plugin binding config
+          - execution order and failure/stop composition SHALL remain Flow contracts
+          - final Detector aggregation SHALL continue through the registered reducer capability

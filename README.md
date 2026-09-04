@@ -102,10 +102,11 @@ development environments.
 **Versioning policy** (SemVer): `v0.0.x` = internal development · `v0.x.y` = public test releases · `v1.0.0` = general availability (when the API is stable and validated).
 
 Next planned milestone: **v0.3.0**, the multi-tenant safety policy isolation foundation. This is
-in progress: the first of four implementation changes adds trusted tenant identity and its
-configuration contract, while tenant-scoped policy isolation is not complete. The released
-Gateway version remains v0.2.2. Scope, implementation units, entry criteria, and completion
-criteria are maintained in the
+in progress: change 1/4 delivered trusted tenant identity, and change 2/4 delivered
+tenant-scoped Flow, Detector policy, and Provider routing.
+Evidence/observability isolation and resource/failure compatibility remain changes 3/4 and 4/4;
+the public milestone is not complete. The released Gateway version remains v0.2.2. Scope,
+implementation units, entry criteria, and completion criteria are maintained in the
 [authoritative project roadmap](DESIGN.md#post-v010-roadmap-until-v100-ga).
 
 ## License

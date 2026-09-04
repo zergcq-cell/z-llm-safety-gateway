@@ -108,7 +108,7 @@ class MetricsRegistry:
         self.detector_up = Gauge(
             "safety_detector_up",
             "Whether a configured detector is loaded and healthy",
-            ["detector_name", "direction", "detector_type"],
+            ["detector_name", "direction", "detector_type", "policy_id"],
             registry=self._registry,
         )
         self.detector_initialization_failures = Counter(
@@ -338,6 +338,7 @@ def set_detector_up(
     direction: str,
     detector_type: str,
     is_up: bool,
+    policy_id: str = "legacy",
 ) -> None:
     """Set a detector's current loaded-and-healthy state."""
     reg = _registry
@@ -347,6 +348,7 @@ def set_detector_up(
         detector_name=detector_name,
         direction=direction,
         detector_type=detector_type,
+        policy_id=policy_id,
     ).set(1 if is_up else 0)
 
 

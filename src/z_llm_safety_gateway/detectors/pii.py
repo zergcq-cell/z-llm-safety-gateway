@@ -102,8 +102,7 @@ class PIIDetector(Detector):
 
         logger.info(
             "PII detector initialized",
-            redaction_mode=self._redaction_mode,
-            entity_types=list(self._patterns.keys()),
+            entity_type_count=len(self._patterns),
         )
 
     async def detect(

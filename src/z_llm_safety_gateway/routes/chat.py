@@ -68,6 +68,7 @@ from z_llm_safety_gateway.recall.webhook import WebhookRecall
 from z_llm_safety_gateway.streaming.handler import StreamingHandler, _extract_delta_text
 from z_llm_safety_gateway.streaming.sse import (
     SSE_DONE,
+    SSEBuffer,
     format_safety_block,
     format_safety_recall,
 )
@@ -91,6 +92,20 @@ _RISK_LEVEL_ORDER: dict[str, int] = {
     "high": 2,
     "critical": 3,
 }
+
+
+def _runtime_value(
+    request: Request,
+    bundle_name: str,
+    legacy_name: str,
+    default: Any,
+) -> Any:
+    """Read one value from the captured tenant bundle or legacy app state."""
+    bundle = getattr(request.state, "_tenant_runtime_bundle", None)
+    if bundle is not None:
+        value = getattr(bundle, bundle_name, None)
+        return default if value is None else value
+    return getattr(request.app.state, legacy_name, default)
 
 
 def _error_response(
@@ -121,7 +136,9 @@ def _filter_available_detectors(
     detectors: list[Any],
 ) -> list[Any]:
     """Exclude unavailable/unhealthy detector instances for this request."""
-    registry = getattr(request.app.state, "detector_status_registry", None)
+    registry = _runtime_value(
+        request, "status_registry", "detector_status_registry", None
+    )
     if registry is None:
         return detectors
     unavailable_detector_ids = {
@@ -138,35 +155,47 @@ def _filter_available_detectors(
 
 def _enforce_detector_availability(request: Request) -> None:
     """Apply fail-closed admission and capture the fail-open request snapshot."""
-    registry = getattr(request.app.state, "detector_status_registry", None)
+    registry = _runtime_value(
+        request, "status_registry", "detector_status_registry", None
+    )
     statuses = registry.snapshot() if registry is not None else ()
     snapshot = capture_flow_execution_snapshot(
         request_id=getattr(request.state, "request_id", ""),
         statuses=statuses,
-        input_detectors=getattr(request.app.state, "input_detectors", ()),
-        output_detectors=getattr(request.app.state, "output_detectors", ()),
-        input_detector_configs=getattr(
-            request.app.state, "input_detector_configs", {}
+        input_detectors=_runtime_value(
+            request, "input_detectors", "input_detectors", ()
         ),
-        output_detector_configs=getattr(
-            request.app.state, "output_detector_configs", {}
+        output_detectors=_runtime_value(
+            request, "output_detectors", "output_detectors", ()
+        ),
+        input_detector_configs=_runtime_value(
+            request, "input_detector_configs", "input_detector_configs", {}
+        ),
+        output_detector_configs=_runtime_value(
+            request, "output_detector_configs", "output_detector_configs", {}
         ),
         max_evidence_size=getattr(
             getattr(getattr(request.app.state, "config", None), "flow_runtime", None),
             "max_evidence_size",
             256 * 1024,
         ),
-        input_flow_identity=getattr(
-            request.app.state, "input_flow_identity", None
+        input_flow_identity=_runtime_value(
+            request, "input_flow_identity", "input_flow_identity", None
         ),
-        output_flow_identity=getattr(
-            request.app.state, "output_flow_identity", None
+        output_flow_identity=_runtime_value(
+            request, "output_flow_identity", "output_flow_identity", None
         ),
-        input_detector_policies=getattr(
-            request.app.state, "input_detector_policies", {}
+        input_detector_policies=_runtime_value(
+            request,
+            "input_detector_policies",
+            "input_detector_policies",
+            {},
         ),
-        output_detector_policies=getattr(
-            request.app.state, "output_detector_policies", {}
+        output_detector_policies=_runtime_value(
+            request,
+            "output_detector_policies",
+            "output_detector_policies",
+            {},
         ),
     )
     request.state.flow_snapshot = snapshot
@@ -232,7 +261,12 @@ def _stage_flow_enabled(
     detectors: Any,
     engine: Any,
 ) -> bool:
-    identity = getattr(request.app.state, f"{direction}_flow_identity", None)
+    identity = _runtime_value(
+        request,
+        f"{direction}_flow_identity",
+        f"{direction}_flow_identity",
+        None,
+    )
     return engine is not None and (bool(detectors) or identity is not None)
 
 
@@ -528,14 +562,21 @@ def _build_streaming_response(
             getattr(
                 request.state,
                 "output_detectors",
-                getattr(request.app.state, "output_detectors", []),
+                _runtime_value(
+                    request, "output_detectors", "output_detectors", []
+                ),
             )
         )
     )
     output_detector_configs = (
         snapshot.output_detector_configs
         if snapshot is not None
-        else getattr(request.app.state, "output_detector_configs", {})
+        else _runtime_value(
+            request,
+            "output_detector_configs",
+            "output_detector_configs",
+            {},
+        )
     )
     post_audit_runner: PostAuditRunner | None = None
     if _stage_flow_enabled(request, "output", output_detectors, engine):
@@ -598,10 +639,16 @@ def _build_streaming_response(
             )
             buffered: list[str] = []
             full_content = ""
+            sse_buffer = SSEBuffer()
             try:
                 async for chunk in provider.stream_forward(body, forward_headers):
                     buffered.append(chunk)
-                    full_content += _extract_delta_text(chunk)
+                    full_content += "".join(
+                        _extract_delta_text(event) for event in sse_buffer.feed(chunk)
+                    )
+                residual = sse_buffer.flush()
+                if residual:
+                    full_content += _extract_delta_text(residual)
             except ProviderError as exc:
                 err = json.dumps(
                     {"error": {"message": exc.message, "type": "provider_error"}}
@@ -888,7 +935,19 @@ async def chat_completions(request: Request) -> Response:
     _enforce_detector_availability(request)
 
     # 3. Route to provider
-    model_router: ModelRouter = request.app.state.router
+    tenant_bundle = getattr(request.state, "_tenant_runtime_bundle", None)
+    if tenant_bundle is not None and tenant_bundle.router_view is None:
+        return _error_response(
+            status_code=503,
+            message="Tenant policy is temporarily unavailable",
+            error_type="service_unavailable",
+            code="tenant_policy_unavailable",
+        )
+    model_router: ModelRouter = (
+        tenant_bundle.router_view
+        if tenant_bundle is not None
+        else request.app.state.router
+    )
     provider = model_router.route(model)
 
     # 4. Build forward headers (X-Request-ID for tracing)
@@ -905,7 +964,7 @@ async def chat_completions(request: Request) -> Response:
         else getattr(
             request.state,
             "input_detectors",
-            getattr(request.app.state, "input_detectors", []),
+            _runtime_value(request, "input_detectors", "input_detectors", []),
         )
     )
     input_detector_configs: dict[str, dict[str, Any]] = (
@@ -914,9 +973,11 @@ async def chat_completions(request: Request) -> Response:
             for name, config in input_stage.detector_configs.items()
         }
         if input_stage is not None
-        else getattr(request.app.state, "input_detector_configs", {})
+        else _runtime_value(
+            request, "input_detector_configs", "input_detector_configs", {}
+        )
     )
-    engine = getattr(request.app.state, "pipeline_engine", None)
+    engine = _runtime_value(request, "engine", "pipeline_engine", None)
 
     input_pipeline_result: Any = None
     input_extracted: list[Any] | None = None
@@ -1064,7 +1125,7 @@ async def chat_completions(request: Request) -> Response:
         else getattr(
             request.state,
             "output_detectors",
-            getattr(request.app.state, "output_detectors", []),
+            _runtime_value(request, "output_detectors", "output_detectors", []),
         )
     )
     output_detector_configs: dict[str, dict[str, Any]] = (
@@ -1073,7 +1134,12 @@ async def chat_completions(request: Request) -> Response:
             for name, config in output_snapshot.output_detector_configs.items()
         }
         if output_snapshot is not None
-        else getattr(request.app.state, "output_detector_configs", {})
+        else _runtime_value(
+            request,
+            "output_detector_configs",
+            "output_detector_configs",
+            {},
+        )
     )
 
     response_content = provider_response.content

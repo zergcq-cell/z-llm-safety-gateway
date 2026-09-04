@@ -1,0 +1,60 @@
+meta:
+  capability: provider-proxy
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  created: '2026-09-01T22:58:16+08:00'
+  confidence: high
+requirements:
+  - id: REQ-PROXY-010
+    description: Provider selection SHALL be restricted to the authenticated tenant policy's immutable routing rules
+    scenarios:
+      - id: SC-PROXY-013
+        confidence: high
+        evidence: proposal.yaml C4 and success criteria 2/3; design Decision 6
+        given: acme and globex policies map the same model pattern to different configured Providers
+        when: each authenticated tenant sends the same model in a chat completion request
+        then: each request SHALL call only the Provider selected by its own policy rule order
+        and:
+          - request body and model SHALL be forwarded without tenant-specific rewriting
+          - Provider adapters and credentials SHALL remain shared private implementation objects
+      - id: SC-PROXY-014
+        confidence: high
+        evidence: proposal.yaml C5 and success criterion 5; design Decisions 6/9
+        given: a model matches global or another policy's rules but matches no rule in the authenticated tenant policy
+        when: chat routing runs
+        then: the request SHALL return the existing OpenAI-compatible HTTP 404 code model_not_found
+        and:
+          - no Provider SHALL be called
+          - the response SHALL NOT enumerate other policies, models, Providers, endpoints, or credentials
+      - id: SC-PROXY-015
+        confidence: high
+        evidence: proposal.yaml success criterion 3; design Decision 6
+        given: an authenticated request supplies tenant, policy, Provider, or routing hints in Headers or body fields
+        when: routing selects a Provider
+        then: the Router view SHALL ignore every untrusted selection hint and use only the captured tenant policy rules
+        and:
+          - an allowed standard model field SHALL select only within that policy's bounded rule domain
+  - id: REQ-PROXY-011
+    description: The models endpoint SHALL use an explicit tenant-authorized Provider without changing passthrough semantics
+    scenarios:
+      - id: SC-PROXY-016
+        confidence: high
+        evidence: proposal.yaml C4/C7; design Decision 7
+        given: an authenticated multi-tenant policy declares a models_provider referenced by at least one allowed route
+        when: the client calls GET /v1/models
+        then: the endpoint SHALL query only that policy's models_provider and pass its status, body, and content type through unchanged
+        and:
+          - results SHALL NOT be aggregated across Providers
+          - the global first Provider SHALL NOT be queried unless it is the selected models_provider
+          - legacy single-tenant mode SHALL retain first-configured-Provider behavior
+  - id: REQ-PROXY-012
+    description: Tenant Router views SHALL reuse private Provider instances and expose only bounded, non-secret routing identity
+    scenarios:
+      - id: SC-PROXY-017
+        confidence: medium
+        evidence: proposal.yaml C6 and evidence/data constraint; design Decisions 4/6
+        given: multiple tenant policies reference one Provider and distinct policies reference different Providers
+        when: startup compiles Router views and requests inspect their TenantPolicyContext
+        then: Provider adapters SHALL be initialized once per global Provider definition and reused by authorized Router views
+        and:
+          - TenantPolicyContext SHALL contain no Provider object, base URL, API Key, or raw rule list
+          - routing errors and routine logs SHALL use stable bounded identifiers only

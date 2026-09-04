@@ -224,10 +224,24 @@ def _freeze_configs(
 ) -> Mapping[str, Mapping[str, Any]]:
     return MappingProxyType(
         {
-            name: MappingProxyType(dict(config))
+            name: MappingProxyType(
+                {key: _freeze_value(value) for key, value in config.items()}
+            )
             for name, config in sorted(configs.items())
         }
     )
+
+
+def _freeze_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {key: _freeze_value(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_value(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_value(item) for item in value)
+    return value
 
 
 def _status_policy(status: DetectorStatus) -> Any:

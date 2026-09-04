@@ -104,13 +104,6 @@ class ToxicityDetector(Detector):
 
         logger.info(
             "toxicity_detector_initialized",
-            model_name=self._model_name,
-            model_cache_dir=self._model_cache_dir,
-            model_version=self._model_version,
-            offline_mode=self._offline_mode,
-            on_error=self._on_error,
-            block_threshold=self._block_threshold,
-            flag_threshold=self._flag_threshold,
         )
 
     async def detect(

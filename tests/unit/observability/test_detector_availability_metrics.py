@@ -54,6 +54,22 @@ def test_detector_up_gauge_tracks_health_transitions() -> None:
     assert sample.endswith(" 0.0")
 
 
+def test_detector_up_gauge_isolated_by_policy_id() -> None:
+    """Same-named tenant detectors cannot overwrite each other's gauge."""
+    metrics.set_enabled(True)
+    metrics.set_detector_up("guard", "output", "builtin", False, "acme")
+    metrics.set_detector_up("guard", "output", "builtin", True, "globex")
+
+    samples = [
+        line
+        for line in metrics.generate_latest().decode().splitlines()
+        if line.startswith("safety_detector_up{")
+    ]
+
+    assert any('policy_id="acme"' in line and line.endswith(" 0.0") for line in samples)
+    assert any('policy_id="globex"' in line and line.endswith(" 1.0") for line in samples)
+
+
 def test_detector_up_gauge_is_wired_to_registry_transitions() -> None:
     """TC-PROM-602: lifecycle callback drives the full 1→0→1 gauge sequence."""
     metrics.set_enabled(True)

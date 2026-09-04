@@ -1,8 +1,9 @@
 changes:
 - 2026-08-19-detector-readiness-fail-safe
+- 2026-09-01-tenant-flow-policy-resolution
 meta:
-  last_updated: '2026-08-31T21:43:25.855466'
-  total_changes: 10
+  last_updated: '2026-09-05T00:28:00+08:00'
+  total_changes: 11
 modules:
   .github/dependabot.yml:
     changes:
@@ -235,6 +236,7 @@ modules:
   src/z_llm_safety_gateway/app.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+    - 2026-09-01-tenant-flow-policy-resolution
   src/z_llm_safety_gateway/audit/logger.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
@@ -265,6 +267,7 @@ modules:
   src/z_llm_safety_gateway/plugins/grpc/client.py:
     changes:
     - 2026-08-19-detector-readiness-fail-safe
+    - 2026-09-01-tenant-flow-policy-resolution
   src/z_llm_safety_gateway/ratelimit/token_bucket.py:
     changes:
     - 2026-08-28-rate-limit-deterministic-concurrency
@@ -331,3 +334,27 @@ modules:
   tools/stdd_backfill.py:
     changes:
     - 2026-08-20-v0.1.1-release-hardening
+  src/z_llm_safety_gateway/tenancy/policy.py:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/tenancy/runtime.py:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/middleware/policy_resolution.py:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/config:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/routes:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/providers/router.py:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/pipeline/snapshot.py:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution
+  src/z_llm_safety_gateway/flow/detector_adapter.py:
+    changes:
+    - 2026-09-01-tenant-flow-policy-resolution

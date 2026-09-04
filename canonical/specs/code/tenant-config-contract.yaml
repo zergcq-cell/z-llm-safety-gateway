@@ -4,72 +4,145 @@ meta:
   created: '2026-08-30T22:00:00+08:00'
   confidence: high
 requirements:
-  - id: REQ-TCC-001
-    description: TenancyConfig SHALL provide an explicit, strict, bounded tenant declaration contract
-    scenarios:
-      - id: SC-TCC-001
-        confidence: high
-        evidence: proposal.yaml what_changes C1/C4; design.md Decisions 1/2
-        given: a Gateway YAML with tenancy.enabled=true, two valid tenant IDs, enabled API Key auth, and one bound key per tenant
-        when: load_config validates the configuration
-        then: GatewayConfig SHALL expose the two declared tenants and their API Key tenant bindings
-        and:
-          - tenant IDs SHALL match the lowercase ASCII slug contract and contain 1 through 64 characters
-          - the tenant declaration order SHALL NOT determine a default or fallback tenant
-          - TenancyConfig and TenantConfig SHALL reject unknown fields
-      - id: SC-TCC-002
-        confidence: high
-        evidence: proposal.yaml constraints 6; design.md Decision 2
-        given: tenant IDs containing uppercase, whitespace, Unicode, path separators, a leading or trailing separator, an empty value, or more than 64 characters
-        when: each candidate configuration is validated
-        then: the configuration SHALL be rejected before gateway startup
-        and:
-          - the validation error SHALL identify the tenant ID field without exposing any API Key value
-      - id: SC-TCC-003
-        confidence: medium
-        evidence: proposal.yaml success_criteria 7; design.md Decision 2
-        given: a multi-tenant configuration declaring more than 1024 tenants or more than 4096 API Keys
-        when: load_config performs cross-field validation
-        then: the gateway SHALL reject startup with tenant_limit_exceeded or tenant_api_key_limit_exceeded
-        and:
-          - validation cost SHALL remain bounded by one pass over tenant and key declarations
-  - id: REQ-TCC-002
-    description: Multi-tenant startup SHALL fail closed for missing, ambiguous, or unreachable identity bindings
-    scenarios:
-      - id: SC-TCC-004
-        confidence: high
-        evidence: proposal.yaml what_changes C4/C5; design.md Decision 4
-        given: tenancy.enabled=true with auth disabled, no tenants, or an API Key missing tenant_id
-        when: load_config validates each invalid configuration
-        then: startup SHALL be rejected with the corresponding stable reason code
-        and:
-          - the accepted reason codes SHALL include tenancy_enabled_requires_auth, tenancy_requires_tenants, and api_key_tenant_required
-          - no invalid configuration SHALL be repaired or downgraded automatically
-      - id: SC-TCC-005
-        confidence: high
-        evidence: proposal.yaml success_criteria 4/5; design.md Decisions 3/4
-        given: tenancy.enabled=true with a duplicate tenant ID, unknown tenant binding, duplicate API Key value, duplicate or empty API Key name, or a tenant without a bound key
-        when: load_config validates each invalid configuration
-        then: startup SHALL be rejected with a stable, case-specific reason code
-        and:
-          - no error or log record SHALL contain a configured API Key value
-          - the gateway SHALL NOT select another tenant or the first declaration as fallback
-      - id: SC-TCC-006
-        confidence: high
-        evidence: proposal.yaml success_criteria 5/6; design.md Decisions 4/7
-        given: tenancy is absent or disabled while tenant declarations or API Key tenant_id values are present
-        when: load_config validates the contradictory configuration
-        then: startup SHALL be rejected with tenancy_disabled_with_tenant_configuration
-        and:
-          - tenancy absent or disabled with no tenant fields SHALL remain a valid legacy configuration
-  - id: REQ-TCC-003
-    description: Tenant configuration SHALL remain identity-only in this change
-    scenarios:
-      - id: SC-TCC-007
-        confidence: high
-        evidence: proposal.yaml non_goals 1/2/3; design.md Context and Decision 1
-        given: a valid tenancy block and API Key bindings
-        when: the canonical config is inspected and a request is admitted
-        then: the tenancy contract SHALL NOT define or resolve tenant-specific Flow, detector, threshold, word-list, provider, evidence, metrics, or resource policy
-        and:
-          - existing global Flow, detector, provider, audit, and observability configuration SHALL remain authoritative in this change
+- id: REQ-TCC-001
+  description: TenancyConfig SHALL provide an explicit, strict, bounded tenant declaration contract
+  scenarios:
+  - id: SC-TCC-001
+    confidence: high
+    evidence: proposal.yaml what_changes C1/C4; design.md Decisions 1/2
+    given: a Gateway YAML with tenancy.enabled=true, two valid tenant IDs, enabled API Key auth, and one bound key per tenant
+    when: load_config validates the configuration
+    then: GatewayConfig SHALL expose the two declared tenants and their API Key tenant bindings
+    and:
+    - tenant IDs SHALL match the lowercase ASCII slug contract and contain 1 through 64 characters
+    - the tenant declaration order SHALL NOT determine a default or fallback tenant
+    - TenancyConfig and TenantConfig SHALL reject unknown fields
+  - id: SC-TCC-002
+    confidence: high
+    evidence: proposal.yaml constraints 6; design.md Decision 2
+    given: tenant IDs containing uppercase, whitespace, Unicode, path separators, a leading or trailing separator, an empty value, or more than 64 characters
+    when: each candidate configuration is validated
+    then: the configuration SHALL be rejected before gateway startup
+    and:
+    - the validation error SHALL identify the tenant ID field without exposing any API Key value
+  - id: SC-TCC-003
+    confidence: medium
+    evidence: proposal.yaml success_criteria 7; design.md Decision 2
+    given: a multi-tenant configuration declaring more than 1024 tenants or more than 4096 API Keys
+    when: load_config performs cross-field validation
+    then: the gateway SHALL reject startup with tenant_limit_exceeded or tenant_api_key_limit_exceeded
+    and:
+    - validation cost SHALL remain bounded by one pass over tenant and key declarations
+- id: REQ-TCC-002
+  description: Multi-tenant startup SHALL fail closed for missing, ambiguous, or unreachable identity bindings
+  scenarios:
+  - id: SC-TCC-004
+    confidence: high
+    evidence: proposal.yaml what_changes C4/C5; design.md Decision 4
+    given: tenancy.enabled=true with auth disabled, no tenants, or an API Key missing tenant_id
+    when: load_config validates each invalid configuration
+    then: startup SHALL be rejected with the corresponding stable reason code
+    and:
+    - the accepted reason codes SHALL include tenancy_enabled_requires_auth, tenancy_requires_tenants, and api_key_tenant_required
+    - no invalid configuration SHALL be repaired or downgraded automatically
+  - id: SC-TCC-005
+    confidence: high
+    evidence: proposal.yaml success_criteria 4/5; design.md Decisions 3/4
+    given: tenancy.enabled=true with a duplicate tenant ID, unknown tenant binding, duplicate API Key value, duplicate or empty API Key name, or a tenant without a bound key
+    when: load_config validates each invalid configuration
+    then: startup SHALL be rejected with a stable, case-specific reason code
+    and:
+    - no error or log record SHALL contain a configured API Key value
+    - the gateway SHALL NOT select another tenant or the first declaration as fallback
+  - id: SC-TCC-006
+    confidence: high
+    evidence: proposal.yaml success_criteria 5/6; design.md Decisions 4/7
+    given: tenancy is absent or disabled while tenant declarations or API Key tenant_id values are present
+    when: load_config validates the contradictory configuration
+    then: startup SHALL be rejected with tenancy_disabled_with_tenant_configuration
+    and:
+    - tenancy absent or disabled with no tenant fields SHALL remain a valid legacy configuration
+- id: REQ-TCC-003
+  description: Tenant configuration SHALL remain identity-only in this change
+  scenarios:
+  - id: SC-TCC-007
+    confidence: high
+    evidence: proposal.yaml non_goals 1/2/3; design.md Context and Decision 1
+    given: a valid tenancy block and API Key bindings
+    when: the canonical config is inspected and a request is admitted
+    then: the tenancy contract SHALL NOT define or resolve tenant-specific Flow, detector, threshold, word-list, provider, evidence, metrics, or resource policy
+    and:
+    - existing global Flow, detector, provider, audit, and observability configuration SHALL remain authoritative in this change
+- id: REQ-TCC-004
+  description: Enabled tenancy SHALL use strict, bounded, explicitly referenced named policy declarations
+  scenarios:
+  - id: SC-TCC-008
+    confidence: high
+    evidence: proposal.yaml C1/C3 and success criterion 1; design Decisions 1/2/3
+    given: tenancy declares acme and globex with policy_id references to two valid named policies
+    when: load_config validates the YAML
+    then: GatewayConfig SHALL expose strict policy declarations with explicit input_flow, output_flow, capabilities, result_policy, and routing fields
+    and:
+    - policy IDs SHALL use the bounded lowercase ASCII slug contract
+    - input_flow and output_flow SHALL be present and MAY be explicitly null
+    - unknown tenant policy fields SHALL be rejected without exposing input values
+  - id: SC-TCC-009
+    confidence: medium
+    evidence: proposal.yaml C6 and bounded constraints; design Decisions 1/10
+    given: two tenants reference one policy or configuration declares more than 1024 policies, 256 bindings, or 256 routing rules per policy
+    when: startup validation runs
+    then: explicit policy reuse SHALL be accepted and every exceeded bound SHALL be rejected with its stable limit reason code
+    and:
+    - a shared compiled policy bundle SHALL be created once
+    - declaration order SHALL NOT select a fallback policy
+- id: REQ-TCC-005
+  description: Startup SHALL reject every statically detectable policy, Flow, capability, and routing ambiguity
+  scenarios:
+  - id: SC-TCC-010
+    confidence: high
+    evidence: proposal.yaml C5 and success criterion 4; design Decisions 1/9
+    given: enabled tenancy has no policies, a tenant lacks policy_id, a duplicate policy ID, or an unknown tenant-to-policy reference
+    when: cross-field validation runs
+    then: startup SHALL fail with tenant_policy_required, duplicate_tenant_policy_id, or unknown_tenant_policy as applicable
+    and:
+    - the validator SHALL NOT choose the first policy or synthesize a policy
+    - errors SHALL identify only bounded tenant and policy IDs
+  - id: SC-TCC-011
+    confidence: high
+    evidence: proposal.yaml C1/C3/C5; design Decisions 2/9
+    given: a policy references an unknown Flow, omits a binding for a selected Detector capability, declares a duplicate binding, or declares an unused binding
+    when: the policy compiler expands both selected stage Flows
+    then: startup SHALL fail with a stable Flow or capability-binding reason code
+    and:
+    - each expanded Detector capability SHALL have exactly one policy-local binding
+    - no plugin default SHALL silently replace a missing binding
+    - nested Flow references SHALL be validated under existing depth and node limits
+  - id: SC-TCC-012
+    confidence: high
+    evidence: proposal.yaml C4/C5; design Decisions 6/7/9
+    given: a policy route references an unknown Provider, duplicates one exact pattern with different Providers, or selects a models_provider absent from its allowed rules
+    when: routing policy validation runs
+    then: startup SHALL fail with tenant_policy_route_provider_not_found, tenant_policy_route_conflict, or tenant_policy_models_provider_not_allowed
+    and:
+    - no Provider Key SHALL appear in validation output or logs
+    - non-identical overlapping patterns SHALL retain explicit first-match order
+- id: REQ-TCC-006
+  description: Tenant policy sources SHALL be unambiguous while legacy single-tenant configuration remains compatible
+  scenarios:
+  - id: SC-TCC-013
+    confidence: high
+    evidence: proposal.yaml C5/C7; design Decision 8
+    given: tenancy policies coexist with explicit global routing.rules, pipeline.detectors, pipeline input/output Flow selectors, or top-level capability bindings
+    when: raw source validation determines execution selectors
+    then: startup SHALL fail with conflicting_tenant_policy_sources
+    and:
+    - global providers, Flow definitions, flow_runtime, and deployment-level transport settings SHALL remain valid declaration sources
+    - no global selector SHALL be accepted and silently ignored
+  - id: SC-TCC-014
+    confidence: high
+    evidence: proposal.yaml C7 and success criterion 8; design Decision 8
+    given: tenancy is absent or disabled with policy declarations or policy_id fields, plus an unchanged legacy control configuration
+    when: each configuration is loaded
+    then: contradictory policy fields SHALL fail with tenancy_disabled_with_tenant_policy and the unchanged legacy control SHALL remain valid
+    and:
+    - existing global Flow, Detector, routing, HTTP, and SSE semantics SHALL remain unchanged for the legacy control

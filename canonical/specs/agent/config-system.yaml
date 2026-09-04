@@ -1,65 +1,91 @@
 meta:
-  task_id: "config-system"
-  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_id: config-system
+  change_id: 2026-08-22-v0.2.0-flow-foundation
   task_type: code
-  system: "z LLM Safety Gateway config-system"
+  system: z LLM Safety Gateway config-system
   preconditions:
-    - "Phase 2 spec locked and the referenced RED test node exists"
+  - Phase 2 spec locked and the referenced RED test node exists
 steps:
-  - id: CP-001
-    description: "SC-CFG-001 配置系统解析严格的新 Flow schema 与 stage 引用"
-    action: "cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_001"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-002
-    description: "SC-CFG-002 配置系统解析严格的新 Flow schema 与 stage 引用"
-    action: "cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_002"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-003
-    description: "SC-CFG-003 旧 YAML 保持加载并编译为等价 Flow"
-    action: "cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_003"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-004
-    description: "SC-CFG-004 旧 YAML 保持加载并编译为等价 Flow"
-    action: "cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_004"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-005
-    description: "SC-CFG-005 跨 Flow 验证在启动阶段拒绝不安全或不确定配置"
-    action: "cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_005"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-006
-    description: "SC-CFG-006 安全配置文档示例由真实运行时模型反向验证"
-    action: "cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_006"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-CFG-701
-    description: Existing single-tenant YAML and HTTP/SSE behavior remain compatible.
-    action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_legacy_config_files_and_protocol_remain_compatible -q
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-CFG-702
-    description: The documented environment-backed multi-tenant YAML validates without exposing keys.
-    action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_documented_multi_tenant_yaml_loads_with_environment_keys -q
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-CFG-703
-    description: create_app production middleware consumes distinct YAML tenant bindings end to end.
-    action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_create_app_resolves_distinct_tenants_over_http -q
-    assertions:
-      - type: exit_code
-        expected: 0
+- id: CP-001
+  description: SC-CFG-001 配置系统解析严格的新 Flow schema 与 stage 引用
+  action: cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_001
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-002
+  description: SC-CFG-002 配置系统解析严格的新 Flow schema 与 stage 引用
+  action: cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_002
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-003
+  description: SC-CFG-003 旧 YAML 保持加载并编译为等价 Flow
+  action: cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_003
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-004
+  description: SC-CFG-004 旧 YAML 保持加载并编译为等价 Flow
+  action: cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_004
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-005
+  description: SC-CFG-005 跨 Flow 验证在启动阶段拒绝不安全或不确定配置
+  action: cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_005
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-006
+  description: SC-CFG-006 安全配置文档示例由真实运行时模型反向验证
+  action: cd ../.. && .venv/bin/pytest -q tests/unit/config/test_flow_config.py::test_tc_cfg_006
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-701
+  description: Existing single-tenant YAML and HTTP/SSE behavior remain compatible.
+  action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_legacy_config_files_and_protocol_remain_compatible -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-702
+  description: The documented environment-backed multi-tenant YAML validates without exposing keys.
+  action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_documented_multi_tenant_yaml_loads_with_environment_keys -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-703
+  description: create_app production middleware consumes distinct YAML tenant bindings end to end.
+  action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_create_app_resolves_distinct_tenants_over_http -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-704
+  description: Real create_app requests consume tenant policy, Flow, Detector config, and Provider routing end to end.
+  action: .venv/bin/pytest tests/integration/test_tenant_policy_runtime.py::test_real_app_uses_tenant_flow_binding_and_router_bundle tests/integration/test_tenant_policy_runtime.py::test_tenant_bundle_drives_streaming_output_paths -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-705
+  description: The documented environment-backed tenant policy YAML compiles without secret exposure.
+  action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_documented_config_compiles_all_private_surfaces_without_secret_leak -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-706
+  description: Existing single-tenant configs and HTTP/SSE/Provider/Flow contracts remain compatible.
+  action: .venv/bin/pytest tests/integration/test_tenant_identity_contract.py::test_legacy_config_files_and_protocol_remain_compatible -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-CFG-707
+  description: Project docs report v0.3.0 change 2/4 accurately and preserve later-change boundaries.
+  action: .venv/bin/pytest tests/unit/release/test_documentation_contract.py::test_v030_tenant_policy_resolution_status -q
+  assertions:
+  - type: exit_code
+    expected: 0
 rollback:
   steps:
-    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"
+  - Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence
+  - Revert application wiring, example, and roadmap state together without modifying immutable archives.
+  - Re-run configuration, documentation, HTTP, and SSE regression suites.

@@ -1,0 +1,331 @@
+artifacts:
+  canonical_agent_specs: canonical/specs/agent
+  canonical_code_specs: canonical/specs/code
+  design_adjustments_md: design-adjustments.md
+  design_adjustments_yaml: design-adjustments.yaml
+  design_md: design.md
+  human_specs: specs
+  proposal_md: proposal.md
+  proposal_yaml: canonical/proposals/2026-09-01-tenant-flow-policy-resolution.yaml
+  test_plan_md: test-plan.md
+  test_report_md: test-report.md
+change_id: 2026-09-01-tenant-flow-policy-resolution
+complexity_score: 17
+confirmed_at:
+  gate1_understand: '2026-09-01T22:01:48+08:00'
+  gate2_spec: '2026-09-01T22:58:16+08:00'
+  gate3_verify: '2026-09-05T00:24:00+08:00'
+critical:
+  cross_system: false
+  financial: false
+  is_critical: true
+  rationale: 租户级安全策略与 Provider 路由解析错误可能造成跨租户策略越权。
+  required_anchoring_level: L3
+  safety_critical: true
+current_phase: completed
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+long_range:
+  authorization: user_full_control_for_change
+  authorization_adjustment: verification findings required adjacent runtime, test,
+    and compatibility-config fixes; user had granted full control for this change
+  authorized_paths:
+  - changes/2026-09-01-tenant-flow-policy-resolution
+  - src/z_llm_safety_gateway/tenancy
+  - src/z_llm_safety_gateway/config
+  - src/z_llm_safety_gateway/pipeline
+  - src/z_llm_safety_gateway/providers
+  - src/z_llm_safety_gateway/routes
+  - src/z_llm_safety_gateway/app.py
+  - src/z_llm_safety_gateway/middleware
+  - src/z_llm_safety_gateway/detectors
+  - src/z_llm_safety_gateway/flow
+  - src/z_llm_safety_gateway/audit/models.py
+  - src/z_llm_safety_gateway/observability/metrics.py
+  - src/z_llm_safety_gateway/plugins/grpc/client.py
+  - tests/unit/tenancy
+  - tests/unit/config
+  - tests/unit/providers
+  - tests/unit/middleware
+  - tests/unit/routes
+  - tests/unit/flow
+  - tests/unit/audit/test_detector_availability_audit.py
+  - tests/unit/observability/test_detector_availability_metrics.py
+  - tests/unit/release/test_documentation_contract.py
+  - tests/integration
+  - config
+  - DESIGN.md
+  - README.md
+  - CHANGELOG.md
+  - AGENTS.md
+  - pyproject.toml
+  - .stdd/experiences
+  - .stdd/skills/_shared/confirm-gate.md
+  auto_fix_failure_limit: 3
+  enabled: true
+  gate3_mandatory: true
+  git_delivery_authorized: true
+  max_iterations: 10
+  mode: full_auto
+  operations:
+    command_exec: allow
+    directory: allow
+    file_read: allow
+    file_write: allow
+    git_readonly: allow
+    network: allow_if_needed
+    script_exec: allow
+  platform_permissions: codex_managed
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-09-01T22:58:16+08:00'
+  selection: full_auto
+mode: thorough
+mode_selection: completed
+phase:
+  build: completed
+  current: completed
+  deliver: completed
+  slice: completed
+  spec: completed
+  understand: completed
+  verify: completed
+phase1:
+  capabilities_modified: 4
+  capabilities_new: 1
+  completed_at: '2026-09-01T22:01:48+08:00'
+  principle_check: completed
+  proposal_review:
+    auto_fixed: 2
+    conclusion: passed
+    dimensions:
+    - completeness
+    - clarity
+    - scope
+    discovered: 2
+    unresolved: 0
+  status: completed
+phase2:
+  anchoring:
+    actual: L3
+    minimum: L3_safety_critical
+    references:
+    - 2026-08-22-v0.2.0-flow-foundation
+    - 2026-08-30-v0.3.0-milestone-roadmap
+    - 2026-08-30-tenant-identity-config-contract
+    status: passed
+  capabilities: 5
+  completed_at: '2026-09-01T22:58:16+08:00'
+  confidence:
+    high: 22
+    low: 0
+    medium: 5
+  confirmed_at: '2026-09-01T22:58:16+08:00'
+  experiences_loaded:
+  - EXP-2026-0001
+  - EXP-2026-0002
+  - EXP-2026-0005
+  - EXP-2026-0008
+  - EXP-2026-0009
+  - EXP-2026-0011
+  - EXP-2026-0022
+  - EXP-2026-0023
+  - EXP-2026-0025
+  priority:
+    P0: 22
+    P1: 5
+    P2: 0
+  requirements: 14
+  review:
+    auto_fixed: 6
+    conclusion: passed_with_documented_tool_fallback
+    dimensions:
+    - requirement_coverage
+    - scenario_completeness
+    - tc_id_consistency
+    - document_consistency
+    discovered: 6
+    tool_limitations:
+    - extract-proposal missed generated Human View capability headings; canonical
+      proposal used as authority
+    - canon spec renderer route is unreliable; canonical-first files and deterministic
+      Human Views validated directly
+    unresolved: 0
+  scenarios: 27
+  status: completed
+phase3:
+  capabilities: 5
+  completed_at: '2026-09-01T23:07:54+08:00'
+  critical_path_depth: 6
+  dependency_cycles: 0
+  dependency_edges_cli: 0
+  dependency_edges_manual: 7
+  requirements_covered: 14
+  scenarios_covered: 27
+  slices: 7
+  status: completed
+phase4:
+  completed_at: '2026-09-03T08:48:33+08:00'
+  known_environment_signals:
+  - TC-PE-003 throughput benchmark repeatedly below historical threshold under current
+    host load; no changed code path and deterministic operation-count checks remain
+    authoritative
+  slices_completed:
+    S1:
+      completed_at: '2026-09-01T23:25:41+08:00'
+      focused: 39_passed
+      new_tests: tests/unit/config/test_tenant_policies.py
+      red: import_contract_missing
+      regression: 1128_passed_1_skipped_1_unrelated_perf_signal
+      static: ruff_mypy_passed
+      status: done
+      tc_coverage: 4/4
+      verified_at: '2026-09-01T23:25:41+08:00'
+    S2:
+      completed_at: '2026-09-01T23:25:41+08:00'
+      focused: 172_passed
+      new_tests: tests/unit/config/test_tenant_policy_validation.py
+      red: 14_failed_1_passed
+      regression: 1145_passed_1_skipped_1_unrelated_perf_signal
+      static: ruff_mypy_passed
+      status: done
+      tc_coverage: 3/3
+      verified_at: '2026-09-01T23:25:41+08:00'
+    S3:
+      completed_at: '2026-09-01T23:31:00+08:00'
+      focused: 81_passed_1_skipped
+      new_tests: tests/unit/tenancy/test_policy_resolver.py
+      red: module_not_found
+      static: ruff_mypy_passed
+      status: done
+      tc_coverage: 5/5
+      verified_at: '2026-09-01T23:31:00+08:00'
+    S4:
+      completed_at: '2026-09-03T08:48:33+08:00'
+      focused: 42_passed
+      new_tests: tests/unit/tenancy/test_runtime_bundle.py
+      red: module_not_found
+      static: ruff_mypy_passed
+      status: done
+      tc_coverage: 4/4
+      verified_at: '2026-09-03T08:48:33+08:00'
+    S5:
+      completed_at: '2026-09-03T08:48:33+08:00'
+      focused: 46_passed
+      new_tests: tests/unit/providers/test_tenant_router.py
+      red: 5_failed_missing_tenant_view
+      static: ruff_mypy_passed
+      status: done
+      tc_coverage: 5/5
+      verified_at: '2026-09-03T08:48:33+08:00'
+    S6:
+      completed_at: '2026-09-03T08:48:33+08:00'
+      focused: 47_passed
+      new_tests: tests/unit/routes/test_tenant_policy_snapshot.py
+      red: unexpected_bundle_policy_fields
+      static: ruff_mypy_passed
+      status: done
+      tc_coverage: 2/2
+      verified_at: '2026-09-03T08:48:33+08:00'
+    S7:
+      checkpoint_execution_cases: 60_passed
+      checkpoint_unique_nodes: 49_passed
+      checkpoints: 27/27
+      completed_at: '2026-09-03T08:48:33+08:00'
+      focused: 27_docs_and_integration_passed
+      new_tests: tests/integration/test_tenant_policy_runtime.py; tests/integration/test_tenant_identity_contract.py;
+        tests/unit/release/test_documentation_contract.py
+      red: phase4_red_result_not_recorded
+      static: ruff_mypy_yaml_diff_passed
+      status: done
+      tc_coverage: 4/4
+      verified_at: '2026-09-03T08:48:33+08:00'
+  status: completed
+phase5:
+  checkpoints:
+    actions: 27/27_passed
+    execution_cases: 60_passed
+    unique_nodes: 49_passed
+  completed_at: '2026-09-05T00:22:01+08:00'
+  failure_modes:
+    checked: 12/12
+    fixed_hits:
+    - cascading_fallback
+    - runtime_deviation
+    - pipeline_break
+    - coverage_vacuum
+    gate3_process_deviation: S7_phase4_red_result_not_recorded
+  gate3_recommendation: recommend_with_disclosed_process_and_environment_signals
+  principles: 4/4_passed
+  python_matrix:
+    '3.10': 1189_passed_1_skipped_1_deselected
+    '3.11': 1189_passed_1_skipped_1_deselected
+    '3.12': 1189_passed_1_skipped_1_deselected
+    deselected: tests/unit/pipeline/test_flow_compat.py::test_tc_pe_003
+  quality:
+    diff_check: passed
+    e2e: not_applicable_disabled_by_project_config
+    mypy: 104_files_passed
+    pip_audit: no_known_third_party_vulnerabilities
+    ruff: passed
+    yaml: passed
+  release_gate:
+    coverage: 93.02_percent
+    duration_seconds: 74.03
+    python: 3.12.14
+    result: 1190_passed_1_skipped
+  review:
+    initial_aggregate: C0_H15_M15_L3
+    last_successful:
+      code: C0_H1_M2_L0
+      docs: C0_H0_M1_L0
+      tests: C0_H2_M4_L2
+    post_review_fixes:
+    - readiness_total_deadline
+    - tenant_scoped_degraded_and_details
+    - policy_scoped_lifecycle_audit_and_metrics
+    - concurrent_sync_output_barrier
+    - checkpoint_counts_recollected_as_49_unique_60_cases
+    tool_limitation: final follow-up reviewer turns hit account usage limit; not represented
+      as independent PASS
+    verification: focused_and_full_quality_gates_passed
+  status: completed
+phase6:
+  status: completed
+  completed_at: '2026-09-05T07:23:14+08:00'
+  archive: archive/2026-09-01-tenant-flow-policy-resolution
+  human_specs: merged
+  canonical_specs: merged_and_equivalence_verified
+  structure_summary: merged_with_archive_path_fallback
+  experience_share: no_deposited_experiences
+  git_delivery: authorized_for_commit_and_push
+  commit_message: 'feat(tenancy): add tenant-scoped policy runtime'
+  suggested_tag: none_public_v0.3.0_milestone_incomplete
+  tool_limitations:
+  - archive subcommand ignored the global dry-run flag and executed the already-authorized archive operation
+  - canon verify and structure merge only search changes/, although deliver archives first; deterministic archive-path equivalents passed
+phases:
+  build:
+    completed_at: '2026-09-03T08:48:33+08:00'
+    status: completed
+  deliver:
+    completed_at: '2026-09-05T07:23:14+08:00'
+    status: completed
+  slice:
+    completed_at: '2026-09-01T23:07:54+08:00'
+    status: completed
+  spec:
+    confirmed_at: '2026-09-01T22:58:16+08:00'
+    status: completed
+  understand:
+    confirmed_at: '2026-09-01T22:01:48+08:00'
+    status: completed
+  verify:
+    completed_at: '2026-09-05T00:22:01+08:00'
+    confirmed_at: '2026-09-05T00:24:00+08:00'
+    status: completed
+score_confidence: preliminary
+status: archived
+task_type: code
+version: '2.0'

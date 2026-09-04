@@ -1,0 +1,17 @@
+designs: {}
+proposals:
+  2026-09-01-tenant-flow-policy-resolution: proposals/2026-09-01-tenant-flow-policy-resolution.yaml
+specs:
+  agent:
+    config-system: specs/agent/config-system.yaml
+    default-detector-flow: specs/agent/default-detector-flow.yaml
+    provider-proxy: specs/agent/provider-proxy.yaml
+    tenant-config-contract: specs/agent/tenant-config-contract.yaml
+    tenant-policy-resolution: specs/agent/tenant-policy-resolution.yaml
+  code:
+    config-system: specs/code/config-system.yaml
+    default-detector-flow: specs/code/default-detector-flow.yaml
+    provider-proxy: specs/code/provider-proxy.yaml
+    tenant-config-contract: specs/code/tenant-config-contract.yaml
+    tenant-policy-resolution: specs/code/tenant-policy-resolution.yaml
+version: '2.9'

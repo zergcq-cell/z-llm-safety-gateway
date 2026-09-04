@@ -292,11 +292,19 @@ def test_tenant_auth_middleware_order_and_secret_safety(
 server: {host: 127.0.0.1, port: 8080}
 providers:
   - {name: local, type: openai_compatible, base_url: http://localhost:11434/v1}
-routing:
-  rules: [{pattern: "*", provider: local}]
+routing: {}
 tenancy:
   enabled: true
-  tenants: [{id: acme}, {id: globex}]
+  tenants:
+    - {id: acme, policy_id: default-policy}
+    - {id: globex, policy_id: default-policy}
+  policies:
+    - id: default-policy
+      input_flow: null
+      output_flow: null
+      routing:
+        models_provider: local
+        rules: [{pattern: "*", provider: local}]
 security:
   auth:
     enabled: true

@@ -1,0 +1,49 @@
+meta:
+  capability: config-system
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  created: '2026-09-01T22:58:16+08:00'
+  confidence: high
+requirements:
+  - id: REQ-CFG-703
+    description: Accepted tenant policy configuration SHALL be compiled and consumed by the real application request path
+    scenarios:
+      - id: SC-CFG-704
+        confidence: high
+        evidence: proposal.yaml C1-C6 and success criteria 1/2/6; EXP-2026-0008; design Decisions 4/5/10
+        given: create_app loads a YAML file with two tenants, two policies, distinct Flows and bindings, and tenant-specific routes for the same model
+        when: real authenticated HTTP requests enter chat sync and streaming paths
+        then: production wiring SHALL resolve the corresponding policy, execute its Flow/config, and call its authorized Provider end to end
+        and:
+          - the two requests SHALL not share policy Context, Detector state, or Provider selection
+          - SSE and non-streaming public contracts SHALL remain compatible
+      - id: SC-CFG-705
+        confidence: high
+        evidence: proposal.yaml constraints and success criterion 4; EXP-2026-0005/0025; design Decisions 9/10
+        given: the documented multi-tenant policy YAML uses real environment interpolation for Gateway and Provider Keys plus valid literal policy references
+        when: load_config and create_app consume the example
+        then: the example SHALL validate and compile through production models, validators, Detector factories, and Router construction
+        and:
+          - every security-relevant field SHALL exist at the documented runtime path
+          - canonical, human docs, errors, logs, repr, and policy Context SHALL NOT expose interpolated secrets
+  - id: REQ-CFG-704
+    description: The change SHALL preserve legacy contracts and accurately report v0.3.0 progress without implementing later isolation phases
+    scenarios:
+      - id: SC-CFG-706
+        confidence: high
+        evidence: proposal.yaml C7 and success criteria 8/10; design Decisions 8/10
+        given: gateway.yaml, gateway.prod.yaml, representative v0.2.2 fixtures, existing explicit Flow configs, and their HTTP/SSE tests contain no tenant policy fields
+        when: full configuration and request regressions run
+        then: every previously valid single-tenant configuration and public HTTP/SSE/Provider/Flow behavior SHALL remain compatible
+        and:
+          - no legacy file SHALL require policy_id, policies, models_provider, or tenant-local bindings
+          - existing error status, body, headers, payload forwarding, and SSE chunk order SHALL remain unchanged
+      - id: SC-CFG-707
+        confidence: high
+        evidence: proposal.yaml C7/non_goals; v0.3.0 roadmap; design Context
+        given: Phase 2 scope and eventual implementation are reflected in DESIGN, README, CHANGELOG, AGENTS, specs, and canonical indexes
+        when: documentation contract tests inspect current milestone state
+        then: project surfaces SHALL state that change 1/4 is delivered and change 2/4 is active or delivered according to lifecycle state
+        and:
+          - v0.3.0 SHALL NOT be marked complete or release-ready
+          - tenant evidence/observability and resource/failure aggregate isolation SHALL remain explicitly pending
+          - no v0.3.0 tag or artifact version SHALL be created by this change

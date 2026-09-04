@@ -1,53 +1,85 @@
 meta:
-  task_id: "default-detector-flow"
-  change_id: "2026-08-22-v0.2.0-flow-foundation"
+  task_id: default-detector-flow
+  change_id: 2026-08-22-v0.2.0-flow-foundation
   task_type: code
-  system: "z LLM Safety Gateway default-detector-flow"
+  system: z LLM Safety Gateway default-detector-flow
   preconditions:
-    - "Phase 2 spec locked and the referenced RED test node exists"
+  - Phase 2 spec locked and the referenced RED test node exists
 steps:
-  - id: CP-001
-    description: "SC-DDF-001 旧 detector YAML 被确定性编译为 input/output 默认 Flow"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_001"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-002
-    description: "SC-DDF-002 旧 detector YAML 被确定性编译为 input/output 默认 Flow"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_002"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-003
-    description: "SC-DDF-003 默认 reducer 与 stop policy 保持 Pipeline 结果语义"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_003"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-004
-    description: "SC-DDF-004 默认 reducer 与 stop policy 保持 Pipeline 结果语义"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_004"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-005
-    description: "SC-DDF-005 所有 detector 执行路径共享请求级 Flow snapshot"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_005"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-006
-    description: "SC-DDF-006 所有 detector 执行路径共享请求级 Flow snapshot"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_006 tests/integration/test_pipeline_flow.py::test_complete_flow_allow_path tests/unit/routes/test_availability_guard.py::test_output_fail_closed_preflight_blocks_every_response_mode tests/integration/test_streaming.py::test_streaming_returns_sse_chunks tests/integration/test_streaming.py::test_buffer_mode_safe_replay tests/integration/test_streaming.py::test_async_output_detection_returns_immediately tests/integration/test_streaming.py::test_post_audit_recall_sse_event"
-    assertions:
-      - type: exit_code
-        expected: 0
-  - id: CP-007
-    description: "SC-DDF-007 Detector 聚合作为可注册 reducer capability 而非通用核心分支"
-    action: "cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_007"
-    assertions:
-      - type: exit_code
-        expected: 0
+- id: CP-001
+  description: SC-DDF-001 旧 detector YAML 被确定性编译为 input/output 默认 Flow
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_001
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-002
+  description: SC-DDF-002 旧 detector YAML 被确定性编译为 input/output 默认 Flow
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_002
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-003
+  description: SC-DDF-003 默认 reducer 与 stop policy 保持 Pipeline 结果语义
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_003
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-004
+  description: SC-DDF-004 默认 reducer 与 stop policy 保持 Pipeline 结果语义
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_004
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-005
+  description: SC-DDF-005 所有 detector 执行路径共享请求级 Flow snapshot
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_005
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-006
+  description: SC-DDF-006 所有 detector 执行路径共享请求级 Flow snapshot
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_006 tests/integration/test_pipeline_flow.py::test_complete_flow_allow_path tests/unit/routes/test_availability_guard.py::test_output_fail_closed_preflight_blocks_every_response_mode tests/integration/test_streaming.py::test_streaming_returns_sse_chunks tests/integration/test_streaming.py::test_buffer_mode_safe_replay tests/integration/test_streaming.py::test_async_output_detection_returns_immediately tests/integration/test_streaming.py::test_post_audit_recall_sse_event
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-007
+  description: SC-DDF-007 Detector 聚合作为可注册 reducer capability 而非通用核心分支
+  action: cd ../.. && .venv/bin/pytest -q tests/integration/test_default_detector_flow.py::test_tc_ddf_007
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-DDF-008
+  description: Distinct tenant Flows produce their configured actions and Node policy behavior.
+  action: .venv/bin/pytest tests/integration/test_tenant_policy_runtime.py::test_real_app_uses_tenant_flow_binding_and_router_bundle -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-DDF-009
+  description: Same Detector capability uses only its tenant thresholds, word list, and result policy.
+  action: .venv/bin/pytest tests/unit/tenancy/test_runtime_bundle.py::test_policy_bundles_isolate_flow_binding_reducer_and_status -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-DDF-010
+  description: Input, output, streaming, and background stages share one tenant execution snapshot.
+  action: .venv/bin/pytest tests/unit/routes/test_tenant_policy_snapshot.py tests/integration/test_tenant_policy_runtime.py::test_concurrent_requests_keep_sync_output_policy_snapshots_isolated tests/integration/test_tenant_policy_runtime.py::test_tenant_bundle_drives_streaming_output_paths tests/integration/test_tenant_policy_runtime.py::test_tenant_bundle_drives_async_output_and_recall -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-DDF-011
+  description: Same-named Detector lifecycle status is isolated per policy bundle.
+  action: .venv/bin/pytest tests/unit/tenancy/test_runtime_bundle.py::test_policy_bundles_isolate_flow_binding_reducer_and_status tests/unit/tenancy/test_runtime_bundle.py::test_required_failure_rejects_all_bundles_and_cleans_up tests/integration/test_tenant_policy_runtime.py::test_ready_refreshes_every_tenant_registry tests/unit/routes/test_detector_readiness.py::test_ready_hides_other_tenant_detector_details tests/unit/routes/test_detector_readiness.py::test_ready_limits_health_check_concurrency -q
+  assertions:
+  - type: exit_code
+    expected: 0
+- id: CP-DDF-012
+  description: Flow core remains domain-neutral and aggregation remains a reducer capability.
+  action: .venv/bin/pytest tests/integration/test_default_detector_flow.py::test_tc_ddf_007 -q
+  assertions:
+  - type: exit_code
+    expected: 0
 rollback:
   steps:
-    - "Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence"
+  - Revert only the implementation slice associated with the failing checkpoint; preserve RED test evidence
+  - Revert per-policy bundle assembly and snapshot selection together.
+  - Re-run all existing Flow Foundation checkpoints before retrying.

@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 import fnmatch
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from types import MappingProxyType
 
-from z_llm_safety_gateway.config.models import GatewayConfig, ProviderConfig
+from z_llm_safety_gateway.config.models import (
+    MAX_TENANT_POLICY_ROUTES,
+    GatewayConfig,
+    ProviderConfig,
+    TenantPolicyRoutingConfig,
+    TenantRoutingRuleConfig,
+)
 from z_llm_safety_gateway.providers.azure_openai import AzureOpenAIProvider
 from z_llm_safety_gateway.providers.base import BaseProvider, ProviderError
 from z_llm_safety_gateway.providers.openai import OpenAIProvider
@@ -15,6 +24,51 @@ _PROVIDER_TYPES: dict[str, type[BaseProvider]] = {
     "openai_compatible": OpenAICompatibleProvider,
     "azure_openai": AzureOpenAIProvider,
 }
+
+
+@dataclass(frozen=True, slots=True)
+class TenantRouteSelection:
+    """One tenant-scoped route decision with bounded-work evidence."""
+
+    provider: BaseProvider = field(repr=False)
+    comparisons: int
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class TenantRouterView:
+    """Immutable tenant routing rules over shared Provider adapters."""
+
+    _rules: tuple[TenantRoutingRuleConfig, ...] = field(repr=False)
+    _provider_instances: Mapping[str, BaseProvider] = field(repr=False)
+    _models_provider_name: str = field(repr=False)
+
+    def __repr__(self) -> str:
+        """Return a bounded representation without routing or Provider details."""
+        return f"TenantRouterView(rule_count={len(self._rules)})"
+
+    @property
+    def models_provider(self) -> BaseProvider:
+        """Return the policy's explicit Provider for ``GET /v1/models``."""
+        return self._provider_instances[self._models_provider_name]
+
+    def resolve(self, model: str) -> TenantRouteSelection:
+        """Resolve *model* and expose the deterministic comparison count."""
+        for comparisons, rule in enumerate(self._rules, start=1):
+            if fnmatch.fnmatch(model, rule.pattern):
+                return TenantRouteSelection(
+                    provider=self._provider_instances[rule.provider],
+                    comparisons=comparisons,
+                )
+
+        raise ProviderError(
+            provider_name="router",
+            message="No tenant routing rule matches requested model",
+            status_code=404,
+        )
+
+    def route(self, model: str) -> BaseProvider:
+        """Route *model* strictly inside this tenant policy's rule domain."""
+        return self.resolve(model).provider
 
 
 class ModelRouter:
@@ -28,6 +82,9 @@ class ModelRouter:
 
     def __init__(self, config: GatewayConfig) -> None:
         self._rules = config.routing.rules
+        self._legacy_models_provider_name = (
+            config.providers[0].name if config.providers else None
+        )
         self._providers: dict[str, ProviderConfig] = {
             p.name: p for p in config.providers
         }
@@ -47,6 +104,56 @@ class ModelRouter:
             )
 
         self._conflict_warnings = self._detect_conflicts()
+
+    def tenant_view(self, routing: TenantPolicyRoutingConfig) -> TenantRouterView:
+        """Compile an immutable tenant view that reuses initialized adapters.
+
+        The view receives only adapters named by its rules. This prevents a
+        later request-time lookup from reaching a Provider outside the captured
+        tenant policy, while keeping adapter construction global and one-time.
+        """
+        rules = tuple(routing.rules)
+        if len(rules) > MAX_TENANT_POLICY_ROUTES:
+            raise ValueError("tenant_policy_route_limit_exceeded")
+
+        allowed_provider_names: set[str] = set()
+        providers_by_pattern: dict[str, str] = {}
+        for rule in rules:
+            previous_provider = providers_by_pattern.get(rule.pattern)
+            if previous_provider is not None and previous_provider != rule.provider:
+                raise ValueError("tenant_policy_route_conflict")
+            providers_by_pattern[rule.pattern] = rule.provider
+
+            if rule.provider not in self._provider_instances:
+                raise ValueError("tenant_policy_route_provider_not_found")
+            allowed_provider_names.add(rule.provider)
+
+        if routing.models_provider not in self._provider_instances:
+            raise ValueError("tenant_policy_route_provider_not_found")
+        if routing.models_provider not in allowed_provider_names:
+            raise ValueError("tenant_policy_models_provider_not_allowed")
+
+        shared_allowed_instances = MappingProxyType(
+            {
+                name: self._provider_instances[name]
+                for name in allowed_provider_names
+            }
+        )
+        return TenantRouterView(
+            _rules=rules,
+            _provider_instances=shared_allowed_instances,
+            _models_provider_name=routing.models_provider,
+        )
+
+    def models_provider(self) -> BaseProvider:
+        """Return the first configured Provider for legacy ``GET /v1/models``."""
+        if self._legacy_models_provider_name is None:
+            raise ProviderError(
+                provider_name="router",
+                message="No providers configured",
+                status_code=500,
+            )
+        return self._provider_instances[self._legacy_models_provider_name]
 
     def route(self, model: str) -> BaseProvider:
         """Route *model* to the first matching provider (first match wins).

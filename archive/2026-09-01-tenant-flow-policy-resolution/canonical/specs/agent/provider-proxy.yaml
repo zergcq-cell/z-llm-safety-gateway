@@ -1,0 +1,33 @@
+meta:
+  task_id: provider-proxy
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  task_type: code
+  system: Tenant-bounded Provider routing and models endpoint passthrough
+  preconditions:
+    - Provider definitions and credentials have passed existing validation.
+    - A trusted tenant policy bundle is selected before routing.
+steps:
+  - id: CP-PROXY-013
+    description: The same model routes to the Provider selected by each tenant policy.
+    action: .venv/bin/pytest tests/unit/providers/test_tenant_router.py::test_same_model_routes_within_each_tenant_policy -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-PROXY-014
+    description: A model outside the tenant routing domain returns 404 without Provider use.
+    action: .venv/bin/pytest tests/unit/providers/test_tenant_router.py::test_route_miss_never_falls_back_or_calls_provider -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-PROXY-015
+    description: Client routing hints cannot escape the captured policy Router view.
+    action: .venv/bin/pytest tests/unit/providers/test_tenant_router.py::test_client_hints_cannot_override_tenant_router -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-PROXY-016
+    description: GET models queries only the explicit tenant models Provider and preserves passthrough.
+    action: .venv/bin/pytest tests/integration/test_tenant_policy_runtime.py::test_models_endpoint_uses_explicit_tenant_models_provider -q
+    assertions: [{type: exit_code, expected: 0}]
+  - id: CP-PROXY-017
+    description: Router views reuse private Provider adapters without exposing secrets in policy Context.
+    action: .venv/bin/pytest tests/unit/providers/test_tenant_router.py::test_router_views_reuse_private_provider_instances -q
+    assertions: [{type: exit_code, expected: 0}]
+rollback:
+  steps:
+    - Revert tenant Router views and models-provider selection while preserving existing ModelRouter behavior.
+    - Run all provider-proxy and models endpoint regressions.

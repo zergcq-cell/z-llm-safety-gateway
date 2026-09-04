@@ -1,0 +1,48 @@
+meta:
+  change_id: 2026-09-01-tenant-flow-policy-resolution
+  created: '2026-09-03T15:03:00+08:00'
+  total_adjustments: 5
+  requires_re_spec: false
+  requires_re_build: false
+
+adjustments:
+  - id: ADJ-001
+    category: design_change
+    original: Runtime bundle fields were optional to support Phase 3 identity-only tests.
+    adjusted: Startup install and request resolution require a complete executable bundle; routes retain explicit 503 defense-in-depth and only disabled tenancy may use the legacy runtime.
+    reason: Phase 5 dynamic review reproduced a tenant-to-global fail-open fallback.
+    principle_impact: Strengthens explicit failure and the tenant execution boundary; no approved contract changes.
+    affected_capabilities: [tenant-policy-resolution, provider-proxy]
+    resolved_in_phase: VERIFY
+  - id: ADJ-002
+    category: design_change
+    original: Per-policy status registries existed but readiness refreshed only the legacy registry, and tenant circuit-breaker declarations were not compiled.
+    adjusted: Readiness refreshes every policy registry with batches of at most 32 and one five-second aggregate deadline, computes application-wide strict readiness, and exposes Detector details/degraded state only for the request policy. Lifecycle audit and metrics add bounded policy identity, and each policy receives its own configured CircuitBreaker.
+    reason: Phase 5 runtime probes showed false-ready status, cross-policy readiness detail and metric overwrites, unbounded probe duration, and silently inactive circuit policy.
+    principle_impact: Makes policy enforcement explicit, prevents cross-policy observation, and keeps lifecycle evidence attributable without moving tenant logic into Flow core or implementing the later request-evidence change.
+    affected_capabilities: [default-detector-flow, tenant-config-contract]
+    resolved_in_phase: VERIFY
+  - id: ADJ-003
+    category: boundary_discovery
+    original: Bundle and request config mappings were shallowly immutable, and credential fields remained visible in model repr.
+    adjusted: Nested config containers are recursively frozen; Gateway and Provider credential fields are excluded from repr; routine Detector logs expose only bounded summaries.
+    reason: Mutation and synthetic-secret probes demonstrated cross-request mutation and representation leakage.
+    principle_impact: Strengthens stable snapshots and data protection; runtime access to credential values is unchanged.
+    affected_capabilities: [tenant-policy-resolution, default-detector-flow, config-system]
+    resolved_in_phase: VERIFY
+  - id: ADJ-004
+    category: boundary_discovery
+    original: Buffer streaming extracted one JSON delta directly from each network text chunk.
+    adjusted: Buffer streaming reassembles SSE event boundaries with SSEBuffer before extracting delta text.
+    reason: A real tenant SSE test proved that one network chunk may contain multiple events and previously bypassed buffer detection.
+    principle_impact: Preserves transparent SSE bytes while ensuring the safety decision has complete content evidence.
+    affected_capabilities: [default-detector-flow, config-system]
+    resolved_in_phase: VERIFY
+  - id: ADJ-005
+    category: test_change
+    original: All DeprecationWarning instances were test errors on every supported Python version.
+    adjusted: The exact AnyIO BlockingPortal compatibility warning emitted by Starlette on Python 3.10/3.11 is ignored after the general error rule; all other DeprecationWarning instances remain errors.
+    reason: The declared Python matrix could not collect tests due solely to a known third-party compatibility alias.
+    principle_impact: No runtime or public-contract impact; restores truthful multi-version verification without broad warning suppression.
+    affected_capabilities: [config-system]
+    resolved_in_phase: VERIFY

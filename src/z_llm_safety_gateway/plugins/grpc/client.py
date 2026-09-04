@@ -66,7 +66,8 @@ class GRPCDetector:
     description: str = "gRPC sidecar detector"
     version: str = "0.0.0"
 
-    def __init__(self) -> None:
+    def __init__(self, *, name: str = "grpc") -> None:
+        self.name = name
         self._grpc: Any = None
         self._channel: Any = None
         self._stub: Any = None
@@ -151,7 +152,6 @@ class GRPCDetector:
             self.version = init_resp.info.version or self.version
         logger.info(
             "gRPC detector initialized",
-            endpoint=self._endpoint,
             name=self.name,
             version=self.version,
         )

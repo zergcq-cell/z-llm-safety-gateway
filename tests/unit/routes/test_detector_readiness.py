@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ from z_llm_safety_gateway.detectors.status import (
     DetectorState,
     DetectorStatusRegistry,
 )
+from z_llm_safety_gateway.routes import health as health_routes
 from z_llm_safety_gateway.routes.health import router
 
 
@@ -147,6 +149,108 @@ def test_ready_fail_open_issue_returns_exact_degraded_schema() -> None:
             {"name": "toxicity", "direction": "input", "state": "unavailable"}
         ],
     }
+
+
+def test_ready_aggregates_tenant_bundle_registries_and_fails_closed() -> None:
+    """TC-DDF-011: one tenant strict health failure makes the app not ready."""
+    healthy = _loaded_status(on_error="fail_closed", detector=HealthDetector([True]))
+    unhealthy = _loaded_status(on_error="fail_closed", detector=HealthDetector([False]))
+    app = _app_with_statuses(DetectorStatusRegistry())
+    app.state.tenant_runtime_bundles = (
+        SimpleNamespace(policy_id="acme", status_registry=healthy),
+        SimpleNamespace(policy_id="globex", status_registry=unhealthy),
+    )
+
+    response = TestClient(app).get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "not_ready"
+    assert response.json()["detectors"]["configured"] == 2
+    assert response.json()["detectors"]["unhealthy"] == 1
+
+
+def test_ready_hides_other_tenant_detector_details() -> None:
+    """TC-DDF-011: app readiness does not disclose another policy's status."""
+    acme = _loaded_status(on_error="fail_closed", detector=HealthDetector([True]))
+    globex = DetectorStatusRegistry()
+    globex.register(
+        direction="output",
+        name="globex-private-detector",
+        detector_type="grpc",
+        required=True,
+        on_error="fail_closed",
+        timeout_seconds=0.1,
+    )
+    globex.transition(
+        "output",
+        "globex-private-detector",
+        DetectorState.UNAVAILABLE,
+    )
+    acme_bundle = SimpleNamespace(policy_id="acme", status_registry=acme)
+    globex_bundle = SimpleNamespace(policy_id="globex", status_registry=globex)
+    app = _app_with_statuses(DetectorStatusRegistry())
+    app.state.tenant_runtime_bundles = (acme_bundle, globex_bundle)
+
+    @app.middleware("http")
+    async def select_acme(request: Any, call_next: Any) -> Any:
+        request.state._tenant_runtime_bundle = acme_bundle
+        return await call_next(request)
+
+    response = TestClient(app).get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["detectors"]["configured"] == 1
+    assert "globex-private-detector" not in response.text
+
+
+def test_ready_limits_health_check_concurrency() -> None:
+    """A readiness probe creates at most one bounded batch of health tasks."""
+    active = 0
+    maximum_active = 0
+
+    class CountedDetector:
+        async def health_check(self) -> bool:
+            nonlocal active, maximum_active
+            active += 1
+            maximum_active = max(maximum_active, active)
+            await asyncio.sleep(0.001)
+            active -= 1
+            return True
+
+    statuses = DetectorStatusRegistry()
+    for index in range(65):
+        name = f"guard-{index}"
+        statuses.register(
+            direction="input",
+            name=name,
+            detector_type="builtin",
+            required=False,
+            on_error="fail_open",
+            timeout_seconds=0.1,
+        )
+        statuses.transition(
+            "input", name, DetectorState.HEALTHY, detector=CountedDetector()
+        )
+
+    response = TestClient(_app_with_statuses(statuses)).get("/ready")
+
+    assert response.status_code == 200
+    assert maximum_active == 32
+
+
+def test_ready_has_an_application_wide_refresh_deadline(monkeypatch: Any) -> None:
+    """The aggregate tenant health refresh fails closed within one deadline."""
+    statuses = _loaded_status(
+        on_error="fail_closed",
+        detector=HealthDetector([True], delay=0.1),
+        timeout_seconds=1.0,
+    )
+    monkeypatch.setattr(health_routes, "_HEALTH_REFRESH_DEADLINE_SECONDS", 0.001)
+
+    response = TestClient(_app_with_statuses(statuses)).get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "not_ready"
 
 
 def test_ready_health_exception_and_timeout_use_stable_reasons() -> None:

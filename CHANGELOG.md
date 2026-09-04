@@ -14,7 +14,8 @@
 - 将 `DESIGN.md` 的 Post-v0.1.0 Roadmap 明确为版本路线的唯一权威来源，并区分内部
   `v0.0.3` 与新的公共 `v0.3.0`。
 - 将 v0.3.0 的规划主题限定为多租户安全策略隔离基础，拆分为四个后续独立 STDD changes；
-  当前正在实施第 1/4 个 change：可信租户身份与配置契约；租户级策略隔离尚未完成。
+  第 1/4 个 change 已交付可信租户身份与配置契约以及第 2/4 个 change 的租户级 Flow、
+  Detector 配置和 Provider 路由解析；第 1/4、2/4 个 changes 均已交付，第 3/4、4/4 尚未开始。
 - Anthropic/Gemini、多模态、OAuth 和额外检测器延后到各自独立的 STDD 范围决策，不承诺
   新的目标版本。
 - Gateway 发布版本仍为 v0.2.2、Detector SDK 仍为 v0.1.1；里程碑尚未宣告完成。

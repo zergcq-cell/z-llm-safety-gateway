@@ -1,0 +1,139 @@
+# proposal.yaml — Canonical 格式
+
+meta:
+  change_id: "2026-09-01-tenant-flow-policy-resolution"
+  title: "v0.3.0 租户级 Flow 与安全策略解析"
+  created: "2026-09-01T22:01:48+08:00"
+  status: confirmed
+
+why:
+  problem: >
+    v0.3.0 已建立可信租户身份与配置契约，但当前所有租户仍共享同一套全局 Flow、
+    Detector 配置、阈值、词表和 Provider 路由。网关虽然能够识别租户，却尚不能保证
+    不同租户按各自安全策略执行，也不能阻止模型路由越出租户允许的 Provider 范围。
+  motivation: >
+    本 change 是 v0.3.0 四个运行时实施单元中的第二个。只有先建立由可信 TenantContext
+    驱动、启动期验证且请求期有界的策略解析，后续证据隔离、资源隔离和整体验收才能
+    建立在稳定、无跨租户回退的执行边界上。
+
+what_changes:
+  - id: C1
+    description: "扩展租户配置，使租户显式引用经过启动期验证的 Flow、Detector、策略和 Provider 路由配置"
+    type: modified
+  - id: C2
+    description: "建立由可信 TenantContext 驱动的不可变请求级租户策略快照"
+    type: new
+  - id: C3
+    description: "按租户解析 input/output Flow、节点策略、Detector 参数、阈值和词表"
+    type: modified
+  - id: C4
+    description: "将 Provider 选择限制在租户允许的路由范围内，禁止客户端输入越权切换租户策略"
+    type: modified
+  - id: C5
+    description: "启动期拒绝未知、重复、悬空和冲突引用；运行期拒绝缺失策略和越权路由，不静默回退"
+    type: modified
+  - id: C6
+    description: "预编译租户策略关系，使请求期解析为有界查找且并发请求互不污染"
+    type: new
+  - id: C7
+    description: "保持旧单租户 YAML、Flow、HTTP/SSE 和 Provider 协议行为兼容，并更新 v0.3.0 roadmap 状态"
+    type: modified
+
+capabilities:
+  new:
+    - name: tenant-policy-resolution
+      description: "从可信租户身份解析不可变、有界且非秘密的请求级 Flow、安全策略和 Provider 路由快照"
+  modified:
+    - name: tenant-config-contract
+      description: "从 identity-only 声明演进为显式、可验证的租户策略引用契约"
+    - name: default-detector-flow
+      description: "支持请求级 Flow、Detector 参数、阈值、词表和节点策略选择"
+    - name: provider-proxy
+      description: "在租户允许的路由范围内选择 Provider，禁止跨租户或全局静默回退"
+    - name: config-system
+      description: "在启动期验证并预编译全部租户策略关系，同时保留单租户兼容入口"
+
+constraints:
+  - "严格 TDD：每个实施切片必须遵循 RED→GREEN→REFACTOR"
+  - "策略选择只能使用经过认证建立的 TenantContext，不得信任客户端租户 Header 或 body 字段"
+  - "Detector 领域行为仍属于插件，执行顺序和组合仍由 Flow 定义，核心只承担策略引用、编译和解析"
+  - "多租户模式下策略缺失、冲突、未知引用或越权 Provider 路由必须 fail-closed，禁止跨租户或全局回退"
+  - "租户策略快照不得包含 API Key、Provider Key 或其他认证秘密"
+  - "请求期解析必须使用启动期预编译的有界结构，不执行无界配置扫描"
+  - "现有单租户配置无需迁移，OpenAI-compatible HTTP/SSE 与 Provider 请求语义保持不变"
+  - "本 change 不引入数据库、动态控制面、配置热更新或分布式缓存"
+
+stakeholders:
+  - "网关部署与配置维护者"
+  - "调用网关的多租户应用和平台团队"
+  - "安全策略、Flow 和 Detector 插件维护者"
+  - "Provider 路由及后续可观测性、资源隔离能力开发者"
+
+risk_areas:
+  - capability: tenant-policy-resolution
+    risk: "策略解析错误或共享可变状态可能导致跨租户安全策略污染"
+    mitigation: "只消费可信 TenantContext，启动期预编译不可变快照，并覆盖并发、伪造和缺失上下文场景"
+  - capability: tenant-config-contract
+    risk: "引用歧义或静默默认值可能把租户绑定到错误 Flow、Detector 或 Provider"
+    mitigation: "启动期拒绝重复、悬空和冲突引用，并使用稳定、脱敏的失败原因"
+  - capability: default-detector-flow
+    risk: "租户覆盖逻辑进入核心可能破坏插件化和 Flow 契约"
+    mitigation: "租户只选择已验证的 Flow 与能力配置；Detector 行为留在插件，组合留在 Flow"
+  - capability: provider-proxy
+    risk: "客户端 model 字段可能越出租户允许范围并访问其他 Provider"
+    mitigation: "先按可信租户限定路由域，再在域内匹配 model；无匹配时显式拒绝"
+  - capability: config-system
+    risk: "新增租户策略 schema 可能破坏现有单租户配置"
+    mitigation: "保留现有全局配置路径，并以旧配置夹具、HTTP/SSE 集成测试和全量回归证明兼容"
+
+non_goals:
+  - "不实现租户级审计日志、Trace、Metrics 或完整证据隔离；这些属于第 3/4 个 change"
+  - "不实现租户配额、并发公平性、限流、容量或资源隔离；这些属于第 4/4 个 change"
+  - "不引入租户数据库、控制面 API、热更新、动态生命周期或分布式缓存"
+  - "不实现 OAuth、JWT 或新的认证协议"
+  - "不增加 Anthropic、Gemini、多模态、新 Provider 协议或新 Detector"
+  - "不修改 Gateway/SDK 制品版本，不创建 v0.3.0 tag，也不宣告里程碑完成"
+
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+
+anchoring:
+  level: L3
+  reference_changes:
+    - "2026-08-22-v0.2.0-flow-foundation"
+    - "2026-08-30-v0.3.0-milestone-roadmap"
+    - "2026-08-30-tenant-identity-config-contract"
+  anchor_implementations: []
+
+principle_check:
+  plugin_flow: >
+    Detector 领域行为继续属于插件，执行顺序和组合继续由 Flow 管理。核心只增加可信策略引用、
+    启动期编译和请求级解析机制，不承载租户专属检测逻辑。
+  explicit_policy_failure: >
+    缺失策略、未知或冲突引用、客户端越权和无匹配 Provider 均显式失败；多租户模式不静默回退到
+    其他租户或全局策略，旧单租户兼容路径保持明确。
+  transparent_contracts: >
+    不改写客户端 model、HTTP/SSE 或 Provider 协议语义；只在可信租户允许的路由域内选择目标。
+    配置启动期预编译，请求期成本有界。
+  evidence_data_protection: >
+    策略快照只携带有界、非秘密的租户、Flow、策略和路由标识，不包含 API Key 或 Provider Key；
+    完整证据与可观测性投影由后续独立 change 实现。
+  tradeoffs_or_departures: >
+    为保证租户隔离，多租户策略解析失败采用 fail-closed；旧单租户配置继续使用既有全局行为。
+    无原则偏离。
+
+success_criteria:
+  - "两个租户可以在同一 Gateway 中解析为不同的 input/output Flow、Detector 参数、阈值、词表和 Provider 路由"
+  - "相同 model 值可以依据可信租户身份在各自允许的路由域内选择不同 Provider"
+  - "客户端 Header、body 或 model 输入不能覆盖可信租户身份或选择其他租户策略"
+  - "未知、重复、悬空和冲突策略引用在启动期以稳定、脱敏的原因失败"
+  - "运行期缺失策略、无匹配 Provider 或越权路由不会回退到其他租户或全局配置"
+  - "并发租户请求使用彼此独立、不可变的策略快照，不发生跨租户污染"
+  - "请求期解析使用启动期预编译的有界查找，不执行无界配置扫描"
+  - "原有单租户 YAML、Flow、HTTP、SSE 和 Provider 行为保持兼容"
+  - "新增单元、集成和失败路径测试；全量 pytest、ruff、mypy 通过且覆盖率不下降"
+  - "不提前实现后续 evidence/observability 和 resource/failure/aggregate changes 的能力"

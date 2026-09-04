@@ -1,89 +1,145 @@
 meta:
-  capability: "default-detector-flow"
-  change_id: "2026-08-22-v0.2.0-flow-foundation"
-  created: "2026-08-22T22:10:50+08:00"
+  capability: default-detector-flow
+  change_id: 2026-08-22-v0.2.0-flow-foundation
+  created: '2026-08-22T22:10:50+08:00'
   confidence: high
 requirements:
-  - id: REQ-DDF-001
-    description: "旧 detector YAML 被确定性编译为 input/output 默认 Flow"
-    scenarios:
-      - id: SC-DDF-001
-        confidence: high
-        evidence: "proposal C7/C8; success_criteria 3/4; design D6"
-        given: "现有 pipeline.detectors input/output、threshold、priority、required、on_error、timeout、circuit breaker、short_circuit 和 flag escalation 配置"
-        when: "LegacyDetectorFlowCompiler 在启动时运行"
-        then: "编译器 SHALL 生成等价 legacy-input-detector-flow 与 legacy-output-detector-flow"
-        and:
-          - "每个 detector SHALL 对应唯一 Node"
-          - "所有旧策略 SHALL 映射为显式 resolved policy"
-          - "旧配置文件 SHALL 无需修改"
-          - "编译结果 SHALL NOT 持久化秘密"
-      - id: SC-DDF-002
-        confidence: medium
-        evidence: "proposal C8; design D6"
-        given: "同一旧 YAML 被重复加载"
-        when: "规范化为默认 Flow"
-        then: "两次 resolved Flow 结构、Node 顺序、策略和 reducer 配置 SHALL 相同"
-        and:
-          - "结果 SHALL 不依赖 dict 哈希或任务完成顺序"
-          - "诊断指纹 SHALL 排除密钥和原始内容"
-  - id: REQ-DDF-002
-    description: "默认 reducer 与 stop policy 保持 Pipeline 结果语义"
-    scenarios:
-      - id: SC-DDF-003
-        confidence: high
-        evidence: "proposal C7; pipeline-engine anchors; design D3/D6"
-        given: "Detector 结果包含 allow、flag、modify、block、不同 risk 和 priority"
-        when: "detector-result-reducer 聚合 Flow 结果"
-        then: "final action SHALL 保持 block>modify>flag>allow，risk SHALL 取最高，modification SHALL 按 priority/配置顺序排列"
-        and:
-          - "flag escalation SHALL 保持既有 DSL 行为"
-          - "空结果 SHALL 为 allow/low"
-          - "触发结果 SHALL 保留 detector identity"
-      - id: SC-DDF-004
-        confidence: high
-        evidence: "proposal C7; pipeline REQ-002/003; design D4"
-        given: "short_circuit_on 分别为 block 或 block_and_modify"
-        when: "Detector Node 发出 block 或 modify signal"
-        then: "stop signals SHALL 精确复现既有短路矩阵"
-        and:
-          - "block 模式 SHALL 仅因 block 停止"
-          - "block_and_modify SHALL 因 block 或 modify 停止"
-          - "pending 调用 SHALL 取消并产证"
-  - id: REQ-DDF-003
-    description: "所有 detector 执行路径共享请求级 Flow snapshot"
-    scenarios:
-      - id: SC-DDF-005
-        confidence: high
-        evidence: "proposal C7; EXP-2026-0001; design D7"
-        given: "一次请求包含 input、sync/async output、sliding window、buffer 或 post-audit 阶段，且存在 fail-open unavailable Detector"
-        when: "请求入口创建 snapshot 并进入各阶段"
-        then: "全部阶段 SHALL 使用同一 Flow/Capability 可用性快照"
-        and:
-          - "unavailable Detector SHALL 在所有阶段保持跳过"
-          - "async background SHALL 持有 snapshot 副本"
-          - "不得通过全局 runner 重新引入 Detector"
-          - "每次跳过 SHALL 有 NodeEvidence"
-      - id: SC-DDF-006
-        confidence: high
-        evidence: "proposal C10; success_criteria 6; design D7/D14"
-        given: "现有 HTTP、SSE、Provider 与 safety header 回归样例"
-        when: "内部 detector pipeline 改由默认 Flow 执行"
-        then: "公开状态码、body、header、SSE event 顺序和 Provider 透传 SHALL 与基线一致"
-        and:
-          - "fail-closed output unavailable 时 Provider SHALL NOT 被调用"
-          - "stream buffer replay SHALL 保持原 chunk"
-          - "async output SHALL 继续立即返回"
-  - id: REQ-DDF-004
-    description: "Detector 聚合作为可注册 reducer capability 而非通用核心分支"
-    scenarios:
-      - id: SC-DDF-007
-        confidence: medium
-        evidence: "PRINCIPLES 1; proposal principle_check; design D3"
-        given: "通用 FlowRuntime 与注册的 detector-result-reducer"
-        when: "执行默认 Detector Flow"
-        then: "Runtime SHALL 仅通过 reducer contract 聚合结果且 SHALL NOT 包含 detector action precedence 分支"
-        and:
-          - "reducer descriptor SHALL 带版本"
-          - "reducer failure SHALL 按 Flow failure policy 处理"
-          - "依赖边界测试 SHALL 阻止 flow core 导入 detector 模块"
+- id: REQ-DDF-001
+  description: 旧 detector YAML 被确定性编译为 input/output 默认 Flow
+  scenarios:
+  - id: SC-DDF-001
+    confidence: high
+    evidence: proposal C7/C8; success_criteria 3/4; design D6
+    given: 现有 pipeline.detectors input/output、threshold、priority、required、on_error、timeout、circuit breaker、short_circuit 和 flag escalation 配置
+    when: LegacyDetectorFlowCompiler 在启动时运行
+    then: 编译器 SHALL 生成等价 legacy-input-detector-flow 与 legacy-output-detector-flow
+    and:
+    - 每个 detector SHALL 对应唯一 Node
+    - 所有旧策略 SHALL 映射为显式 resolved policy
+    - 旧配置文件 SHALL 无需修改
+    - 编译结果 SHALL NOT 持久化秘密
+  - id: SC-DDF-002
+    confidence: medium
+    evidence: proposal C8; design D6
+    given: 同一旧 YAML 被重复加载
+    when: 规范化为默认 Flow
+    then: 两次 resolved Flow 结构、Node 顺序、策略和 reducer 配置 SHALL 相同
+    and:
+    - 结果 SHALL 不依赖 dict 哈希或任务完成顺序
+    - 诊断指纹 SHALL 排除密钥和原始内容
+- id: REQ-DDF-002
+  description: 默认 reducer 与 stop policy 保持 Pipeline 结果语义
+  scenarios:
+  - id: SC-DDF-003
+    confidence: high
+    evidence: proposal C7; pipeline-engine anchors; design D3/D6
+    given: Detector 结果包含 allow、flag、modify、block、不同 risk 和 priority
+    when: detector-result-reducer 聚合 Flow 结果
+    then: final action SHALL 保持 block>modify>flag>allow，risk SHALL 取最高，modification SHALL 按 priority/配置顺序排列
+    and:
+    - flag escalation SHALL 保持既有 DSL 行为
+    - 空结果 SHALL 为 allow/low
+    - 触发结果 SHALL 保留 detector identity
+  - id: SC-DDF-004
+    confidence: high
+    evidence: proposal C7; pipeline REQ-002/003; design D4
+    given: short_circuit_on 分别为 block 或 block_and_modify
+    when: Detector Node 发出 block 或 modify signal
+    then: stop signals SHALL 精确复现既有短路矩阵
+    and:
+    - block 模式 SHALL 仅因 block 停止
+    - block_and_modify SHALL 因 block 或 modify 停止
+    - pending 调用 SHALL 取消并产证
+- id: REQ-DDF-003
+  description: 所有 detector 执行路径共享请求级 Flow snapshot
+  scenarios:
+  - id: SC-DDF-005
+    confidence: high
+    evidence: proposal C7; EXP-2026-0001; design D7
+    given: 一次请求包含 input、sync/async output、sliding window、buffer 或 post-audit 阶段，且存在 fail-open unavailable Detector
+    when: 请求入口创建 snapshot 并进入各阶段
+    then: 全部阶段 SHALL 使用同一 Flow/Capability 可用性快照
+    and:
+    - unavailable Detector SHALL 在所有阶段保持跳过
+    - async background SHALL 持有 snapshot 副本
+    - 不得通过全局 runner 重新引入 Detector
+    - 每次跳过 SHALL 有 NodeEvidence
+  - id: SC-DDF-006
+    confidence: high
+    evidence: proposal C10; success_criteria 6; design D7/D14
+    given: 现有 HTTP、SSE、Provider 与 safety header 回归样例
+    when: 内部 detector pipeline 改由默认 Flow 执行
+    then: 公开状态码、body、header、SSE event 顺序和 Provider 透传 SHALL 与基线一致
+    and:
+    - fail-closed output unavailable 时 Provider SHALL NOT 被调用
+    - stream buffer replay SHALL 保持原 chunk
+    - async output SHALL 继续立即返回
+- id: REQ-DDF-004
+  description: Detector 聚合作为可注册 reducer capability 而非通用核心分支
+  scenarios:
+  - id: SC-DDF-007
+    confidence: medium
+    evidence: PRINCIPLES 1; proposal principle_check; design D3
+    given: 通用 FlowRuntime 与注册的 detector-result-reducer
+    when: 执行默认 Detector Flow
+    then: Runtime SHALL 仅通过 reducer contract 聚合结果且 SHALL NOT 包含 detector action precedence 分支
+    and:
+    - reducer descriptor SHALL 带版本
+    - reducer failure SHALL 按 Flow failure policy 处理
+    - 依赖边界测试 SHALL 阻止 flow core 导入 detector 模块
+- id: REQ-DDF-005
+  description: Selected tenant policies SHALL drive Flow topology, Detector bindings, thresholds, word lists, and result policy
+  scenarios:
+  - id: SC-DDF-008
+    confidence: high
+    evidence: proposal.yaml C3 and success criterion 1; design Decisions 2/3/5
+    given: acme and globex policies select different input/output Flows whose Nodes produce different safety actions for the same content
+    when: authenticated requests execute through the production PipelineEngine facade
+    then: each request SHALL execute only its selected policy's Flow identities and resolved Node policies
+    and:
+    - action, risk, modification, stop, timeout, availability, and failure behavior SHALL follow that selected Flow
+    - Flow Runtime SHALL remain tenant-domain neutral
+  - id: SC-DDF-009
+    confidence: high
+    evidence: proposal.yaml C3 and success criterion 1; design Decisions 2/3
+    given: two policies bind the same Detector capability with different thresholds, sensitive-word lists, and flag_escalation settings
+    when: identical content is processed for each tenant
+    then: each result SHALL reflect only the binding and reducer policy compiled for that tenant policy
+    and:
+    - raw word-list or Detector configuration SHALL NOT enter TenantPolicyContext, public errors, or routine logs
+    - one policy's initialized Detector SHALL NOT be substituted for the other policy's differently configured instance
+- id: REQ-DDF-006
+  description: Every pipeline path SHALL retain the selected policy's immutable execution snapshot and isolated lifecycle state
+  scenarios:
+  - id: SC-DDF-010
+    confidence: high
+    evidence: proposal.yaml C2/C6 and success criterion 6; EXP-2026-0001; design Decision 5
+    given: one tenant request exercises input, sync/async output, sliding-window, buffer, and post-audit execution
+    when: stages and background tasks read Detector instances, configs, Flow identities, and Node policies
+    then: all stages SHALL use values captured from the same tenant runtime bundle at request admission
+    and:
+    - no stage SHALL reintroduce app-global Detectors or Flow identities
+    - background async output SHALL retain its captured bundle after the request handler returns
+    - existing HTTP and SSE ordering SHALL remain compatible
+  - id: SC-DDF-011
+    confidence: high
+    evidence: proposal.yaml success criterion 6; design Decisions 4/5
+    given: two policies contain same-named Detector instances and only policy acme reports that Detector unavailable
+    when: acme and globex requests capture availability snapshots
+    then: acme SHALL apply its configured availability policy and globex SHALL retain its healthy Detector
+    and:
+    - status identity SHALL be isolated per compiled policy bundle
+    - a required Detector initialization failure in any declared policy SHALL prevent Gateway readiness
+- id: REQ-DDF-007
+  description: Tenant selection SHALL not move Detector domain behavior or composition into the Flow core
+  scenarios:
+  - id: SC-DDF-012
+    confidence: medium
+    evidence: proposal.yaml principle_check and C3; design Decisions 2/3
+    given: tenant policy compilation and execution are implemented
+    when: dependency boundaries and runtime branches are inspected
+    then: Flow core SHALL NOT import tenancy, Detector, Provider, or tenant policy modules to decide domain behavior
+    and:
+    - tenant-specific thresholds and word lists SHALL remain plugin binding config
+    - execution order and failure/stop composition SHALL remain Flow contracts
+    - final Detector aggregation SHALL continue through the registered reducer capability

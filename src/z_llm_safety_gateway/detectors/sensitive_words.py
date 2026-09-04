@@ -104,9 +104,6 @@ class SensitiveWordsDetector(Detector):
             "sensitive_words_initialized",
             en_word_count=len(en_words),
             zh_word_count=len(zh_words),
-            match_mode=self._match_mode,
-            block_threshold=self._block_threshold,
-            flag_threshold=self._flag_threshold,
         )
 
     async def detect(

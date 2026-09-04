@@ -51,6 +51,7 @@ class DetectorLifecycleEvent(BaseModel):
 
     event_type: Literal["detector_lifecycle"] = "detector_lifecycle"
     timestamp: str = Field(default_factory=_utcnow)
+    policy_id: str = "legacy"
     detector_name: str
     direction: Literal["input", "output"]
     detector_type: str
