@@ -468,7 +468,7 @@ def test_v030_scope_change_preserves_runtime_and_version_surfaces() -> None:
     assert "All four v0.3.0 implementation changes are delivered." in roadmap
     assert "All four v0.3.0 implementation changes are delivered" in roadmap
     assert "All four v0.3.0 implementation changes are delivered" in roadmap
-    assert "There is no package version change" in roadmap
+    assert "there is no package version change" in roadmap
     assert 'version = "0.2.2"' in gateway_project
     assert 'version = "0.1.1"' in sdk_project
     assert "tenant_id" in runtime

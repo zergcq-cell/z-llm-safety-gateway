@@ -42,4 +42,4 @@ def test_roadmap_records_change_four_delivery() -> None:
     design = (root / "DESIGN.md").read_text()
 
     assert "all four changes are delivered" in readme
-    assert "change 4/4 delivered" in design
+    assert "All four v0.3.0 implementation changes are delivered" in design
