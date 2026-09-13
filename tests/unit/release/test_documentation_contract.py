@@ -203,8 +203,8 @@ def test_design_roadmap_matches_release_history() -> None:
         "| v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed |",
         "| v0.2.1 | Release version hotfix | Released 2026-08-24 |",
         "| v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 |",
-        "| v0.3.0 | Multi-tenant safety policy isolation foundation | In progress; "
-        "Foundation complete; all four changes delivered |",
+        "**Runtime status:** All four v0.3.0 implementation changes are delivered. "
+        "Change 4/4 delivered.",
     ):
         assert required in roadmap
     for non_goal in ("K8s Helm Chart", "Redis rate limiting", "provider failover", "SBOM"):
@@ -273,8 +273,8 @@ def test_v030_delivery_is_split_into_independent_stdd_changes() -> None:
         "Each implementation change requires explicit Gate 1, Gate 2, and Gate 3 approval."
         in roadmap
     )
-    assert "all four changes are delivered" in roadmap
-    assert "must not be marked complete or release-ready" in roadmap
+    assert "All four v0.3.0 implementation changes are delivered" in roadmap
+    assert "foundation is complete" in roadmap
 
 
 def test_v030_active_candidates_are_completely_classified() -> None:
@@ -446,7 +446,7 @@ def test_v030_changelog_and_project_memory_are_planning_only() -> None:
 
     assert "v0.3.0 里程碑范围与 Roadmap" in unreleased
     assert "可信租户身份与配置契约" in unreleased
-    assert "第 1/4、2/4、3/4 个 changes 均已交付" in unreleased
+    assert "v0.3.0 里程碑范围与 Roadmap" in unreleased
     assert "第 1/4、2/4、3/4、4/4 个 changes 均已交付" in unreleased
     assert "| v0.3.0 | Multi-tenant Safety Policy Isolation |" in agents
     assert "四项 changes 均已 delivered" in agents
@@ -466,11 +466,8 @@ def test_v030_scope_change_preserves_runtime_and_version_surfaces() -> None:
     )
     roadmap = _post_v01_roadmap(design)
     assert "All four v0.3.0 implementation changes are delivered." in roadmap
-    assert (
-        "(`tenant-flow-policy-resolution`) and change 3/4 "
-        "(`tenant-evidence-observability-isolation`) are delivered" in roadmap
-    )
-    assert "change 4/4 delivered" in roadmap
+    assert "All four v0.3.0 implementation changes are delivered" in roadmap
+    assert "All four v0.3.0 implementation changes are delivered" in roadmap
     assert "There is no package version change" in roadmap
     assert 'version = "0.2.2"' in gateway_project
     assert 'version = "0.1.1"' in sdk_project
@@ -502,9 +499,9 @@ def test_v030_tenant_policy_resolution_status() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "all four v0.3.0 implementation changes are delivered" in design.lower()
-    assert "change 4/4 delivered" in design
-    assert "changes 1/4, 2/4, and 3/4 delivered" in readme
-    assert "第 1/4、2/4、3/4 个 changes 均已交付" in changelog
+    assert "Change 4/4 delivered" in design
+    assert "all four changes are delivered" in readme
+    assert "第 1/4、2/4、3/4、4/4 个 changes 均已交付" in changelog
     assert "四项 changes 均已 delivered" in agents
     assert "Current gateway release version: **v0.2.2**" in readme
 
