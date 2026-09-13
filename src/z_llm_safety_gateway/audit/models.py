@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from z_llm_safety_gateway.audit.streaming_evidence import StreamingEvidenceSummary
 from z_llm_safety_gateway.flow.evidence import FlowEvidence, NodeEvidence
+from z_llm_safety_gateway.tenancy.observation import TenantObservationContext
 
 
 def _utcnow() -> str:
@@ -60,10 +61,14 @@ class DetectorLifecycleEvent(BaseModel):
     required: bool
     on_error: Literal["fail_open", "fail_closed"]
     reason_code: str = ""
+    tenant_context: TenantObservationContext | None = Field(default=None, exclude=True)
 
     def to_json_line(self) -> dict[str, Any]:
         """Serialize the lifecycle event for the existing JSONL sinks."""
-        return self.model_dump()
+        data = self.model_dump()
+        if self.tenant_context is not None:
+            data["tenant_context"] = _tenant_context_json(self.tenant_context)
+        return data
 
 
 class AuditEntry(BaseModel):
@@ -106,6 +111,7 @@ class AuditEntry(BaseModel):
     node_evidence: list[NodeEvidence] = Field(default_factory=list)
     evidence_persisted: bool = True
     streaming_evidence: StreamingEvidenceSummary | None = None
+    tenant_context: TenantObservationContext | None = Field(default=None, exclude=True)
     # Content (only serialized when store_content=True)
     content: str | None = None
     _attached_flow_evidence: FlowEvidence | None = PrivateAttr(default=None)
@@ -131,4 +137,16 @@ class AuditEntry(BaseModel):
         data = self.model_dump(mode="json", exclude={"content"})
         if self.content is not None:
             data["content"] = self.content
+        if self.tenant_context is not None:
+            data["tenant_context"] = _tenant_context_json(self.tenant_context)
         return data
+
+
+def _tenant_context_json(context: TenantObservationContext) -> dict[str, Any]:
+    """Serialize the small, trusted observation projection explicitly."""
+    return {
+        "contract_version": context.contract_version,
+        "scope": context.scope.value,
+        "tenant_id": context.tenant_id,
+        "policy_id": context.policy_id,
+    }

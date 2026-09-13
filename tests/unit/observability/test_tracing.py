@@ -293,7 +293,7 @@ def reset_tracing_state() -> None:
 
 
 def test_tracing_disabled_by_default_does_not_initialize(fake_otel: FakeOTEL) -> None:
-    """TC-OTEL-001: tracing.enabled=false does not initialize a TracerProvider.
+    """TC-OTEL-001/TOB-004: disabled tracing does not initialize a TracerProvider.
 
     GIVEN observability.tracing.enabled=false
     WHEN setup_tracing is called with the default (disabled) config
@@ -392,7 +392,7 @@ def test_tracing_span_structure_and_attributes(fake_otel: FakeOTEL) -> None:
 
     GIVEN tracing enabled and a request spanning detection and provider calls
     WHEN trace_request / trace_detector / trace_provider are used
-    THEN a gateway.request root span carries model/direction but not request_id
+    THEN a gateway.request root span carries a redacted model/direction but not request_id
     AND detector.* and provider.call child spans carry their attributes.
     """
     with observability_tracing.trace_request("req-1", "gpt-4", "input"):
@@ -408,7 +408,7 @@ def test_tracing_span_structure_and_attributes(fake_otel: FakeOTEL) -> None:
     assert root.name == "gateway.request"
     assert root.depth == 0
     assert "request_id" not in root.attributes
-    assert root.attributes["model"] == "gpt-4"
+    assert root.attributes["model"] == "redacted"
     assert root.attributes["direction"] == "input"
 
     detector = next(e for e in starts if e.name == "detector.prompt_injection")
@@ -420,7 +420,7 @@ def test_tracing_span_structure_and_attributes(fake_otel: FakeOTEL) -> None:
     provider = next(e for e in starts if e.name == "provider.call")
     assert provider.depth == 1
     assert provider.attributes["provider"] == "openai"
-    assert provider.attributes["model"] == "gpt-4"
+    assert provider.attributes["model"] == "redacted"
     assert provider.attributes["streaming"] is True
 
 

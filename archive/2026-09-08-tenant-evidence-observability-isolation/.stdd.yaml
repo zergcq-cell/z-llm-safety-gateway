@@ -1,0 +1,172 @@
+version: '2.0'
+change_id: 2026-09-08-tenant-evidence-observability-isolation
+status: archived
+task_type: code
+mode: thorough
+complexity_score: 17
+score_confidence: preliminary
+complexity_breakdown:
+  file_count: 3
+  line_count: 3
+  capability_count: 2
+  risk_level: 4
+  data_api: 2
+  security: 3
+current_phase: deliver
+phases:
+  understand:
+    status: completed
+    confirmed_at: '2026-09-08T07:57:11+08:00'
+    approval_text: 确认gate 1 提案
+  spec:
+    status: completed
+    confirmed_at: '2026-09-12T00:00:00+08:00'
+  slice:
+    status: completed
+    completed_at: '2026-09-12T00:00:00+08:00'
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+confirmed_at:
+  gate1_understand: '2026-09-08T07:57:11+08:00'
+  gate2_spec: '2026-09-12T00:00:00+08:00'
+  gate3_verify: '2026-09-13T10:15:00+08:00'
+long_range:
+  enabled: true
+  mode: full_auto
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-09-12T00:00:00+08:00'
+  authorization: user_confirmed_all
+  max_iterations: 10
+  auto_fix_failure_limit: 3
+  gate3_mandatory: true
+  operations:
+    directory: allow
+    file_write: allow
+    command_exec: allow
+    script_exec: allow
+    network: allow_if_needed
+    file_read: allow
+    git_readonly: allow
+artifacts:
+  proposal_yaml: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml
+  proposal_md: proposal.md
+  design_md: design.md
+  test_plan_md: test-plan.md
+  canonical_code_specs: canonical/specs/code
+  canonical_agent_specs: canonical/specs/agent
+  human_specs: specs
+phase2:
+  status: completed
+  confirmed_at: '2026-09-12T00:00:00+08:00'
+  artifacts_generated_at: '2026-09-08T08:06:26+08:00'
+  requirements: 10
+  scenarios: 26
+  capabilities: 5
+  confidence:
+    high: 19
+    medium: 7
+    low: 0
+  priority:
+    P0: 23
+    P1: 3
+    P2: 0
+  experiences_loaded:
+  - EXP-2026-0001
+  - EXP-2026-0002
+  - EXP-2026-0005
+  - EXP-2026-0006
+  - EXP-2026-0008
+  - EXP-2026-0010
+  - EXP-2026-0011
+  - EXP-2026-0026
+  - EXP-2026-0027
+  - EXP-2026-0028
+  anchoring:
+    actual: L3
+    minimum: L3
+    status: passed
+    references:
+    - 2026-08-22-v0.2.0-flow-foundation
+    - 2026-08-30-tenant-identity-config-contract
+    - 2026-09-01-tenant-flow-policy-resolution
+  review:
+    status: passed
+    validation: review/validation.json
+    tool_limitations:
+    - system python3 lacks PyYAML; used project Python 3.10.20
+    - canon generate --type spec rendered only proposal; specs deterministically rendered
+      from canonical YAML
+    - extract-proposal recognizes corrected capability headings but misses prose Impact;
+      canonical impact used and reviewed
+phase3:
+  status: completed
+  slices: 5
+  requirements_covered: 10
+  scenarios_covered: 26
+  dependency_cycles: 0
+  dependency_edges_cli: 0
+  dependency_edges_manual: 4
+  execution: serial_due_to_shared_workspace
+phase4:
+  status: completed
+  slices_completed:
+    S1:
+      status: done
+      tc_coverage: 5/5
+      new_tests: 7
+      red: module_not_found
+      focused: 7_passed
+      static: ruff_and_mypy_passed
+      regression: 1190_passed_1_skipped_1_unrelated_performance_signal
+      verified_at: '2026-09-12T00:00:00+08:00'
+    S2:
+      status: done
+      tc_coverage: 5/5
+      new_tests: 5
+      red: tenant_context_field_missing
+      focused: 59_passed
+      static: ruff_and_mypy_passed
+      regression: inherited_full_regression_1190_passed_1_skipped_1_unrelated_performance_signal
+      verified_at: '2026-09-12T00:00:00+08:00'
+    S3:
+      status: done
+      tc_coverage: 5/5
+      new_tests: 4
+      red: tenant_metric_api_missing
+      focused: 71_passed
+      static: ruff_and_mypy_passed
+      regression: 1204_passed_1_skipped_1_unrelated_performance_signal
+      verified_at: '2026-09-12T21:10:00+08:00'
+    S4:
+      status: done
+      tc_coverage: 7/7
+      new_tests: 5
+      red: tenant_context_propagation_missing
+      focused: 71_passed
+      static: ruff_and_mypy_passed
+      regression: 1204_passed_1_skipped_1_unrelated_performance_signal
+      verified_at: '2026-09-12T21:10:00+08:00'
+    S5:
+      status: done
+      tc_coverage: 4/4
+      new_tests: 3
+      red: streaming_and_post_audit_context_missing
+      focused: 28_passed
+      static: ruff_and_mypy_passed
+      regression: 1206_passed_1_skipped_1_unrelated_performance_signal
+      verified_at: '2026-09-12T21:25:00+08:00'
+phase5:
+  status: completed
+  completed_at: '2026-09-13T10:00:00+08:00'
+  test_report: test-report.md
+  design_adjustments: design-adjustments.yaml
+  full_regression: 1208_passed_1_skipped
+  coverage: 93_percent
+  lint: passed
+  typecheck: passed
+  failure_modes: a_to_l_checked
+  review: 3_parallel_agents_completed_c0_h0_m0_l0
+build:
+  status: completed

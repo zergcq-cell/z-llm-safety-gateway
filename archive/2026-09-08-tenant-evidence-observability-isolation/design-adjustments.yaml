@@ -1,0 +1,23 @@
+meta:
+  change_id: 2026-09-08-tenant-evidence-observability-isolation
+  created: '2026-09-13T10:00:00+08:00'
+  total_adjustments: 2
+  requires_re_spec: false
+  requires_re_build: false
+adjustments:
+  - id: ADJ-001
+    category: design_change
+    original: FlowContext may carry the tenant observation context directly from tenancy.
+    adjusted: The payload-free observation contract lives in flow.observation and tenancy re-exports it.
+    reason: Avoid the tenancy/configuration import cycle while keeping the public Flow contract typed and validated.
+    principle_impact: Preserves plugin/Flow boundaries, stable contracts, explicit failure, and data minimization.
+    affected_capabilities: [tenant-evidence-context, observability]
+    resolved_in_phase: Phase 5
+  - id: ADJ-002
+    category: boundary_discovery
+    original: Existing custom pipeline and post-audit adapters use the legacy constructor and run signature.
+    adjusted: Built-in PipelineEngine receives explicit provenance; custom adapters retain their legacy call shape.
+    reason: Preserve transparent compatibility while making gateway-owned Flow propagation explicit.
+    principle_impact: No safety decision changes; compatibility remains explicit and bounded.
+    affected_capabilities: [tenant-evidence-context, audit-logger, observability]
+    resolved_in_phase: Phase 4

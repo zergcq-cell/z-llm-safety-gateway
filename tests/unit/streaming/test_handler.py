@@ -9,8 +9,12 @@ import asyncio
 import json
 
 from z_llm_safety_gateway.models import DetectionResult
-from z_llm_safety_gateway.pipeline.engine import PipelineResult
+from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
 from z_llm_safety_gateway.streaming.handler import StreamingHandler
+from z_llm_safety_gateway.tenancy.observation import (
+    ObservationScope,
+    TenantObservationContext,
+)
 
 
 def sse_chunk(text: str) -> str:
@@ -185,3 +189,28 @@ def test_reuses_pipeline_engine():
 
 def test_handles_done_signal():
     run(test_handler_handles_done_signal())
+
+
+def test_streaming_handler_passes_captured_tenant_context_to_builtin_engine() -> None:
+    """TC-TEC-004: SSE windows keep their request's trusted snapshot."""
+    engine = PipelineEngine()
+    captured = []
+
+    async def capture(*args, **kwargs):
+        captured.append(kwargs["tenant_observation_context"])
+        return PipelineResult(final_action="allow", overall_risk_level="low")
+
+    engine.run = capture  # type: ignore[method-assign]
+    observation = TenantObservationContext(ObservationScope.TENANT, "acme", "strict")
+    handler = StreamingHandler(
+        engine=engine,
+        output_detectors=[],
+        detector_configs={},
+        window_size=1,
+        overlap=0,
+        tenant_observation_context=observation,
+    )
+
+    run(_collect(handler, [sse_chunk("a")]))
+
+    assert captured == [observation]

@@ -167,8 +167,18 @@ async def ready(request: Request, response: Response) -> dict[str, Any]:
 
 
 @router.get("/metrics")
-async def metrics() -> Response:
+async def metrics(request: Request) -> Response:
     """Expose Prometheus metrics when collection is enabled."""
+    runtime = getattr(request.app.state, "metrics_runtime", None)
+    if runtime is not None:
+        if not runtime.enabled:
+            return Response(status_code=404)
+        # Tenant metrics are application-owned; retain the process-wide
+        # compatibility collectors in the same scrape for existing dashboards.
+        return Response(
+            content=observability_metrics.generate_latest() + runtime.generate(),
+            media_type=_METRICS_CONTENT_TYPE,
+        )
     if not observability_metrics.is_enabled():
         return Response(status_code=404)
     return Response(

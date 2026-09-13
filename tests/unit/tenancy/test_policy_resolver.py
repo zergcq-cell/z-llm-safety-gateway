@@ -133,7 +133,12 @@ def test_resolution_ignores_untrusted_policy_and_provider_hints() -> None:
     @app.post("/inspect")
     async def inspect(request: Request) -> dict[str, str]:
         context = request.state.tenant_policy_context
-        return {"tenant_id": context.tenant_id, "policy_id": context.policy_id}
+        observation = request.state.tenant_observation_context
+        return {
+            "tenant_id": context.tenant_id,
+            "policy_id": context.policy_id,
+            "observation_tenant_id": observation.tenant_id,
+        }
 
     response = TestClient(app).post(
         "/inspect",
@@ -150,7 +155,11 @@ def test_resolution_ignores_untrusted_policy_and_provider_hints() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {"tenant_id": "acme", "policy_id": "strict-policy"}
+    assert response.json() == {
+        "tenant_id": "acme",
+        "policy_id": "strict-policy",
+        "observation_tenant_id": "acme",
+    }
 
 
 @pytest.mark.parametrize("invalid_case", ("missing_context", "unknown_tenant", "missing_bundle"))

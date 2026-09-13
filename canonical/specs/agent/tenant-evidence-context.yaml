@@ -1,0 +1,89 @@
+meta:
+  task_id: tenant-evidence-context
+  change_id: 2026-09-08-tenant-evidence-observability-isolation
+  task_type: code
+  system: z LLM Safety Gateway tenant observation
+  preconditions:
+  - Gate 2 approved before implementation.
+  - Planned test nodes must be implemented in RED phase; collect-only must prove every
+    node exists before Gate 3.
+steps:
+- id: CP-TEC-001
+  description: 'TC-TEC-001 / SC-TEC-001: 可信观测快照'
+  action: .venv/bin/python -m pytest tests/unit/tenancy/test_observation_tec.py::test_tc_tec_001
+    -q --no-cov
+  assertions:
+  - type: exit_code
+    expected: 0
+  scenario_id: SC-TEC-001
+  expected_behavior:
+  - SHALL 创建 frozen TenantObservationContext v1.0，包含 scope=tenant、tenant_id 和 policy_id；身份必须同时匹配启动期租户与策略绑定。
+  - 快照只含 contract_version、scope、tenant_id、policy_id；不含密钥、认证凭据名、配置对象或请求原文。
+  - tenant_id 和 policy_id 复用既有 1–64 字符配置 ID 契约。
+  implementation_status: planned
+- id: CP-TEC-002
+  description: 'TC-TEC-002 / SC-TEC-002: 可信观测快照'
+  action: .venv/bin/python -m pytest tests/integration/test_tenant_observation_tec.py::test_tc_tec_002
+    -q --no-cov
+  assertions:
+  - type: exit_code
+    expected: 0
+  scenario_id: SC-TEC-002
+  expected_behavior:
+  - SHALL 仅以已认证上下文选择归属，忽略所有客户端归属声明。
+  - 两个租户使用相同 X-Request-ID 也不合并上下文或审计归属。
+  implementation_status: planned
+- id: CP-TEC-003
+  description: 'TC-TEC-003 / SC-TEC-003: 可信观测快照'
+  action: .venv/bin/python -m pytest tests/integration/test_tenant_observation_tec.py::test_tc_tec_003
+    -q --no-cov
+  assertions:
+  - type: exit_code
+    expected: 0
+  scenario_id: SC-TEC-003
+  expected_behavior:
+  - SHALL 返回 OpenAI-compatible 503 tenant_policy_unavailable，且不调用插件或 Provider。
+  - 诊断归属 unattributed，原因码 tenant_context_invalid；禁止 default、其他租户或全局策略回退。
+  implementation_status: planned
+- id: CP-TEC-004
+  description: 'TC-TEC-004 / SC-TEC-004: 阶段生命周期隔离'
+  action: .venv/bin/python -m pytest tests/integration/test_tenant_observation_tec.py::test_tc_tec_004
+    -q --no-cov
+  assertions:
+  - type: exit_code
+    expected: 0
+  scenario_id: SC-TEC-004
+  expected_behavior:
+  - SHALL 每条证据和后台诊断保留发起请求快照；共享 policy_id 时 tenant_id 仍不同。
+  - 后台任务和生成器显式携带快照，不在执行时读取最近请求或重新解析全局默认值。
+  - 每一运行路径分别参数化并断言真实调用、证据及输出，而非仅枚举阶段名称。
+  implementation_status: planned
+- id: CP-TEC-005
+  description: 'TC-TEC-005 / SC-TEC-005: 阶段生命周期隔离'
+  action: .venv/bin/python -m pytest tests/integration/test_tenant_observation_tec.py::test_tc_tec_005
+    -q --no-cov
+  assertions:
+  - type: exit_code
+    expected: 0
+  scenario_id: SC-TEC-005
+  expected_behavior:
+  - SHALL 用 token/finally 恢复上下文且不吞掉取消；后续请求不继承前一租户。
+  - 在 ASGI send/迭代结束前保留流式作用域；禁止仅围绕 BaseHTTPMiddleware.call_next 绑定。
+  implementation_status: planned
+- id: CP-TEC-006
+  description: 'TC-TEC-006 / SC-TEC-006: 阶段生命周期隔离'
+  action: .venv/bin/python -m pytest tests/integration/test_tenant_observation_tec.py::test_tc_tec_006
+    -q --no-cov
+  assertions:
+  - type: exit_code
+    expected: 0
+  scenario_id: SC-TEC-006
+  expected_behavior:
+  - SHALL 分别使用 legacy、unattributed、system scope；只有已验证 policy 生命周期事件使用 policy scope。
+  - legacy 的 tenant_id/policy_id 为 null，保留已有 TenantContext default 的认证契约，不将其误认为多租户
+    default。
+  - 未认证请求维持现有 401，不引入归属查询。
+  implementation_status: planned
+rollback:
+  steps:
+  - 保留失败证据；回退本切片修改前先审阅 diff，禁止覆盖用户改动。

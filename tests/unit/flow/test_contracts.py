@@ -18,6 +18,10 @@ from z_llm_safety_gateway.flow.contracts import (
     FlowItem,
     FlowNodeDefinition,
 )
+from z_llm_safety_gateway.tenancy.observation import (
+    ObservationScope,
+    TenantObservationContext,
+)
 
 
 def _capability(**overrides: Any) -> CapabilityDescriptor:
@@ -233,3 +237,28 @@ def test_tc_fc_006() -> None:
     assert "metadata" not in evidence
     assert "secret-first" not in repr(evidence)
     assert "secret-second" not in repr(evidence)
+
+
+def test_tenant_observation_context_propagates_to_nested_flow_without_evidence() -> None:
+    """TC-TOB-003: Flow children retain explicit trusted provenance only."""
+    observation = TenantObservationContext(
+        scope=ObservationScope.TENANT,
+        tenant_id="acme",
+        policy_id="strict",
+    )
+    flow_input = FlowInput(
+        contract_version="1.0",
+        items=(FlowItem(item_id="item-0", content="secret"),),
+        context=FlowContext(
+            request_id="request-1",
+            correlation_id="request-1",
+            direction="input",
+            stage="input",
+            tenant_observation_context=observation,
+        ),
+    )
+
+    child = flow_input.for_child(parent_execution_id="parent", stage="nested-flow")
+
+    assert child.context.tenant_observation_context == observation
+    assert "tenant_observation_context" not in child.evidence_envelope().model_dump()

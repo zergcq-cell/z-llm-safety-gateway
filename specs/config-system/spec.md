@@ -363,3 +363,6 @@ Prove that accepted tenant policy configuration is consumed by production wiring
 - **WHEN** documentation contracts inspect v0.3.0 state.
 - **THEN** they **SHALL** accurately report change 1/4 delivered and change 2/4 active or delivered.
 - **AND** v0.3.0 SHALL remain incomplete, later isolation changes pending, and no tag or artifact version created.
+# Tenant observability configuration (2026-09-08)
+
+`observability.tenancy.metric_tenant_ids` is an optional strict list of at most 32 configured, non-secret tenant IDs. Invalid, duplicate, unknown, or disabled-tenancy configurations fail with the stable `tenant_observability_config_invalid` code.

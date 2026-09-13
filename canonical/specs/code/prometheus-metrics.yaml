@@ -1,0 +1,69 @@
+meta:
+  capability: prometheus-metrics
+  change_id: 2026-09-08-tenant-evidence-observability-isolation
+  created: '2026-09-08T08:05:31+08:00'
+  confidence: medium
+requirements:
+- id: REQ-TME-001
+  description: 租户指标与计数语义
+  confidence: medium
+  scenarios:
+  - id: SC-TME-001
+    confidence: medium
+    evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+      design.md
+    given: metrics 启用且 tenant_ids 白名单为 acme
+    when: acme、其他可信租户、legacy 和无归属请求产生日志/决策
+    then: SHALL 新增 safety_tenant_decisions_total{tenant_scope,tenant_id,direction,action}
+      和 safety_tenant_observability_events_total{tenant_scope,tenant_id,event}。
+    and:
+    - acme 使用 tenant/acme；其他可信租户使用 tenant_other/other；legacy、unattributed、policy、system
+      使用相应 scope 和固定 none。
+    - 不新增 policy、model、request_id、Flow/node、API key 标签；policy 生命周期不扇出为租户指标。
+  - id: SC-TME-002
+    confidence: high
+    evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+      design.md
+    given: 同一请求多个 Flow 节点、多个 SSE 窗口或 async pending/completed 审计
+    when: 统计最终 input/output 安全决策
+    then: SHALL 每个实际最终方向决策计数一次；pending、窗口和持久化重试不得重复计数。
+    and:
+    - action 枚举 allow/block/flag/modify/error；direction 仅 input/output。
+    - 未形成方向安全决策的 401/路由错误只产生诊断，不伪造 allow。
+- id: REQ-TME-002
+  description: 基数与安全兼容
+  confidence: medium
+  scenarios:
+  - id: SC-TME-003
+    confidence: high
+    evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+      design.md
+    given: 白名单最多 32 个已配置租户，攻击者发送 10000 个不同请求字段
+    when: 检查两个新指标 family 的所有 label tuples
+    then: SHALL 身份组合最多 37，决策 tuples 最多 370，诊断 tuples 最多 296。
+    and:
+    - event 固定八项：tenant_context_invalid、audit_sink_failed、tracing_unavailable、projection_sanitized、auth_rejected、policy_unavailable、background_failed、cancelled。
+    - 每个 counter 的 total/created 样本合计最多 1332；诊断记录不递归产生诊断。
+  - id: SC-TME-004
+    confidence: medium
+    evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+      design.md
+    given: 多租户请求产生任意 model/category/reason/error 和插件描述
+    when: 更新现有 gateway/provider/detector/Flow 指标
+    then: SHALL 保留现有 metric 名称和 label schema，model 固定 redacted；自由文本映射固定 unknown，ID
+      仅允许启动期受限配置集合。
+    and:
+    - 动作、状态、direction 使用现有有限枚举；category、reason_code、error_type、field、detector_type
+      采用实现中固定允许值集合加 unknown。
+    - Counter/Histogram 的 ID label 白名单取配置字典序前 256 项，其余归并 other；Gauge 仅接受完整预编译实体集合，不聚合实体，未知实体拒绝。
+    - 不得将任意输入加入缓存；单租户旧指标行为保持兼容。
+  - id: SC-TME-005
+    confidence: high
+    evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+      design.md
+    given: metrics 关闭或同进程创建两个不同配置 app
+    when: 记录/导出事件
+    then: SHALL 禁用时不分配 label 状态；不同 app 的租户白名单和新增 registry 不相互覆盖。
+    and:
+    - 使用 app-scoped observation runtime 及显式注入，不能把租户配置保存在模块级最近 app 变量。
+    - 现有全局 metrics/tracing API 的兼容调用保留，但多租户请求路径必须绑定其所属 app runtime。

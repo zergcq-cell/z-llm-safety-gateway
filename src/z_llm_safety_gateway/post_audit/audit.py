@@ -15,6 +15,7 @@ from typing import Any
 from z_llm_safety_gateway.flow.evidence import FlowEvidence
 from z_llm_safety_gateway.models import find_result_by_action
 from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
+from z_llm_safety_gateway.tenancy.observation import TenantObservationContext
 
 
 @dataclass
@@ -61,10 +62,12 @@ class PostAuditRunner:
         engine: PipelineEngine,
         output_detectors: list[Any],
         detector_configs: dict[str, dict[str, Any]],
+        tenant_observation_context: TenantObservationContext | None = None,
     ) -> None:
         self._engine = engine
         self._detectors = output_detectors
         self._configs = detector_configs
+        self._tenant_observation_context = tenant_observation_context
 
     async def run(
         self,
@@ -89,9 +92,15 @@ class PostAuditRunner:
             language=language,
             metadata={"content": content},
         )
-        result: PipelineResult = await self._engine.run(
-            self._detectors, [context], self._configs
-        )
+        if isinstance(self._engine, PipelineEngine):
+            result: PipelineResult = await self._engine.run(
+                self._detectors,
+                [context],
+                self._configs,
+                tenant_observation_context=self._tenant_observation_context,
+            )
+        else:
+            result = await self._engine.run(self._detectors, [context], self._configs)
 
         original = result.final_action
         effective = original

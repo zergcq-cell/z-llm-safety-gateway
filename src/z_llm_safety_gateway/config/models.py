@@ -72,6 +72,7 @@ MAX_TENANT_API_KEYS = 4096
 MAX_TENANT_POLICIES = 1024
 MAX_TENANT_POLICY_CAPABILITIES = 256
 MAX_TENANT_POLICY_ROUTES = 256
+MAX_OBSERVABLE_TENANTS = 32
 
 
 class ApiKeyConfig(BaseModel):
@@ -772,6 +773,27 @@ class TracingConfig(BaseModel):
         return v
 
 
+class TenantObservabilityConfig(BaseModel):
+    """Bounded administrator-selected tenant metric detail."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    metric_tenant_ids: tuple[str, ...] = ()
+
+    @field_validator("metric_tenant_ids", mode="before")
+    @classmethod
+    def _validate_metric_tenant_ids(cls, value: Any) -> Any:
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)) or any(
+            not isinstance(item, str) for item in value
+        ):
+            raise ValueError("tenant_observability_config_invalid")
+        if len(value) > MAX_OBSERVABLE_TENANTS or len(value) != len(set(value)):
+            raise ValueError("tenant_observability_config_invalid")
+        return tuple(value)
+
+
 class ObservabilityConfig(BaseModel):
     """Observability configuration (metrics and tracing).
 
@@ -782,6 +804,7 @@ class ObservabilityConfig(BaseModel):
 
     metrics: MetricsConfig = MetricsConfig()
     tracing: TracingConfig = TracingConfig()
+    tenancy: TenantObservabilityConfig = TenantObservabilityConfig()
 
 
 class GatewayConfig(BaseModel):
@@ -888,6 +911,12 @@ class GatewayConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_flow_configuration(self) -> GatewayConfig:
+        observed_tenants = self.observability.tenancy.metric_tenant_ids
+        declared_tenants = {tenant.id for tenant in self.tenancy.tenants}
+        if observed_tenants and (
+            not self.tenancy.enabled or not set(observed_tenants).issubset(declared_tenants)
+        ):
+            raise ValueError("tenant_observability_config_invalid")
         descriptors: dict[str, CapabilityDescriptor] = {}
         binding_ids = [binding.capability_id for binding in self.capabilities]
         if len(binding_ids) != len(set(binding_ids)):

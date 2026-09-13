@@ -16,6 +16,8 @@ from pydantic import (
     model_validator,
 )
 
+from z_llm_safety_gateway.flow.observation import TenantObservationContext
+
 SUPPORTED_CONTRACT_VERSIONS = frozenset({"1.0"})
 DEFAULT_MAX_FLOW_DEPTH = 8
 DEFAULT_MAX_EXPANDED_NODES = 256
@@ -179,6 +181,7 @@ class FlowContext(_StrictContract):
     direction: Literal["input", "output"]
     stage: NonEmptyBoundedString
     parent_execution_id: NonEmptyBoundedString | None = None
+    tenant_observation_context: TenantObservationContext | None = None
     metadata: Mapping[str, Any] = Field(default_factory=dict)
 
     @field_validator("metadata", mode="after")

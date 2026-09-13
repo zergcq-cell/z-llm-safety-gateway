@@ -37,6 +37,7 @@ from z_llm_safety_gateway.streaming.sse import (
     format_safety_block,
     format_safety_flag,
 )
+from z_llm_safety_gateway.tenancy.observation import TenantObservationContext
 
 # Action precedence for aggregating output-side results (higher = more severe).
 _ACTION_PRECEDENCE: dict[str, int] = {
@@ -112,6 +113,7 @@ class StreamingHandler:
         max_response_size: str = "1MB",
         on_max_size: str = "block",
         language: str | None = None,
+        tenant_observation_context: TenantObservationContext | None = None,
     ) -> None:
         self._engine = engine
         self._detectors = output_detectors
@@ -120,6 +122,7 @@ class StreamingHandler:
         self._send_flag_events = send_flag_events
         self._request_id = request_id
         self._language = language
+        self._tenant_observation_context = tenant_observation_context
         self._memory = StreamingMemory(
             max_response_size=max_response_size, on_max_size=on_max_size
         )
@@ -252,9 +255,7 @@ class StreamingHandler:
         while self._window.is_ready() and not self._blocked:
             content, _retained = self._window.consume_window()
             self._window_count += 1
-            result: PipelineResult = await self._engine.run(
-                self._detectors, [self._make_context(content)], self._configs
-            )
+            result: PipelineResult = await self._run_pipeline(content)
             if result.flow_evidence is not None:
                 self._evidence.record_window(
                     result.flow_evidence,
@@ -306,6 +307,18 @@ class StreamingHandler:
         self._output_risk_level = _higher_risk(
             self._output_risk_level, result.overall_risk_level
         )
+
+    async def _run_pipeline(self, content: str) -> PipelineResult:
+        """Preserve trusted request provenance for built-in Flow execution."""
+        context = self._make_context(content)
+        if isinstance(self._engine, PipelineEngine):
+            return await self._engine.run(
+                self._detectors,
+                [context],
+                self._configs,
+                tenant_observation_context=self._tenant_observation_context,
+            )
+        return await self._engine.run(self._detectors, [context], self._configs)
 
     def _make_context(self, content: str) -> DetectionContext:
         """Build a DetectionContext for window detection (direction output)."""

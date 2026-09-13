@@ -1,0 +1,89 @@
+meta:
+  change_id: 2026-09-08-tenant-evidence-observability-isolation
+  title: v0.3.0 租户证据与可观测性隔离
+  created: '2026-09-08T07:57:11+08:00'
+  status: confirmed
+why:
+  problem: 可信租户身份和策略运行时已交付，但 AuditEntry 缺少租户归属，Flow 指标和 Trace 尚无统一租户观测上下文。
+  motivation: 实施 DESIGN.md 公共 v0.3.0 路线第三项，确保普通、流式及后台安全决策的证据不会串租户。
+what_changes:
+- id: C1
+  type: new
+  description: 建立可信且跨请求隔离的观测快照
+- id: C2
+  type: modified
+  description: 将租户及策略归属贯穿审计、日志和 Trace
+- id: C3
+  type: modified
+  description: 为指标设定租户明细及基数边界
+- id: C4
+  type: modified
+  description: 明确身份异常、观测失败和脱敏行为
+- id: C5
+  type: modified
+  description: 补充真实请求链测试、配置约束和兼容文档
+capabilities:
+  new:
+  - name: tenant-evidence-context
+    description: 可信、不可变且跨异步阶段隔离的租户观测上下文
+  modified:
+  - name: audit-logger
+    description: 审计归属、租户证据与持久化失败可观测
+  - name: observability
+    description: 安全日志和 Trace 的租户归属与脱敏
+  - name: prometheus-metrics
+    description: 有限基数的租户指标及现有指标安全投影
+  - name: config-system
+    description: 租户观测配置约束、兼容行为与示例
+impact:
+  code: tenancy、middleware、pipeline、routes、streaming、post_audit、audit、observability、app
+    装配及对应测试，预计 20–35 文件。
+  configuration: 新增观测配置约束及示例；旧配置无需迁移。
+  infrastructure: 无需新增基础设施，复用现有 JSONL、Prometheus、OTel。
+constraints:
+- 严格 STDD 与 RED→GREEN→REFACTOR；Gate 2/3 独立确认。
+- 只消费可信身份，禁止客户端 Header、body、baggage 覆写。
+- 不改变 Provider 协议、安全决策或默认内容保留策略。
+stakeholders:
+- 网关维护者
+- 多租户平台与安全运维
+- 观测数据消费者
+risk_areas:
+- capability: tenant-evidence-context
+  risk: 并发及后台任务串租户
+  mitigation: 不可变快照、显式传递、上下文清理及真实并发测试
+- capability: prometheus-metrics
+  risk: 高基数或秘密泄漏
+  mitigation: 配置白名单、有限枚举及对抗性基数测试
+- capability: audit-logger
+  risk: 错误归属或持久化失败静默
+  mitigation: 稳定诊断事件、故障注入与安全投影
+non_goals:
+- 租户容量、配额、并发公平性及第四项整体验收
+- 租户数据库、控制面、热更新、物理日志分库或租户查询 API
+- 发布 v0.3.0、改制品版本或创建发布标签
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: false
+anchoring:
+  level: L3
+  reference_changes:
+  - 2026-08-22-v0.2.0-flow-foundation
+  - 2026-08-30-tenant-identity-config-contract
+  - 2026-09-01-tenant-flow-policy-resolution
+  anchor_implementations: []
+principle_check:
+  plugin_flow: 只扩展上下文、证据与观测运行机制；领域判断仍在插件、组合仍由 Flow 决定。
+  explicit_policy_failure: 身份缺失、上下文冲突、写入失败和指标归并都有明确行为与稳定原因码。
+  transparent_contracts: 保持 HTTP/SSE 和单租户行为；采用增量审计字段及独立租户指标，身份传播和指标基数有界。
+  evidence_data_protection: 可信租户/策略快照关联 Flow/节点证据；默认不记录原文和认证秘密，不从客户端字段推导租户。
+  tradeoffs_or_departures: 指标明细与基数限制之间的取舍由 Phase 2 明确；不偏离四项原则。
+success_criteria:
+- 跨租户并发和后台任务的证据归属正确。
+- 伪造身份无法污染审计、日志、Trace 或指标。
+- 认证秘密、原文和原始异常不进入新增观测字段。
+- 租户指标及请求驱动指标维度有明确可验证的上限。
+- 单租户与上游 HTTP/SSE 协议兼容测试通过。

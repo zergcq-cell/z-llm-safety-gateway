@@ -282,12 +282,22 @@ observability:
   metrics:
     enabled: true                 # Prometheus /metrics
     endpoint: /metrics            # 指标端点路径
+  tenancy:
+    # Only configured, non-secret tenant IDs retain metric detail. At most 32.
+    # All other authenticated tenants aggregate as tenant_other/other.
+    metric_tenant_ids: [acme]
   tracing:
     enabled: false
     exporter: otlp                # otlp | jaeger | zipkin
     endpoint: ""                  # OTLP 端点
     sample_rate: 0.1              # 采样率
 ```
+
+Tenant observability is disabled unless metrics are enabled. The gateway exports
+`safety_tenant_decisions_total` and `safety_tenant_observability_events_total`.
+These metrics never contain policy IDs, request IDs, request content, credentials,
+or provider models. Audit records keep exact trusted attribution when audit is
+enabled; audit sink failures do not change the safety decision.
 
 ## audit（审计日志，顶层块）
 

@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-09-08T08:06:26+08:00",
+  "status": "passed",
+  "capabilities": 5,
+  "requirements": 10,
+  "scenarios": 26,
+  "high": 19,
+  "medium": 7,
+  "low": 0,
+  "test_cases": 26,
+  "P0": 23,
+  "P1": 3,
+  "P2": 0,
+  "canonical_human_equivalence": "passed",
+  "requirement_scenario_tc_checkpoint_mapping": "26/26",
+  "modified_capability_paths": "all exist",
+  "existing_test_collection": "88 tests; collection only",
+  "runtime_tests": "not run; implementation pending Gate 2",
+  "planned_test_nodes": "not yet implemented; must collect successfully during Build/Verify",
+  "stdd_validate": "passed",
+  "tool_limitations": [
+    "system python3 lacks PyYAML; used project Python 3.10.20",
+    "canon generate --type spec rendered only proposal; specs deterministically rendered from canonical YAML",
+    "extract-proposal recognizes corrected capability headings but misses prose Impact; canonical impact used and reviewed"
+  ]
+}

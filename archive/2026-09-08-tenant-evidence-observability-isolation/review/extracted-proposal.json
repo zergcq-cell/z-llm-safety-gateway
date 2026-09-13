@@ -1,0 +1,77 @@
+{
+  "title": "v0.3.0 租户证据与可观测性隔离",
+  "capabilities": {
+    "new": [
+      {
+        "name": "tenant-evidence-context",
+        "description": "可信、不可变且跨异步阶段隔离的租户观测上下文"
+      }
+    ],
+    "modified": [
+      {
+        "name": "audit-logger",
+        "description": "审计归属、租户证据与持久化失败可观测"
+      },
+      {
+        "name": "observability",
+        "description": "安全日志和 Trace 的租户归属与脱敏"
+      },
+      {
+        "name": "prometheus-metrics",
+        "description": "有限基数的租户指标及现有指标安全投影"
+      },
+      {
+        "name": "config-system",
+        "description": "租户观测配置约束、兼容行为与示例"
+      }
+    ]
+  },
+  "what_changes": [
+    "建立可信且跨请求隔离的观测快照",
+    "将租户及策略归属贯穿审计、日志和 Trace",
+    "为指标设定租户明细及基数边界",
+    "明确身份异常、观测失败和脱敏行为",
+    "补充真实请求链测试、配置约束和兼容文档"
+  ],
+  "success_criteria": [
+    "[ ] 跨租户并发和后台任务的证据归属正确。",
+    "[ ] 伪造身份无法污染审计、日志、Trace 或指标。",
+    "[ ] 认证秘密、原文和原始异常不进入新增观测字段。",
+    "[ ] 租户指标及请求驱动指标维度有明确可验证的上限。",
+    "[ ] 单租户与上游 HTTP/SSE 协议兼容测试通过。"
+  ],
+  "impact": {
+    "code": [],
+    "config": [],
+    "infrastructure": []
+  },
+  "constraints": [
+    "严格 STDD 与 RED→GREEN→REFACTOR；Gate 2/3 独立确认。",
+    "只消费可信身份，禁止客户端 Header、body、baggage 覆写。",
+    "不改变 Provider 协议、安全决策或默认内容保留策略。"
+  ],
+  "stakeholders": [
+    "网关维护者",
+    "多租户平台与安全运维",
+    "观测数据消费者"
+  ],
+  "risk_areas": [
+    {
+      "capability": "tenant-evidence-context",
+      "risk": "并发及后台任务串租户；缓解：不可变快照、显式传递、上下文清理及真实并发测试"
+    },
+    {
+      "capability": "prometheus-metrics",
+      "risk": "高基数或秘密泄漏；缓解：配置白名单、有限枚举及对抗性基数测试"
+    },
+    {
+      "capability": "audit-logger",
+      "risk": "错误归属或持久化失败静默；缓解：稳定诊断事件、故障注入与安全投影"
+    }
+  ],
+  "non_goals": [
+    "租户容量、配额、并发公平性及第四项整体验收",
+    "租户数据库、控制面、热更新、物理日志分库或租户查询 API",
+    "发布 v0.3.0、改制品版本或创建发布标签"
+  ]
+}

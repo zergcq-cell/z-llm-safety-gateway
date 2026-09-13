@@ -119,7 +119,9 @@ def _instrument_app(app: Any) -> None:
     except ImportError:
         logger.warning("tracing_fastapi_instrumentation_missing")
         return
-    FastAPIInstrumentor.instrument_app(app)
+    # Automatic HTTP spans can capture URL/query and client propagation fields.
+    # Gateway spans are emitted only through the bounded explicit projection.
+    FastAPIInstrumentor.instrument_app(app, excluded_urls=".*")
 
 
 def get_tracer() -> Any:
@@ -140,11 +142,11 @@ def trace_request(
 
     Request identifiers are deliberately excluded from span attributes.
     """
-    del request_id
+    del request_id, model
     return get_tracer().start_as_current_span(
         "gateway.request",
         attributes={
-            "model": model,
+            "model": "redacted",
             "direction": direction,
         },
     )
@@ -164,11 +166,12 @@ def trace_provider(
     provider: str, model: str, streaming: bool
 ) -> Any:
     """Create a ``provider.call`` span with provider attributes."""
+    del model
     return get_tracer().start_as_current_span(
         "provider.call",
         attributes={
             "provider": provider,
-            "model": model,
+            "model": "redacted",
             "streaming": streaming,
         },
     )

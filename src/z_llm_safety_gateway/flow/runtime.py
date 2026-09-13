@@ -204,6 +204,35 @@ class FlowRuntime:
         deadline: float,
         reducer: RuntimeReducer,
     ) -> FlowExecutionResult:
+        from z_llm_safety_gateway.observability.tenant import bound_tenant_observation
+
+        if flow_input.context.tenant_observation_context is None:
+            return await self._execute_bound(
+                flow,
+                flow_input,
+                parent_execution_id=parent_execution_id,
+                deadline=deadline,
+                reducer=reducer,
+            )
+        with bound_tenant_observation(flow_input.context.tenant_observation_context):
+            return await self._execute_bound(
+                flow,
+                flow_input,
+                parent_execution_id=parent_execution_id,
+                deadline=deadline,
+                reducer=reducer,
+            )
+
+    async def _execute_bound(
+        self,
+        flow: FlowDefinition,
+        flow_input: FlowInput,
+        *,
+        parent_execution_id: str | None,
+        deadline: float,
+        reducer: RuntimeReducer,
+    ) -> FlowExecutionResult:
+        """Execute one Flow with its task-local observation projection bound."""
         started = time.perf_counter()
         execution_id = f"flow-{uuid4().hex}"
         work = self._build_work(flow, flow_input)
@@ -368,7 +397,11 @@ class FlowRuntime:
         from z_llm_safety_gateway.observability.flow import observe_flow_evidence
 
         if parent_execution_id is None:
-            observe_flow_evidence(evidence, children=children)
+            observe_flow_evidence(
+                evidence,
+                children=children,
+                tenant_context=flow_input.context.tenant_observation_context,
+            )
         return FlowExecutionResult(
             output=reduction.output,
             signals=reduction.signals,

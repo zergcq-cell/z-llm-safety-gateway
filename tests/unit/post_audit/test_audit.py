@@ -8,8 +8,12 @@ from __future__ import annotations
 import asyncio
 
 from z_llm_safety_gateway.models import DetectionResult
-from z_llm_safety_gateway.pipeline.engine import PipelineResult
+from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
 from z_llm_safety_gateway.post_audit.audit import PostAuditRunner
+from z_llm_safety_gateway.tenancy.observation import (
+    ObservationScope,
+    TenantObservationContext,
+)
 
 
 class _FakeEngine:
@@ -88,6 +92,29 @@ def test_post_audit_uses_output_detectors():
     )
     asyncio.run(runner.run("some content"))
     assert engine.calls[0]["n_detectors"] == 2
+
+
+def test_post_audit_passes_captured_tenant_context_to_builtin_engine() -> None:
+    """TC-TAU-002: post-audit retains the streaming request's provenance."""
+    engine = PipelineEngine()
+    captured = []
+
+    async def capture(*args, **kwargs):
+        captured.append(kwargs["tenant_observation_context"])
+        return PipelineResult(final_action="allow", overall_risk_level="low")
+
+    engine.run = capture  # type: ignore[method-assign]
+    observation = TenantObservationContext(ObservationScope.TENANT, "acme", "strict")
+    runner = PostAuditRunner(
+        engine=engine,
+        output_detectors=[],
+        detector_configs={},
+        tenant_observation_context=observation,
+    )
+
+    asyncio.run(runner.run("streamed content"))
+
+    assert captured == [observation]
 
 
 # --------------------------------------------------------------------------- #

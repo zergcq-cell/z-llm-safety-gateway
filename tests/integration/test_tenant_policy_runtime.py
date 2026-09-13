@@ -311,7 +311,7 @@ def test_tenant_bundle_drives_streaming_output_paths(
     tmp_path: Path,
     streaming_mode: str,
 ) -> None:
-    """TC-TPR-005/CFG-704: SSE stages retain tenant Flow and Provider state."""
+    """TC-TEC-004/TAU-002/TOC-003: SSE retains tenant state and protocol."""
     acme_upstream = respx.post(
         "https://acme.invalid/v1/chat/completions"
     ).mock(return_value=_sse_response("globex-private-block"))
@@ -355,7 +355,7 @@ def test_tenant_bundle_drives_streaming_output_paths(
 
 @respx.mock
 def test_tenant_bundle_drives_async_output_and_recall(tmp_path: Path) -> None:
-    """TC-TPR-005: async output detection retains policy-local Detector state."""
+    """TC-TEC-004/TAU-002: async work retains policy-local request state."""
     config_path = _config(tmp_path / "tenant-async.yaml")
     config_path.write_text(
         config_path.read_text().replace(

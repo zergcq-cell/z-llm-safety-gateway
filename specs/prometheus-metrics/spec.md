@@ -9,3 +9,6 @@
 
 新增指标为 `safety_detector_initialization_failures_total`、`safety_detector_up` 和
 `safety_gateway_degraded_requests_total`，标签不得包含异常正文、endpoint 或凭据。
+# Tenant metrics isolation (2026-09-08)
+
+Tenant decision and bounded diagnostic counters use application-owned registries. Explicitly allowlisted tenants retain detail; all others aggregate under `tenant_other/other`. The legacy metric API remains available for compatibility.

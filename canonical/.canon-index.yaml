@@ -1,4 +1,13 @@
 changes:
+  2026-09-08-tenant-evidence-observability-isolation:
+    proposal: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml
+    capabilities:
+    - audit-logger
+    - config-system
+    - observability
+    - prometheus-metrics
+    - tenant-evidence-context
+    verified: true
   2026-08-30-tenant-identity-config-contract:
     proposal: canonical/proposals/2026-08-30-tenant-identity-config-contract.yaml
     capabilities:

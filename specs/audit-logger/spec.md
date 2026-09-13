@@ -30,3 +30,6 @@
 - Canonical spec: `canonical/specs/code/audit-logger.yaml`
 - Agent checkpoints: `canonical/specs/agent/audit-logger.yaml`
 - Test cases: 5
+# Tenant attribution extension (2026-09-08)
+
+Audit entries may carry the trusted `TenantObservationContext` envelope outside FlowEvidence v1.0. The envelope contains no content or credentials and sink failures preserve the original safety action.

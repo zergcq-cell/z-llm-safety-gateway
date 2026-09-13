@@ -1,0 +1,442 @@
+cases:
+- capability: tenant-evidence-context
+  requirement: REQ-TEC-001
+  scenario: SC-TEC-001
+  tc: TC-TEC-001
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tec.py::test_tc_tec_001
+  id: SC-TEC-001
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 已认证 acme/globex 且具有 TenantPolicyContext
+  when: 策略解析后构建观测快照
+  then: SHALL 创建 frozen TenantObservationContext v1.0，包含 scope=tenant、tenant_id 和
+    policy_id；身份必须同时匹配启动期租户与策略绑定。
+  and:
+  - 快照只含 contract_version、scope、tenant_id、policy_id；不含密钥、认证凭据名、配置对象或请求原文。
+  - tenant_id 和 policy_id 复用既有 1–64 字符配置 ID 契约。
+- capability: tenant-evidence-context
+  requirement: REQ-TEC-001
+  scenario: SC-TEC-002
+  tc: TC-TEC-002
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tec.py::test_tc_tec_002
+  id: SC-TEC-002
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 请求伪造 tenant Header/body、baggage 或日志同名字段
+  when: 执行真实认证与策略解析
+  then: SHALL 仅以已认证上下文选择归属，忽略所有客户端归属声明。
+  and:
+  - 两个租户使用相同 X-Request-ID 也不合并上下文或审计归属。
+- capability: tenant-evidence-context
+  requirement: REQ-TEC-001
+  scenario: SC-TEC-003
+  tc: TC-TEC-003
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tec.py::test_tc_tec_003
+  id: SC-TEC-003
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: tenancy.enabled=true 且内部上下文缺失、身份未知或绑定冲突
+  when: 进入安全检测或 Provider 调用前验证快照
+  then: SHALL 返回 OpenAI-compatible 503 tenant_policy_unavailable，且不调用插件或 Provider。
+  and:
+  - 诊断归属 unattributed，原因码 tenant_context_invalid；禁止 default、其他租户或全局策略回退。
+- capability: tenant-evidence-context
+  requirement: REQ-TEC-002
+  scenario: SC-TEC-004
+  tc: TC-TEC-004
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tec.py::test_tc_tec_004
+  id: SC-TEC-004
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 两个租户以屏障交错执行真实 HTTP 请求
+  when: 分别走 sync-output、async-output、SSE buffer、sliding-window 和 post-audit/recall
+  then: SHALL 每条证据和后台诊断保留发起请求快照；共享 policy_id 时 tenant_id 仍不同。
+  and:
+  - 后台任务和生成器显式携带快照，不在执行时读取最近请求或重新解析全局默认值。
+  - 每一运行路径分别参数化并断言真实调用、证据及输出，而非仅枚举阶段名称。
+- capability: tenant-evidence-context
+  requirement: REQ-TEC-002
+  scenario: SC-TEC-005
+  tc: TC-TEC-005
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tec.py::test_tc_tec_005
+  id: SC-TEC-005
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 响应完成、异常、断连或取消，随后在同一执行环境处理其他请求
+  when: 退出请求/后台观测作用域
+  then: SHALL 用 token/finally 恢复上下文且不吞掉取消；后续请求不继承前一租户。
+  and:
+  - 在 ASGI send/迭代结束前保留流式作用域；禁止仅围绕 BaseHTTPMiddleware.call_next 绑定。
+- capability: tenant-evidence-context
+  requirement: REQ-TEC-002
+  scenario: SC-TEC-006
+  tc: TC-TEC-006
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tec.py::test_tc_tec_006
+  id: SC-TEC-006
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: tenancy 关闭、未认证请求和非请求生命周期事件
+  when: 生成观测上下文
+  then: SHALL 分别使用 legacy、unattributed、system scope；只有已验证 policy 生命周期事件使用 policy scope。
+  and:
+  - legacy 的 tenant_id/policy_id 为 null，保留已有 TenantContext default 的认证契约，不将其误认为多租户
+    default。
+  - 未认证请求维持现有 401，不引入归属查询。
+- capability: audit-logger
+  requirement: REQ-TAU-001
+  scenario: SC-TAU-001
+  tc: TC-TAU-001
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tau.py::test_tc_tau_001
+  id: SC-TAU-001
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 包含 allow/block/flag/modify、降级或安全不可用的 input/output 决策
+  when: 构建并写入 AuditEntry
+  then: SHALL 在新增可选 tenant_context 字段中记录可信观测快照，并保留现有 Flow/节点/插件版本/有效策略证据。
+  and:
+  - FlowEvidence v1.0 schema 不变；归属写在 AuditEntry 外层，避免破坏 extra=forbid 消费者。
+  - 旧 AuditEntry JSON 无该字段仍可读取，单租户默认序列化不增加该字段。
+- capability: audit-logger
+  requirement: REQ-TAU-001
+  scenario: SC-TAU-002
+  tc: TC-TAU-002
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tau.py::test_tc_tau_002
+  id: SC-TAU-002
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 后台异步输出、流式审计与 recall，含多个合并 SSE event
+  when: 最终记录或发出后台诊断
+  then: SHALL 使用发起请求快照，保持现有 request_id、Flow execution_id 与归属关联。
+  and:
+  - 失败或取消诊断不得复制另一个请求的归属或原文。
+- capability: audit-logger
+  requirement: REQ-TAU-001
+  scenario: SC-TAU-003
+  tc: TC-TAU-003
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tau.py::test_tc_tau_003
+  id: SC-TAU-003
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 多个租户共用策略，策略私有 detector 发生状态变化
+  when: 写入 DetectorLifecycleEvent
+  then: SHALL 记录 scope=policy 和可信 policy_id，tenant_id=null，保持原有顶层 policy_id。
+  and:
+  - 不伪造请求归属，不向每个租户重复发出事件。
+- capability: audit-logger
+  requirement: REQ-TAU-002
+  scenario: SC-TAU-004
+  tc: TC-TAU-004
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tau.py::test_tc_tau_004
+  id: SC-TAU-004
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 审计原文默认关闭，并植入 API Key、Provider key、异常文本和伪造归属
+  when: 序列化租户审计 envelope
+  then: SHALL 归属字段仅来自可信快照；新增元数据不泄露秘密，默认不记录 content。
+  and:
+  - store_content=true 的现有显式内容政策保留；它不授权把内容写入日志、Trace 或指标。
+  - 新增归属 JSON UTF-8 增量上限 512 bytes，不复制租户配置；现有 Flow evidence size 预算仍成立。
+- capability: audit-logger
+  requirement: REQ-TAU-002
+  scenario: SC-TAU-005
+  tc: TC-TAU-005
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tau.py::test_tc_tau_005
+  id: SC-TAU-005
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: file/stdout 单独或共同失败、无可用 sink 或初始化失败
+  when: 记录有/无 FlowEvidence 的租户审计
+  then: SHALL 标记 entry.evidence_persisted=false，并保持原有不因审计 sink 失败改变安全结果的行为。
+  and:
+  - 如有 FlowEvidence，返回值和 entry 内的 evidence_persisted 一致。
+  - 发出稳定 audit_sink_failed 诊断，不包含路径、原始异常或原文；诊断 sink 再失败不递归。
+- capability: audit-logger
+  requirement: REQ-TAU-002
+  scenario: SC-TAU-006
+  tc: TC-TAU-006
+  priority: P1
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tau.py::test_tc_tau_006
+  id: SC-TAU-006
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: audit.enabled=false 或审计投影收到非法归属
+  when: 尝试记录
+  then: SHALL 分别显式跳过写入，或以 unattributed 记录 tenant_context_invalid 诊断并拒绝伪造的归属。
+  and:
+  - 审计关闭不禁用其他已启用观测通道；非法归属不补写为已知租户。
+  - 禁用设置通过启动时固定事件可见，不逐请求产生禁用日志。
+- capability: observability
+  requirement: REQ-TOB-001
+  scenario: SC-TOB-001
+  tc: TC-TOB-001
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tob.py::test_tc_tob_001
+  id: SC-TOB-001
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 已验证租户快照与 Flow/节点证据
+  when: 生成网关管理的请求、安全决策、Provider、Flow/node 日志及 span
+  then: SHALL 通过统一安全投影附加 tenant.scope、tenant.id、tenant.policy_id；无值字段省略。
+  and:
+  - 日志采用 tenant_scope、tenant_id、tenant_policy_id 对应键；可信投影覆盖同名非可信字段。
+  - Flow/Node 观测函数显式接受快照，第三方插件内部日志不承诺可强制隔离。
+- capability: observability
+  requirement: REQ-TOB-001
+  scenario: SC-TOB-002
+  tc: TC-TOB-002
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tob.py::test_tc_tob_002
+  id: SC-TOB-002
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 请求 model、request_id、Header、baggage 或异常包含秘密和长字符串
+  when: 网关观测事件被导出
+  then: SHALL 不将原文、密钥、原始异常、URL query 或客户端 baggage 导出为租户观测属性。
+  and:
+  - Trace span 名称不包含租户或客户端字段；请求/Provider model 在多租户模式投影为固定 redacted。
+  - 自动 FastAPI instrumentation 的 Header 捕获必须关闭、URL query 必须脱敏；traceparent 仅用于链路连接，不用于身份。
+- capability: observability
+  requirement: REQ-TOB-001
+  scenario: SC-TOB-003
+  tc: TC-TOB-003
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tob.py::test_tc_tob_003
+  id: SC-TOB-003
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 嵌套 Flow、流式和后台任务交错运行
+  when: 导出 spans 和结构化日志
+  then: SHALL 每个请求关联事件使用其显式快照，嵌套 Flow 延续相同归属。
+  and:
+  - 取消、正常结束与失败之后无残留 contextvars。
+  - Span exporter、日志捕获夹具验证实际输出而非只验证调用参数。
+- capability: observability
+  requirement: REQ-TOB-002
+  scenario: SC-TOB-004
+  tc: TC-TOB-004
+  priority: P1
+  layer: integration
+  node: tests/integration/test_tenant_observation_tob.py::test_tc_tob_004
+  id: SC-TOB-004
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: tracing 禁用、可选依赖缺失或 exporter 故障
+  when: 初始化/导出观测
+  then: SHALL 保持禁用时 no-op；启用但不可用时产生稳定 tracing_unavailable 诊断，安全结果和 Provider 语义不变。
+  and:
+  - 沿用已有 best-effort tracing 政策；不得每次请求重复初始化或新建 exporter。
+- capability: observability
+  requirement: REQ-TOB-002
+  scenario: SC-TOB-005
+  tc: TC-TOB-005
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tob.py::test_tc_tob_005
+  id: SC-TOB-005
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 观测投影内部收到非法字段或不可序列化异常对象
+  when: 执行安全投影
+  then: SHALL 使用固定 unknown/invalid 值或省略非法字段，并产生 projection_sanitized 诊断。
+  and:
+  - 不截取、哈希或缓存任意输入来创建身份/标签；异常对象不得进入诊断文本。
+  - 网关管理的日志及 Trace 失败诊断路径都经过相同安全投影。
+- capability: prometheus-metrics
+  requirement: REQ-TME-001
+  scenario: SC-TME-001
+  tc: TC-TME-001
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tme.py::test_tc_tme_001
+  id: SC-TME-001
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: metrics 启用且 tenant_ids 白名单为 acme
+  when: acme、其他可信租户、legacy 和无归属请求产生日志/决策
+  then: SHALL 新增 safety_tenant_decisions_total{tenant_scope,tenant_id,direction,action}
+    和 safety_tenant_observability_events_total{tenant_scope,tenant_id,event}。
+  and:
+  - acme 使用 tenant/acme；其他可信租户使用 tenant_other/other；legacy、unattributed、policy、system
+    使用相应 scope 和固定 none。
+  - 不新增 policy、model、request_id、Flow/node、API key 标签；policy 生命周期不扇出为租户指标。
+- capability: prometheus-metrics
+  requirement: REQ-TME-001
+  scenario: SC-TME-002
+  tc: TC-TME-002
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tme.py::test_tc_tme_002
+  id: SC-TME-002
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 同一请求多个 Flow 节点、多个 SSE 窗口或 async pending/completed 审计
+  when: 统计最终 input/output 安全决策
+  then: SHALL 每个实际最终方向决策计数一次；pending、窗口和持久化重试不得重复计数。
+  and:
+  - action 枚举 allow/block/flag/modify/error；direction 仅 input/output。
+  - 未形成方向安全决策的 401/路由错误只产生诊断，不伪造 allow。
+- capability: prometheus-metrics
+  requirement: REQ-TME-002
+  scenario: SC-TME-003
+  tc: TC-TME-003
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tme.py::test_tc_tme_003
+  id: SC-TME-003
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 白名单最多 32 个已配置租户，攻击者发送 10000 个不同请求字段
+  when: 检查两个新指标 family 的所有 label tuples
+  then: SHALL 身份组合最多 37，决策 tuples 最多 370，诊断 tuples 最多 296。
+  and:
+  - event 固定八项：tenant_context_invalid、audit_sink_failed、tracing_unavailable、projection_sanitized、auth_rejected、policy_unavailable、background_failed、cancelled。
+  - 每个 counter 的 total/created 样本合计最多 1332；诊断记录不递归产生诊断。
+- capability: prometheus-metrics
+  requirement: REQ-TME-002
+  scenario: SC-TME-004
+  tc: TC-TME-004
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_tme.py::test_tc_tme_004
+  id: SC-TME-004
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 多租户请求产生任意 model/category/reason/error 和插件描述
+  when: 更新现有 gateway/provider/detector/Flow 指标
+  then: SHALL 保留现有 metric 名称和 label schema，model 固定 redacted；自由文本映射固定 unknown，ID 仅允许启动期受限配置集合。
+  and:
+  - 动作、状态、direction 使用现有有限枚举；category、reason_code、error_type、field、detector_type 采用实现中固定允许值集合加
+    unknown。
+  - Counter/Histogram 的 ID label 白名单取配置字典序前 256 项，其余归并 other；Gauge 仅接受完整预编译实体集合，不聚合实体，未知实体拒绝。
+  - 不得将任意输入加入缓存；单租户旧指标行为保持兼容。
+- capability: prometheus-metrics
+  requirement: REQ-TME-002
+  scenario: SC-TME-005
+  tc: TC-TME-005
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_tme.py::test_tc_tme_005
+  id: SC-TME-005
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: metrics 关闭或同进程创建两个不同配置 app
+  when: 记录/导出事件
+  then: SHALL 禁用时不分配 label 状态；不同 app 的租户白名单和新增 registry 不相互覆盖。
+  and:
+  - 使用 app-scoped observation runtime 及显式注入，不能把租户配置保存在模块级最近 app 变量。
+  - 现有全局 metrics/tracing API 的兼容调用保留，但多租户请求路径必须绑定其所属 app runtime。
+- capability: config-system
+  requirement: REQ-TOC-001
+  scenario: SC-TOC-001
+  tc: TC-TOC-001
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_toc.py::test_tc_toc_001
+  id: SC-TOC-001
+  confidence: medium
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 未提供新增配置或提供合法已配置租户列表
+  when: 加载 observability.tenancy.metric_tenant_ids
+  then: SHALL 默认 []，最多 32 个唯一已声明租户 ID；tenancy 关闭时要求列表为空。
+  and:
+  - 新增子模型 extra=forbid，严格字符串列表，不接受重复、未知、超长或类型强制转换。
+  - 不新增 metrics/audit/tracing 默认启用开关；沿用已有默认关闭设置。
+- capability: config-system
+  requirement: REQ-TOC-001
+  scenario: SC-TOC-002
+  tc: TC-TOC-002
+  priority: P0
+  layer: unit
+  node: tests/unit/tenancy/test_observation_toc.py::test_tc_toc_002
+  id: SC-TOC-002
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 配置非法或 tenant 名称与系统保留字同名
+  when: 执行启动校验
+  then: SHALL 非法配置以固定 tenant_observability_config_invalid 失败，不回显输入；合法配置 ID 通过 scope
+    区分保留字。
+  and:
+  - tenant/other 与 tenant_other/other 不碰撞；不存在全局禁用保护的静默回退。
+- capability: config-system
+  requirement: REQ-TOC-002
+  scenario: SC-TOC-003
+  tc: TC-TOC-003
+  priority: P0
+  layer: integration
+  node: tests/integration/test_tenant_observation_toc.py::test_tc_toc_003
+  id: SC-TOC-003
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 旧单租户示例及新的多租户观测示例
+  when: 加载配置并通过真实 HTTP/SSE 请求运行
+  then: SHALL 保持旧 JSON/SSE/body/header 状态语义和 FlowEvidence v1.0；新增观测字段只进入管理员观测数据。
+  and:
+  - 不向 Provider Header/body/baggage 或客户端响应注入租户身份。
+  - 示例包含白名单聚合、非秘密 ID、共享管理员 sinks、disabled 与写入失败策略说明。
+- capability: config-system
+  requirement: REQ-TOC-002
+  scenario: SC-TOC-004
+  tc: TC-TOC-004
+  priority: P1
+  layer: unit
+  node: tests/unit/tenancy/test_observation_toc.py::test_tc_toc_004
+  id: SC-TOC-004
+  confidence: high
+  evidence: canonical/proposals/2026-09-08-tenant-evidence-observability-isolation.yaml#what_changes;
+    design.md
+  given: 第三项通过验证但第四项尚未交付
+  when: 更新路线与交付文档
+  then: SHALL 仅在 Gate 3/Deliver 后将第三项标为 delivered，第四项及公共 v0.3.0 保持未完成。
+  and:
+  - 本次不更改包版本、不创建发布标签，不声称实现物理租户存储或访问授权隔离。

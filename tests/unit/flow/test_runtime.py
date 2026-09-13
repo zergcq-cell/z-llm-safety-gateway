@@ -34,6 +34,10 @@ from z_llm_safety_gateway.flow.runtime import (
     FlowRuntime,
     OrderedResultReducer,
 )
+from z_llm_safety_gateway.tenancy.observation import (
+    ObservationScope,
+    TenantObservationContext,
+)
 
 
 def _descriptor(capability_id: str) -> CapabilityDescriptor:
@@ -214,6 +218,41 @@ async def test_tc_fr_001() -> None:
     ]
     assert [item.item_index for item in result.node_results] == list(range(4)) * 3
     assert runtime.pending_task_count == 0
+
+
+async def test_runtime_passes_explicit_tenant_context_to_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-TOB-001: root Flow observation uses its explicit trusted context."""
+    from z_llm_safety_gateway.observability import flow as flow_observability
+
+    descriptor = _descriptor("capability.observe")
+    flow = _flow("observed-flow", _node("observe", descriptor.capability_id))
+    runtime = FlowRuntime(
+        registry=FlowContractRegistry(capabilities=(descriptor,), flows=(flow,)),
+        capabilities={descriptor.capability_id: ImmediateCapability(descriptor)},
+        policies=_policies(flow),
+        reducer=OrderedResultReducer(),
+    )
+    captured: list[Any] = []
+
+    def observe(*args: Any, **kwargs: Any) -> Any:
+        captured.append(kwargs["tenant_context"])
+        return args[0]
+
+    monkeypatch.setattr(flow_observability, "observe_flow_evidence", observe)
+    observation = TenantObservationContext(ObservationScope.TENANT, "acme", "strict")
+    flow_input = _input("safe").model_copy(
+        update={
+            "context": _input("safe").context.model_copy(
+                update={"tenant_observation_context": observation}
+            )
+        }
+    )
+
+    await runtime.execute(flow, flow_input)
+
+    assert captured == [observation]
 
 
 async def test_tc_fr_002() -> None:

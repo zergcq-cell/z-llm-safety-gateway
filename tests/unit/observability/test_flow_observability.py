@@ -13,6 +13,10 @@ from z_llm_safety_gateway.observability.flow import (
     sanitize_observable_value,
     trace_flow_evidence,
 )
+from z_llm_safety_gateway.tenancy.observation import (
+    ObservationScope,
+    TenantObservationContext,
+)
 
 
 def test_tc_obs_701() -> None:
@@ -47,7 +51,7 @@ def test_tc_obs_702() -> None:
 
 
 def test_tc_obs_703(monkeypatch: Any) -> None:
-    """TC-OBS-703: request→flow→node→nested-flow spans preserve real statuses."""
+    """TC-TOB-002/003: spans preserve status without exporting client payloads."""
     events: list[tuple[str, int, dict[str, Any]]] = []
 
     class Span(AbstractContextManager[Any]):
@@ -119,7 +123,7 @@ def test_tc_obs_703(monkeypatch: Any) -> None:
 
 
 def test_tc_obs_704() -> None:
-    """TC-OBS-704: malicious dynamic values are rejected with a metric signal."""
+    """TC-TOB-005: malicious dynamic values are rejected with a metric signal."""
     metrics.set_enabled(True)
     try:
         value, sanitized = sanitize_observable_value(
@@ -136,3 +140,36 @@ def test_tc_obs_704() -> None:
         'reason="invalid_value"}' in output
     )
     assert "endpoint" not in output
+
+
+def test_tenant_context_is_projected_only_to_flow_trace_attributes(
+    monkeypatch: Any,
+) -> None:
+    """TC-TOB-001: Flow tracing receives trusted tenant identity explicitly."""
+    captured_attributes: list[dict[str, Any]] = []
+
+    class Span(AbstractContextManager[Any]):
+        def __enter__(self) -> Span:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+    class Tracer:
+        def start_as_current_span(self, name: str, attributes: Any = None) -> Span:
+            if name.startswith("flow."):
+                captured_attributes.append(attributes or {})
+            return Span()
+
+    monkeypatch.setattr(tracing, "get_tracer", lambda: Tracer())
+    with trace_flow_evidence(
+        _evidence(),
+        tenant_context=TenantObservationContext(
+            ObservationScope.TENANT, "acme", "strict-policy"
+        ),
+    ):
+        pass
+
+    assert captured_attributes[0]["tenant.scope"] == "tenant"
+    assert captured_attributes[0]["tenant.id"] == "acme"
+    assert captured_attributes[0]["tenant.policy_id"] == "strict-policy"

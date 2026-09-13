@@ -548,14 +548,18 @@ def create_app(config_path: str) -> FastAPI:
     # 1. Load configuration
     config = load_config(config_path)
 
-    # 1b. Initialize observability (Prometheus metrics + optional OTel tracing).
-    observability_metrics.set_enabled(config.observability.metrics.enabled)
-
     # 2. Create FastAPI instance
+    # Keep the historical process-wide API available to existing extensions;
+    # tenant-scoped request metrics use the application runtime below.
+    observability_metrics.set_enabled(config.observability.metrics.enabled)
     app = FastAPI(
         title="z LLM Safety Gateway",
         description="Open-source, modular LLM content safety gateway",
         lifespan=lifespan,
+    )
+    app.state.metrics_runtime = observability_metrics.create_runtime(
+        config.observability.metrics.enabled,
+        metric_tenant_ids=config.observability.tenancy.metric_tenant_ids,
     )
 
     # 2b. Initialize optional OpenTelemetry tracing (best effort, off by default).
@@ -910,6 +914,9 @@ def create_app(config_path: str) -> FastAPI:
                         final_risk_level="high",
                         safety_degraded=True,
                         detector_availability=availability,
+                        tenant_context=getattr(
+                            request.state, "tenant_observation_context", None
+                        ),
                     )
                 if flow_evidence is not None:
                     entry.with_flow_evidence(flow_evidence)

@@ -229,6 +229,8 @@ class PipelineEngine:
         detectors: list[Detector],
         contexts: list[DetectionContext],
         detector_configs: dict[str, dict[str, Any]],
+        *,
+        tenant_observation_context: Any | None = None,
     ) -> PipelineResult:
         """Execute the compatibility Flow once and return the legacy result model."""
         started = time.monotonic()
@@ -251,7 +253,7 @@ class PipelineEngine:
         )
         execution = await plan.runtime.execute(
             plan.flow,
-            self._flow_input(contexts),
+            self._flow_input(contexts, tenant_observation_context),
             reducer=reducer,
         )
         self._last_pending_flow_tasks = plan.runtime.pending_task_count
@@ -538,7 +540,9 @@ class PipelineEngine:
         return ("safety.block",)
 
     @staticmethod
-    def _flow_input(contexts: list[DetectionContext]) -> FlowInput:
+    def _flow_input(
+        contexts: list[DetectionContext], tenant_observation_context: Any | None = None
+    ) -> FlowInput:
         first = contexts[0]
         return FlowInput(
             contract_version="1.0",
@@ -555,6 +559,7 @@ class PipelineEngine:
                 correlation_id=first.request_id,
                 direction=first.direction,
                 stage="pipeline-compat",
+                tenant_observation_context=tenant_observation_context,
             ),
         )
 

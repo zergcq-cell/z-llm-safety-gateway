@@ -134,7 +134,7 @@ def test_documented_multi_tenant_yaml_loads_with_environment_keys(
 
 
 def test_create_app_resolves_distinct_tenants_over_http(monkeypatch, capsys) -> None:
-    """TC-CFG-703: create_app exposes distinct trusted Contexts over HTTP."""
+    """TC-CFG-703/TEC-002: HTTP ignores client ownership claims."""
     monkeypatch.setenv("ZLG_ACME_API_KEY", "http-acme-secret")
     monkeypatch.setenv("ZLG_GLOBEX_API_KEY", "http-globex-secret")
     monkeypatch.setenv("ZLG_ACME_PROVIDER_API_KEY", "http-acme-provider-secret")
@@ -149,6 +149,7 @@ def test_create_app_resolves_distinct_tenants_over_http(monkeypatch, capsys) -> 
     @app.get("/tenant-contract")
     async def tenant_contract(request: Request) -> dict[str, object]:
         context = request.state.tenant_context
+        observation = request.state.tenant_observation_context
         return {
             "tenant_id": context.tenant_id,
             "identity_source": context.identity_source,
@@ -161,6 +162,11 @@ def test_create_app_resolves_distinct_tenants_over_http(monkeypatch, capsys) -> 
             ],
             "input_flow": request.app.state.config.pipeline.input_flow,
             "output_flow": request.app.state.config.pipeline.output_flow,
+            "observation": {
+                "scope": observation.scope.value,
+                "tenant_id": observation.tenant_id,
+                "policy_id": observation.policy_id,
+            },
         }
 
     client = TestClient(app)
@@ -182,6 +188,16 @@ def test_create_app_resolves_distinct_tenants_over_http(monkeypatch, capsys) -> 
     assert globex.json()["policy_id"] == "globex-policy"
     assert acme.json()["routing_profile_id"] == "acme-policy"
     assert globex.json()["routing_profile_id"] == "globex-policy"
+    assert acme.json()["observation"] == {
+        "scope": "tenant",
+        "tenant_id": "acme",
+        "policy_id": "acme-policy",
+    }
+    assert globex.json()["observation"] == {
+        "scope": "tenant",
+        "tenant_id": "globex",
+        "policy_id": "globex-policy",
+    }
     rendered = repr(app.state.config)
     captured = capsys.readouterr()
     routine_output = captured.out + captured.err

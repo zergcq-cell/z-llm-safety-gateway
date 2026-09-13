@@ -9,6 +9,8 @@ from contextlib import contextmanager
 
 from z_llm_safety_gateway.flow.evidence import FlowEvidence
 from z_llm_safety_gateway.observability import metrics, tracing
+from z_llm_safety_gateway.observability.tenant import tenant_trace_fields
+from z_llm_safety_gateway.tenancy.observation import TenantObservationContext
 
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _REASON_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -34,6 +36,7 @@ def observe_flow_evidence(
     evidence: FlowEvidence,
     *,
     children: tuple[FlowEvidence, ...] = (),
+    tenant_context: TenantObservationContext | None = None,
 ) -> FlowEvidence:
     """Project immutable evidence to no-op-safe metrics and optional traces."""
     if not metrics.is_enabled() and not tracing.is_enabled():
@@ -59,7 +62,9 @@ def observe_flow_evidence(
             reason,
         )
     if tracing.is_enabled():
-        with trace_flow_evidence(evidence, children=children):
+        with trace_flow_evidence(
+            evidence, children=children, tenant_context=tenant_context
+        ):
             pass
     return evidence
 
@@ -69,20 +74,23 @@ def trace_flow_evidence(
     evidence: FlowEvidence,
     *,
     children: tuple[FlowEvidence, ...] = (),
+    tenant_context: TenantObservationContext | None = None,
 ) -> Iterator[None]:
     """Emit flow→node→nested-flow spans using evidence-only safe attributes."""
     tracer = tracing.get_tracer()
     child_by_execution = {child.execution_id: child for child in children}
     flow_id, _ = sanitize_observable_value("flow_id", evidence.flow_id)
+    attributes = {
+        "flow.id": flow_id,
+        "flow.version": evidence.flow_version,
+        "flow.status": evidence.status.value,
+        "flow.reason_code": evidence.reason_code,
+        "flow.direction": evidence.direction,
+    }
+    attributes.update(tenant_trace_fields(tenant_context))
     with tracer.start_as_current_span(
         f"flow.{flow_id}",
-        attributes={
-            "flow.id": flow_id,
-            "flow.version": evidence.flow_version,
-            "flow.status": evidence.status.value,
-            "flow.reason_code": evidence.reason_code,
-            "flow.direction": evidence.direction,
-        },
+        attributes=attributes,
     ):
         for node in evidence.nodes:
             node_id, _ = sanitize_observable_value("node_id", node.node_id)
@@ -106,6 +114,8 @@ def trace_flow_evidence(
                     else None
                 )
                 if child is not None:
-                    with trace_flow_evidence(child, children=children):
+                    with trace_flow_evidence(
+                        child, children=children, tenant_context=tenant_context
+                    ):
                         pass
         yield

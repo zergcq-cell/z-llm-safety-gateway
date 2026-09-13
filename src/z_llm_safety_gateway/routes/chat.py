@@ -55,7 +55,7 @@ from z_llm_safety_gateway.flow.evidence import (
 from z_llm_safety_gateway.language import detect_language, detect_language_for_messages
 from z_llm_safety_gateway.models import DetectionContext, DetectionResult, find_result_by_action
 from z_llm_safety_gateway.observability import metrics as observability_metrics
-from z_llm_safety_gateway.pipeline.engine import PipelineResult
+from z_llm_safety_gateway.pipeline.engine import PipelineEngine, PipelineResult
 from z_llm_safety_gateway.pipeline.snapshot import (
     FlowExecutionSnapshot,
     FlowStageSnapshot,
@@ -106,6 +106,29 @@ def _runtime_value(
         value = getattr(bundle, bundle_name, None)
         return default if value is None else value
     return getattr(request.app.state, legacy_name, default)
+
+
+async def _run_pipeline(
+    request: Request,
+    engine: Any,
+    detectors: list[Any],
+    contexts: list[Any],
+    detector_configs: dict[str, dict[str, Any]],
+    observation_context: Any | None = None,
+) -> Any:
+    """Run built-in Flows with trusted provenance without breaking engine adapters."""
+    if isinstance(engine, PipelineEngine):
+        return await engine.run(
+            detectors,
+            contexts,
+            detector_configs,
+            tenant_observation_context=(
+                observation_context
+                if observation_context is not None
+                else getattr(request.state, "tenant_observation_context", None)
+            ),
+        )
+    return await engine.run(detectors, contexts, detector_configs)
 
 
 def _error_response(
@@ -445,6 +468,24 @@ def _record_request_audit(
     entry: AuditEntry,
 ) -> FlowEvidence | None:
     """Persist an entry and retain the truthful persistence state for the request."""
+    entry.tenant_context = getattr(request.state, "tenant_observation_context", None)
+    from z_llm_safety_gateway.observability import metrics as observability_metrics
+
+    if entry.tenant_context is not None:
+        recorded_directions: set[str] = getattr(
+            request.state, "_tenant_metric_decision_directions", set()
+        )
+        if entry.direction not in recorded_directions:
+            observability_metrics.record_tenant_decision(
+                entry.tenant_context,
+                direction=entry.direction,
+                action=entry.final_action,
+                runtime=getattr(request.app.state, "metrics_runtime", None),
+            )
+            request.state._tenant_metric_decision_directions = {
+                *recorded_directions,
+                entry.direction,
+            }
     persisted = audit_logger.record(entry)
     if persisted is None:
         return None
@@ -588,6 +629,10 @@ def _build_streaming_response(
                 for name, config in output_detector_configs.items()
             },
         )
+        # Preserve the legacy runner constructor used by adapters and tests.
+        post_audit_runner._tenant_observation_context = getattr(
+            request.state, "tenant_observation_context", None
+        )
     streaming_webhook: WebhookRecall | None = getattr(
         request.app.state, "streaming_webhook_recall", None
     )
@@ -662,7 +707,9 @@ def _build_streaming_response(
                 request_id=request_id,
                 metadata={"content": full_content},
             )
-            result = await engine.run(
+            result = await _run_pipeline(
+                request,
+                engine,
                 list(stage_detectors),
                 [context],
                 {name: dict(config) for name, config in stage_configs.items()},
@@ -738,6 +785,9 @@ def _build_streaming_response(
             ),
             on_max_size=streaming_config.on_max_size if streaming_config else "block",
             language=input_language,
+            tenant_observation_context=getattr(
+                request.state, "tenant_observation_context", None
+            ),
         )
 
         try:
@@ -1005,7 +1055,13 @@ async def chat_completions(request: Request) -> Response:
                 for ec in extracted
             ]
 
-            result = await engine.run(input_detectors, contexts, input_detector_configs)
+            result = await _run_pipeline(
+                request,
+                engine,
+                input_detectors,
+                contexts,
+                input_detector_configs,
+            )
             input_pipeline_result = result
 
             # Store result in request.state for middleware
@@ -1184,6 +1240,9 @@ async def chat_completions(request: Request) -> Response:
         _audit_logger = audit_logger
         _audit_enabled = audit_enabled
         _user_id = user_id
+        _observation_context = getattr(
+            request.state, "tenant_observation_context", None
+        )
         _provider_response_time = provider_response_time
 
         async def _async_output_detection() -> None:
@@ -1203,8 +1262,13 @@ async def chat_completions(request: Request) -> Response:
                             message_index=None,
                             metadata={"content": otext},
                         )
-                        bg_result = await _engine.run(
-                            list(_output_detectors), [octx], _output_configs
+                        bg_result = await _run_pipeline(
+                            request,
+                            _engine,
+                            list(_output_detectors),
+                            [octx],
+                            _output_configs,
+                            observation_context=_observation_context,
                         )
 
                         if (
@@ -1334,7 +1398,9 @@ async def chat_completions(request: Request) -> Response:
                     sync_timeout_seconds = _get_sync_timeout(request)
                     try:
                         result = await asyncio.wait_for(
-                            engine.run(
+                            _run_pipeline(
+                                request,
+                                engine,
                                 sync_detectors,
                                 [output_context],
                                 sync_configs,

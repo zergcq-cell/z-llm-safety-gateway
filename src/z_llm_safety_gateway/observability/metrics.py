@@ -26,12 +26,28 @@ and avoid duplicate-registration errors across app instances.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 
 import structlog
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 from prometheus_client import generate_latest as _generate_latest
 
 logger = structlog.get_logger(__name__)
+
+_TENANT_EVENT_NAMES = frozenset(
+    {
+        "tenant_context_invalid",
+        "audit_sink_failed",
+        "tracing_unavailable",
+        "projection_sanitized",
+        "auth_rejected",
+        "policy_unavailable",
+        "background_failed",
+        "cancelled",
+    }
+)
 
 
 class MetricsRegistry:
@@ -41,8 +57,9 @@ class MetricsRegistry:
     multiple registry instances can coexist without name collisions.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, metric_tenant_ids: Iterable[str] = ()) -> None:
         self._registry = CollectorRegistry()
+        self.metric_tenant_ids = frozenset(metric_tenant_ids)
 
         # --- Gateway metrics (DESIGN 12.5) ---
         self.gateway_requests = Counter(
@@ -153,6 +170,18 @@ class MetricsRegistry:
             ["field", "reason"],
             registry=self._registry,
         )
+        self.tenant_decisions = Counter(
+            "safety_tenant_decisions_total",
+            "Tenant-scoped terminal safety decisions",
+            ["tenant_scope", "tenant_id", "direction", "action"],
+            registry=self._registry,
+        )
+        self.tenant_observability_events = Counter(
+            "safety_tenant_observability_events_total",
+            "Tenant-scoped bounded observation diagnostics",
+            ["tenant_scope", "tenant_id", "event"],
+            registry=self._registry,
+        )
 
         # --- Provider metrics (DESIGN 12.5) ---
         self.provider_requests = Counter(
@@ -187,15 +216,56 @@ class MetricsRegistry:
         return _generate_latest(self._registry)
 
 
+class MetricsRuntime:
+    """Metrics state owned by one application instance."""
+
+    def __init__(self, enabled: bool, metric_tenant_ids: Iterable[str] = ()) -> None:
+        self.registry = MetricsRegistry(metric_tenant_ids) if enabled else None
+
+    @property
+    def enabled(self) -> bool:
+        return self.registry is not None
+
+    def generate(self) -> bytes:
+        return self.registry.generate() if self.registry is not None else b""
+
+
+def create_runtime(
+    enabled: bool, *, metric_tenant_ids: Iterable[str] = ()
+) -> MetricsRuntime:
+    """Create isolated metrics state for one FastAPI application."""
+    return MetricsRuntime(enabled, metric_tenant_ids)
+
+
 # --------------------------------------------------------------------------- #
 # Module-level enabled state and current registry
 # --------------------------------------------------------------------------- #
 _registry: MetricsRegistry | None = None
 _enabled: bool = False
 _lock = threading.Lock()
+_runtime_registry: ContextVar[MetricsRegistry | None] = ContextVar(
+    "metrics_runtime_registry", default=None
+)
 
 
-def set_enabled(enabled: bool) -> None:
+@contextmanager
+def bind_runtime(runtime: MetricsRuntime | None) -> Iterator[None]:
+    """Select one application's registry for the current async task only."""
+    token: Token[MetricsRegistry | None] = _runtime_registry.set(
+        runtime.registry if runtime is not None else None
+    )
+    try:
+        yield
+    finally:
+        _runtime_registry.reset(token)
+
+
+def _active_registry() -> MetricsRegistry | None:
+    """Prefer the explicit application runtime over legacy compatibility state."""
+    return _runtime_registry.get() or _registry
+
+
+def set_enabled(enabled: bool, *, metric_tenant_ids: Iterable[str] = ()) -> None:
     """Enable or disable metrics collection.
 
     When *enabled* is True a fresh :class:`MetricsRegistry` is created; when
@@ -207,7 +277,7 @@ def set_enabled(enabled: bool) -> None:
     global _registry, _enabled
     with _lock:
         _enabled = enabled
-        _registry = MetricsRegistry() if enabled else None
+        _registry = MetricsRegistry(metric_tenant_ids) if enabled else None
         logger.info(
             "metrics_enabled_changed",
             enabled=enabled,
@@ -399,7 +469,7 @@ def record_flow_execution(
     duration_seconds: float,
 ) -> None:
     """Record one bounded Flow terminal state and duration."""
-    reg = _registry
+    reg = _active_registry()
     if reg is None:
         return
     reg.flow_executions.labels(
@@ -422,7 +492,7 @@ def record_flow_node(
     reason_code: str,
 ) -> None:
     """Record one bounded Node terminal state."""
-    reg = _registry
+    reg = _active_registry()
     if reg is None:
         return
     reg.flow_node_executions.labels(
@@ -436,10 +506,61 @@ def record_flow_node(
 
 def record_observability_sanitization(field: str, reason: str) -> None:
     """Signal that an unsafe dynamic observability value was rejected."""
-    reg = _registry
+    reg = _active_registry()
     if reg is None:
         return
     reg.observability_sanitizations.labels(field=field, reason=reason).inc()
+
+
+def record_tenant_decision(
+    context: object,
+    *,
+    direction: str,
+    action: str,
+    runtime: MetricsRuntime | None = None,
+) -> None:
+    """Record one final decision with a finite tenant identity projection."""
+    reg = runtime.registry if runtime is not None else _active_registry()
+    if reg is None:
+        return
+    scope, tenant_id = _tenant_metric_identity(reg, context)
+    bounded_direction = direction if direction in {"input", "output"} else "input"
+    bounded_action = action if action in {"allow", "block", "flag", "modify", "error"} else "error"
+    reg.tenant_decisions.labels(
+        tenant_scope=scope,
+        tenant_id=tenant_id,
+        direction=bounded_direction,
+        action=bounded_action,
+    ).inc()
+
+
+def record_tenant_event(
+    context: object, event: str, *, runtime: MetricsRuntime | None = None
+) -> None:
+    """Record a fixed diagnostic event without accepting dynamic labels."""
+    reg = runtime.registry if runtime is not None else _active_registry()
+    if reg is None:
+        return
+    scope, tenant_id = _tenant_metric_identity(reg, context)
+    bounded_event = event if event in _TENANT_EVENT_NAMES else "projection_sanitized"
+    reg.tenant_observability_events.labels(
+        tenant_scope=scope,
+        tenant_id=tenant_id,
+        event=bounded_event,
+    ).inc()
+
+
+def _tenant_metric_identity(reg: MetricsRegistry, context: object) -> tuple[str, str]:
+    """Project trusted context to finite metric label values."""
+    scope = getattr(getattr(context, "scope", None), "value", "unattributed")
+    tenant_id = getattr(context, "tenant_id", None)
+    if scope == "tenant" and isinstance(tenant_id, str):
+        if tenant_id in reg.metric_tenant_ids:
+            return "tenant", tenant_id
+        return "tenant_other", "other"
+    if scope in {"legacy", "unattributed", "policy", "system"}:
+        return scope, "none"
+    return "unattributed", "none"
 
 
 def record_provider_request(

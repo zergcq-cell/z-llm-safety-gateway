@@ -11,3 +11,6 @@
 - Canonical spec: `canonical/specs/code/observability.yaml`
 - Agent checkpoints: `canonical/specs/agent/observability.yaml`
 - Test cases: 4
+# Tenant evidence and observability isolation (2026-09-08)
+
+The gateway projects only trusted, payload-free tenant scope, tenant ID, and policy ID into gateway logs and Flow traces. IDs are omitted when absent, dynamic request fields are rejected, and task-local context is restored on exit. See the archived change test report for the complete verification matrix.
