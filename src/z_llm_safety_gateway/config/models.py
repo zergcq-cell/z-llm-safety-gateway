@@ -271,10 +271,12 @@ class ProviderConfig(BaseModel):
     - openai: Official OpenAI API (requires api_key)
     - openai_compatible: Any OpenAI-compatible endpoint (api_key optional)
     - azure_openai: Azure OpenAI Service (requires api_key and api_version)
+    - anthropic: Anthropic Claude Messages API (requires api_key)
+    - gemini: Google Gemini generateContent API (requires api_key)
     """
 
     name: str
-    type: str  # "openai" | "openai_compatible" | "azure_openai"
+    type: str  # "openai" | "openai_compatible" | "azure_openai" | "anthropic" | "gemini"
     base_url: str
     api_key: str = Field(default="", repr=False)
     api_version: str = ""  # for azure_openai

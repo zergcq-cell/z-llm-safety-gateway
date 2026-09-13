@@ -7,7 +7,7 @@
 
 ## Description
 
-Transparent HTTP proxy that routes requests to LLM providers based on the `model` field using glob pattern matching, forwards the request to the matched provider, and returns the provider response to the client. Supports three provider types: `openai`, `openai_compatible`, and `azure_openai`. All provider errors are wrapped as OpenAI-compatible HTTP 502 `provider_error` responses.
+Transparent HTTP proxy that routes requests to LLM providers based on the `model` field using glob pattern matching, forwards the request to the matched provider, and returns the provider response to the client. Supports provider types `openai`, `openai_compatible`, `azure_openai`, `anthropic`, and `gemini`. All provider errors are wrapped as OpenAI-compatible HTTP 502 `provider_error` responses.
 
 ---
 

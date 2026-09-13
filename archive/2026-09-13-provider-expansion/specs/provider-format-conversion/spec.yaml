@@ -1,0 +1,13 @@
+capability: provider-format-conversion
+requirements:
+  - id: PFC-001
+    confidence: high
+    text: "不支持或无法表达的字段 SHALL 显式失败。"
+    scenarios:
+      - id: PFC-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[3]
+        given: "请求包含目标 Provider 不支持的字段"
+        when: "执行格式转换"
+        then: "转换 SHALL 返回稳定 provider_error"
+        and: "系统 SHALL 不静默丢弃字段"

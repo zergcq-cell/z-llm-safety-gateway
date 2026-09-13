@@ -1,0 +1,99 @@
+meta:
+  change_id: 2026-09-13-provider-expansion
+  title: "v0.4.0 Change 5 — Provider 扩展"
+  created: "2026-09-13T07:20:00+08:00"
+  status: confirmed
+why:
+  problem: "网关当前支持 OpenAI、Azure OpenAI 和 OpenAI-compatible Provider，但 Anthropic Claude 与 Google Gemini 使用不同的认证、请求、响应和流式协议。"
+  motivation: "为多租户 Flow 提供稳定的 Claude/Gemini Provider 适配，并保持现有统一 Provider contract 与协议兼容。"
+what_changes:
+  - id: C1
+    description: "新增 Anthropic Claude Provider adapter，支持请求、响应和流式协议转换。"
+    type: new
+  - id: C2
+    description: "新增 Google Gemini Provider adapter，支持请求、响应和流式协议转换。"
+    type: new
+  - id: C3
+    description: "扩展统一 Provider contract、路由、模型端点、错误和 SSE 兼容矩阵。"
+    type: modified
+  - id: C4
+    description: "保持租户 Provider 路由隔离、凭据脱敏和既有 Provider 回归兼容。"
+    type: modified
+capabilities:
+  new:
+    - name: anthropic-provider-adapter
+      description: "Claude API 认证、格式转换、非流式与流式调用。"
+    - name: gemini-provider-adapter
+      description: "Gemini API 认证、格式转换、非流式与流式调用。"
+    - name: provider-format-conversion
+      description: "Provider 特有格式与统一内部契约之间的显式转换。"
+    - name: provider-compatibility-matrix
+      description: "新增与既有 Provider 的协议、错误和路由兼容验证。"
+  modified:
+    - name: provider-proxy
+      description: "在统一生命周期和错误契约下支持新增 Provider。"
+    - name: provider-router
+      description: "支持租户范围内的 Anthropic/Gemini 路由解析。"
+    - name: streaming-contract
+      description: "将 Provider 原生流转换为稳定网关 SSE 事件。"
+constraints:
+  - "严格执行 STDD 六阶段和 RED→GREEN→REFACTOR。"
+  - "保持 HTTP/SSE、统一错误结构、超时、取消和默认无重试语义。"
+  - "API Key、原始请求内容和未清理的上游异常不得泄漏。"
+  - "不改变 Flow 核心、租户策略 schema 或现有 Provider 行为。"
+  - "不自动创建 tag、发布版本或推送 GitHub。"
+stakeholders:
+  - "网关部署者与运维人员"
+  - "多租户应用开发者"
+  - "Provider 与 Detector 插件维护者"
+  - "现有单租户用户"
+risk_areas:
+  - capability: provider-format-conversion
+    risk: "字段转换可能丢失语义。"
+    mitigation: "建立字段级映射、边界和兼容测试。"
+  - capability: streaming-contract
+    risk: "不同 Provider 的流式事件顺序和结束语义不一致。"
+    mitigation: "统一 chunk、结束和错误事件并覆盖中途失败。"
+  - capability: tenant-provider-routing
+    risk: "租户间错误使用配置或凭据。"
+    mitigation: "沿用配置快照、路由隔离和凭据脱敏测试。"
+  - capability: provider-proxy
+    risk: "上游错误、取消或超时导致资源和信息泄漏。"
+    mitigation: "稳定错误映射、deadline、取消传播和无原始异常响应。"
+non_goals:
+  - "OAuth 2.0（Change 6）。"
+  - "多模态安全检测或图像生成端点（Change 7）。"
+  - "Provider failover、模型聚合控制面或动态热加载。"
+  - "发布 v0.4.0。"
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: true
+    cross_system: true
+anchoring:
+  level: L3
+  reference_changes:
+    - 2026-08-30-tenant-identity-config-contract
+    - 2026-09-01-tenant-flow-policy-resolution
+    - 2026-09-08-tenant-evidence-observability-isolation
+    - 2026-09-13-tenant-resource-failure-compatibility
+  anchor_implementations:
+    - "src/z_llm_safety_gateway/providers/base.py"
+    - "src/z_llm_safety_gateway/providers/router.py"
+principle_check:
+  plugin_flow: "Provider 特有逻辑放在 adapter；Flow 与核心只负责稳定契约、生命周期、路由和执行机制。"
+  explicit_policy_failure: "认证失败、限流、超时、取消、上游不可用和流式失败均有稳定错误码与可观测信号；不做隐式重试或跨租户回退。"
+  transparent_contracts: "调用方继续使用统一 HTTP/SSE 和错误契约；转换限定在 Provider 边界，延迟和资源有界。"
+  evidence_data_protection: "Provider、模型、租户范围和失败原因可审计；API Key、原始内容和敏感上游细节默认脱敏。"
+  tradeoffs_or_departures: "路线文档原先未承诺 v0.4.0 Provider 范围；本提案经确认将其明确为 v0.4.0 Change 5，并在交付阶段记录设计调整。"
+success_criteria:
+  - "Anthropic 非流式请求通过统一 Provider contract 成功完成。"
+  - "Gemini 非流式请求通过统一 Provider contract 成功完成。"
+  - "Anthropic 与 Gemini 流式响应转换为稳定、可验证的网关 SSE 事件序列。"
+  - "认证、模型字段、系统消息和响应结构转换均有测试覆盖。"
+  - "4xx、429、5xx、网络错误、超时、取消和流式中途错误均命中明确失败契约。"
+  - "多租户 Provider 路由不会跨租户使用配置或凭据。"
+  - "现有 OpenAI、Azure OpenAI、OpenAI-compatible Provider 回归通过。"
+  - "API Key、请求内容和原始异常不会出现在响应、日志或审计证据中。"
+  - "通过完整测试、Ruff、mypy、失败模式和兼容性质量门。"

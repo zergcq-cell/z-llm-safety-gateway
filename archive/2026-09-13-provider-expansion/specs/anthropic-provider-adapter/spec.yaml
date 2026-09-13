@@ -1,0 +1,23 @@
+capability: anthropic-provider-adapter
+requirements:
+  - id: APA-001
+    confidence: high
+    text: "Claude 非流式请求 SHALL 按统一 Provider contract 转换并发送。"
+    scenarios:
+      - id: APA-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[0]
+        given: "有效的 Anthropic 配置和统一聊天请求"
+        when: "调用 Anthropic adapter"
+        then: "请求 SHALL 使用正确认证、模型和消息字段"
+        and: "响应 SHALL 返回统一 Provider 结果"
+  - id: APA-002
+    confidence: high
+    text: "Claude 流式响应 SHALL 转换为稳定网关 SSE。"
+    scenarios:
+      - id: APA-002-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[1]
+        given: "Claude 返回有效事件流"
+        when: "网关处理流"
+        then: "SSE SHALL 保持顺序并以 [DONE] 结束"

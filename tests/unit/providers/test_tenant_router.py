@@ -42,6 +42,12 @@ def _router() -> ModelRouter:
                     type="openai_compatible",
                     base_url="http://local.invalid/v1",
                 ),
+                ProviderConfig(
+                    name="tenant-gemini",
+                    type="gemini",
+                    base_url="https://gemini.invalid/v1beta",
+                    api_key="gemini-secret",
+                ),
             ],
             routing=RoutingConfig(
                 rules=[RoutingRule(pattern="*", provider="global-first")]
@@ -120,6 +126,18 @@ def test_models_provider_core_preserves_explicit_and_legacy_selection() -> None:
 
     assert view.models_provider.config.name == "tenant-local"
     assert router.models_provider().config.name == "global-first"
+
+
+def test_tenant_view_can_isolate_new_provider_types() -> None:
+    """TC-ROUTE-001: a tenant view keeps Gemini routing inside its snapshot."""
+    router = _router()
+    view = router.tenant_view(
+        _routing(("gemini-*", "tenant-gemini"), models_provider="tenant-gemini")
+    )
+
+    assert view.route("gemini-1.5").config.name == "tenant-gemini"
+    with pytest.raises(ProviderError):
+        view.route("shared-model")
 
 
 def test_router_views_reuse_private_provider_instances() -> None:

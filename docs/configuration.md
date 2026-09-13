@@ -124,7 +124,7 @@ server:
 ```yaml
 providers:
   - name: openai              # 唯一名称，被 routing 引用
-    type: openai              # openai | azure_openai | openai_compatible
+    type: openai              # openai | azure_openai | openai_compatible (also anthropic | gemini)
     base_url: https://api.openai.com/v1
     api_key: ${OPENAI_API_KEY}   # 支持环境变量引用
     # Azure 额外配置：

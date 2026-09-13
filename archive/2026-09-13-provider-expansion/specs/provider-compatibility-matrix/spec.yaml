@@ -1,0 +1,19 @@
+capability: provider-compatibility-matrix
+requirements:
+  - id: PCM-001
+    confidence: high
+    text: "Provider 错误、租户路由和隐私边界 SHALL 保持稳定。"
+    scenarios:
+      - id: PCM-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[4]
+        given: "请求触发上游错误、超时、取消或限流"
+        when: "网关处理失败"
+        then: "响应 SHALL 使用稳定错误契约"
+        and: "日志和审计 SHALL 脱敏且不跨租户"
+      - id: PCM-001-S2
+        confidence: high
+        evidence: proposal.yaml#success_criteria[5]
+        given: "两个租户配置不同 Provider"
+        when: "分别发起请求"
+        then: "每个请求 SHALL 只使用所属租户的 adapter 和凭据"

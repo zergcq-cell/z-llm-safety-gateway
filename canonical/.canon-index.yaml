@@ -97,3 +97,11 @@ changes:
     - tenant-config-contract
     - tenant-policy-resolution
     verified: true
+  2026-09-13-provider-expansion:
+    proposal: canonical/proposals/2026-09-13-provider-expansion.yaml
+    capabilities:
+    - anthropic-provider-adapter
+    - gemini-provider-adapter
+    - provider-format-conversion
+    - provider-compatibility-matrix
+    verified: true

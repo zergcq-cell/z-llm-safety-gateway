@@ -1,0 +1,69 @@
+version: '2.0'
+change_id: 2026-09-13-provider-expansion
+status: archived
+task_type: code
+mode: thorough
+complexity_score: 14
+score_confidence: preliminary
+current_phase: deliver
+phases:
+  understand:
+    status: completed
+    confirmed_at: '2026-09-13T07:20:00+08:00'
+    approval_text: '确认填'
+  spec:
+    status: completed
+    confirmed_at: '2026-09-13T07:25:00+08:00'
+  slice:
+    status: completed
+    completed_at: '2026-09-13T07:30:00+08:00'
+  build:
+    status: completed
+    completed_at: '2026-09-13T07:45:00+08:00'
+  verify:
+    status: completed
+    confirmed_at: '2026-09-13T08:30:00+08:00'
+    test_report: test-report.md
+  deliver:
+    status: pending
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+long_range:
+  enabled: true
+  mode: full_auto
+  pre_auth_completed: true
+  authorization: user_confirmed_all
+  gate3_mandatory: true
+artifacts:
+  proposal_yaml: canonical/proposals/2026-09-13-provider-expansion.yaml
+  proposal_md: proposal.md
+  design_md: design.md
+  test_plan_md: test-plan.md
+  spec_yaml: specs/*/spec.yaml
+  slices_md: slices.md
+  tasks_md: tasks.md
+  phase_context_md: phase-context.md
+phase3:
+  status: completed
+  slices: 4
+  dependency_cycles: 0
+phase4:
+  status: completed
+  slices_completed:
+    S1: {status: done, tc_coverage: '2/2', new_tests: 2}
+    S2: {status: done, tc_coverage: '2/2', new_tests: 1}
+    S3: {status: done, tc_coverage: '2/2', new_tests: 4}
+    S4: {status: done, tc_coverage: '3/3', new_tests: 3}
+phase5:
+  status: completed
+  full_regression: '1214_passed_1_skipped_excluding_sandbox_grpc_and_perf'
+  focused_regression: '19_passed'
+  lint: passed
+  typecheck: passed
+  failure_modes: a_to_l_checked
+  design_adjustments: design-adjustments.yaml
+phase6:
+  status: completed
+  archived_at: '2026-09-13T08:35:00+08:00'

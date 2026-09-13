@@ -56,11 +56,19 @@ async def list_models(request: Request) -> Response:
     else:
         provider = request.app.state.router.models_provider()
     provider_config = provider.config
-    url = f"{provider_config.base_url}/models"
+    url = f"{provider_config.base_url.rstrip('/')}/models"
+    if provider_config.type == "anthropic":
+        url = f"{provider_config.base_url.rstrip('/')}/models"
 
     # Build headers
     headers: dict[str, str] = {"Accept": "application/json"}
-    if provider_config.api_key:
+    if provider_config.type == "anthropic" and provider_config.api_key:
+        headers["x-api-key"] = provider_config.api_key
+        if provider_config.api_version:
+            headers["anthropic-version"] = provider_config.api_version
+    elif provider_config.type == "gemini" and provider_config.api_key:
+        headers["x-goog-api-key"] = provider_config.api_key
+    elif provider_config.api_key:
         headers["Authorization"] = f"Bearer {provider_config.api_key}"
 
     # Build query params (Azure api-version)

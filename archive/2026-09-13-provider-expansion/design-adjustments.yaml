@@ -1,0 +1,13 @@
+change_id: 2026-09-13-provider-expansion
+requires_re_spec: false
+adjustments:
+  - id: ADJ-001
+    type: compatibility
+    description: "ProviderConfig 的 type 扩展为 anthropic 和 gemini，并保留既有字符串契约。"
+    reason: "新增 adapter 必须可由现有路由和配置加载。"
+    evidence: "src/z_llm_safety_gateway/config/models.py"
+  - id: ADJ-002
+    type: compatibility
+    description: "模型列表端点按 Provider 使用对应认证头。"
+    reason: "Anthropic/Gemini 不使用 OpenAI Bearer 认证。"
+    evidence: "src/z_llm_safety_gateway/routes/models.py"

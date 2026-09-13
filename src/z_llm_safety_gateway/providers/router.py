@@ -14,8 +14,10 @@ from z_llm_safety_gateway.config.models import (
     TenantPolicyRoutingConfig,
     TenantRoutingRuleConfig,
 )
+from z_llm_safety_gateway.providers.anthropic import AnthropicProvider
 from z_llm_safety_gateway.providers.azure_openai import AzureOpenAIProvider
 from z_llm_safety_gateway.providers.base import BaseProvider, ProviderError
+from z_llm_safety_gateway.providers.gemini import GeminiProvider
 from z_llm_safety_gateway.providers.openai import OpenAIProvider
 from z_llm_safety_gateway.providers.openai_compatible import OpenAICompatibleProvider
 
@@ -23,6 +25,8 @@ _PROVIDER_TYPES: dict[str, type[BaseProvider]] = {
     "openai": OpenAIProvider,
     "openai_compatible": OpenAICompatibleProvider,
     "azure_openai": AzureOpenAIProvider,
+    "anthropic": AnthropicProvider,
+    "gemini": GeminiProvider,
 }
 
 

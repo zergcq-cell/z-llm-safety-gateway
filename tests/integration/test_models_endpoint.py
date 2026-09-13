@@ -39,6 +39,37 @@ security:
     upstream: 5
 """
 
+GEMINI_CONFIG_YAML = """
+server:
+  host: "127.0.0.1"
+  port: 8080
+providers:
+  - name: "gemini"
+    type: "gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    api_key: "gemini-secret"
+routing:
+  rules:
+    - pattern: "gemini*"
+      provider: "gemini"
+"""
+
+ANTHROPIC_CONFIG_YAML = """
+server:
+  host: "127.0.0.1"
+  port: 8080
+providers:
+  - name: "anthropic"
+    type: "anthropic"
+    base_url: "https://api.anthropic.com/v1"
+    api_key: "anthropic-secret"
+    api_version: "2023-06-01"
+routing:
+  rules:
+    - pattern: "claude*"
+      provider: "anthropic"
+"""
+
 
 @pytest.fixture
 def app(tmp_path: pytest.TempPathFactory) -> FastAPI:
@@ -108,3 +139,38 @@ def test_list_models_passthrough_first_provider(client: TestClient) -> None:
     # Only the first provider was queried
     assert openai_models_route.call_count == 1
     assert local_llama_route.call_count == 0
+
+
+@respx.mock
+def test_list_models_uses_gemini_api_key_header(tmp_path) -> None:
+    """TC-COMP-001: Gemini model discovery uses its native authentication."""
+    config_path = tmp_path / "gemini.yaml"
+    config_path.write_text(GEMINI_CONFIG_YAML)
+    app = create_app(str(config_path))
+    route = respx.get("https://generativelanguage.googleapis.com/v1beta/models").respond(
+        200,
+        json={"models": [{"name": "models/gemini-1.5"}]},
+    )
+
+    response = TestClient(app).get("/v1/models")
+
+    assert response.status_code == 200
+    assert route.calls[0].request.headers["x-goog-api-key"] == "gemini-secret"
+    assert "Authorization" not in route.calls[0].request.headers
+
+
+@respx.mock
+def test_list_models_uses_anthropic_native_headers(tmp_path) -> None:
+    """TC-COMP-001: Claude model discovery uses Anthropic's native headers."""
+    config_path = tmp_path / "anthropic.yaml"
+    config_path.write_text(ANTHROPIC_CONFIG_YAML)
+    app = create_app(str(config_path))
+    route = respx.get("https://api.anthropic.com/v1/models").respond(200, json={"data": []})
+
+    response = TestClient(app).get("/v1/models")
+
+    assert response.status_code == 200
+    request_headers = route.calls[0].request.headers
+    assert request_headers["x-api-key"] == "anthropic-secret"
+    assert request_headers["anthropic-version"] == "2023-06-01"
+    assert "Authorization" not in request_headers

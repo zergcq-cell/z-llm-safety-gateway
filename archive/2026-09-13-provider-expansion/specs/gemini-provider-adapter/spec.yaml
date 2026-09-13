@@ -1,0 +1,23 @@
+capability: gemini-provider-adapter
+requirements:
+  - id: GPA-001
+    confidence: high
+    text: "Gemini 非流式请求 SHALL 按统一 Provider contract 转换并发送。"
+    scenarios:
+      - id: GPA-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[1]
+        given: "有效的 Gemini 配置和统一聊天请求"
+        when: "调用 Gemini adapter"
+        then: "请求 SHALL 使用正确模型、contents 和认证"
+        and: "响应 SHALL 返回统一 Provider 结果"
+  - id: GPA-002
+    confidence: high
+    text: "Gemini 流式响应 SHALL 转换为稳定网关 SSE。"
+    scenarios:
+      - id: GPA-002-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[2]
+        given: "Gemini 返回有效事件流"
+        when: "网关处理流"
+        then: "SSE SHALL 保持顺序并以 [DONE] 结束"

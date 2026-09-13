@@ -32,7 +32,7 @@ from z_llm_safety_gateway.flow.contracts import (
 )
 
 # Provider types that require a non-empty api_key.
-_PROVIDER_TYPES_REQUIRING_API_KEY = frozenset({"openai", "azure_openai"})
+_PROVIDER_TYPES_REQUIRING_API_KEY = frozenset({"openai", "azure_openai", "anthropic", "gemini"})
 
 # Provider types that require a non-empty api_version.
 _PROVIDER_TYPES_REQUIRING_API_VERSION = frozenset({"azure_openai"})
