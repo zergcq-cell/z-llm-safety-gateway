@@ -1,0 +1,35 @@
+capability: tenant-failure-matrix
+requirements:
+  - id: TFM-001
+    confidence: high
+    text: "资源耗尽、超时、取消、初始化失败和 Provider 不可用 SHALL 映射到稳定失败分类。"
+    scenarios:
+      - id: TFM-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[2]
+        given: "任一请求路径触发一种声明的失败条件"
+        when: "网关处理该失败"
+        then: "响应和观测 SHALL 使用稳定 reason code"
+        and: "系统 SHALL 不回退到其他租户的 bundle 或策略"
+  - id: TFM-002
+    confidence: high
+    text: "失败和降级 SHALL 可观测且不泄漏敏感数据。"
+    scenarios:
+      - id: TFM-002-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[4]
+        given: "租户资源或 Provider 失败"
+        when: "系统生成日志、trace、metric 或 audit evidence"
+        then: "事件 SHALL 包含最小租户归属、资源类型和 reason code"
+        and: "事件 SHALL 不包含原文、密钥或原始异常"
+  - id: TFM-003
+    confidence: high
+    text: "单次请求 deadline SHALL 传播到 Flow、Provider、SSE 和后台任务。"
+    scenarios:
+      - id: TFM-003-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[1]
+        given: "请求具有有限 deadline"
+        when: "下游节点或 Provider 超过剩余时间"
+        then: "执行 SHALL 被取消并返回匹配的 timeout 分类"
+        and: "后续重试 SHALL 不超过声明上限"

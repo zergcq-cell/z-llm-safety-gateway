@@ -1320,7 +1320,21 @@ async def chat_completions(request: Request) -> Response:
             except Exception:
                 logger.warning("async_output_detection_failed", exc_info=True)
 
-        asyncio.create_task(_async_output_detection())
+        async def _run_bounded_background() -> None:
+            manager = getattr(request.state, "tenant_resource_manager", None)
+            snapshot = getattr(request.state, "resource_snapshot", None)
+            if manager is None or snapshot is None:
+                await _async_output_detection()
+                return
+            try:
+                lease = await manager.acquire(snapshot, "background")
+            except Exception:
+                logger.warning("tenant_background_resource_exhausted")
+                return
+            async with lease:
+                await _async_output_detection()
+
+        asyncio.create_task(_run_bounded_background())
 
         # Initial audit entry (pending)
         if audit_enabled and audit_logger:

@@ -679,6 +679,18 @@ class TenantConfig(BaseModel):
     )
 
 
+class TenantResourceConfig(BaseModel):
+    """Bounded per-tenant capacity and lifecycle limits."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    max_concurrency: int = Field(default=16, ge=1, le=4096)
+    queue_limit: int = Field(default=32, ge=0, le=4096)
+    request_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
+    max_streams: int = Field(default=16, ge=1, le=4096)
+    max_background_tasks: int = Field(default=32, ge=0, le=4096)
+
+
 class TenancyConfig(BaseModel):
     """Trusted tenant identity and policy configuration."""
 
@@ -821,6 +833,9 @@ class GatewayConfig(BaseModel):
     routing: RoutingConfig
     pipeline: PipelineConfig = PipelineConfig()
     tenancy: TenancyConfig = TenancyConfig()
+    tenant_resources: TenantResourceConfig | dict[str, TenantResourceConfig] = Field(
+        default_factory=TenantResourceConfig
+    )
     security: SecurityConfig = SecurityConfig()
     audit: AuditConfig = AuditConfig()
     logging: LoggingConfig = LoggingConfig()

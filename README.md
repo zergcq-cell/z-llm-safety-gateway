@@ -102,9 +102,8 @@ development environments.
 **Versioning policy** (SemVer): `v0.0.x` = internal development · `v0.x.y` = public test releases · `v1.0.0` = general availability (when the API is stable and validated).
 
 Next planned milestone: **v0.3.0**, the multi-tenant safety policy isolation foundation. This is
-in progress: changes 1/4, 2/4, and 3/4 delivered. Evidence and observability isolation is
-complete; resource/failure compatibility remains change 4/4;
-the public milestone is not complete. The released Gateway version remains v0.2.2. Scope,
+all four changes are delivered. The v0.3.0 foundation is complete;
+the released Gateway version remains v0.2.2. Scope,
 implementation units, entry criteria, and completion criteria are maintained in the
 [authoritative project roadmap](DESIGN.md#post-v010-roadmap-until-v100-ga).
 

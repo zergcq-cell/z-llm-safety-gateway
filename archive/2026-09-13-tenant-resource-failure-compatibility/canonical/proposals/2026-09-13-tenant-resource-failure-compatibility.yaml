@@ -1,0 +1,96 @@
+meta:
+  change_id: 2026-09-13-tenant-resource-failure-compatibility
+  title: "v0.3.0 租户资源、失败与兼容性隔离"
+  created: "2026-09-13T00:00:00+08:00"
+  status: confirmed
+why:
+  problem: "租户身份、策略解析和观测隔离已完成，但资源使用、并发争用和跨路径失败行为仍缺少统一租户边界；高负载或租户级故障可能影响其他租户。"
+  motivation: "完成 v0.3.0 多租户安全策略隔离基础的第四项变更，建立容量、失败和兼容性整体验收基础。"
+what_changes:
+  - id: C1
+    description: "增加租户级容量、并发、队列和资源生命周期契约。"
+    type: new
+  - id: C2
+    description: "定义请求、Flow、Detector、Provider、SSE、buffer 和 post-audit 的统一资源边界。"
+    type: new
+  - id: C3
+    description: "建立资源耗尽、超时、取消、初始化失败、Provider 不可用和隔离异常的稳定失败矩阵。"
+    type: new
+  - id: C4
+    description: "禁止静默跨租户回退、上下文泄漏和状态污染，并保持旧单租户及协议兼容。"
+    type: modified
+  - id: C5
+    description: "增加 v0.3.0 四项变更的聚合验收矩阵和交付证据。"
+    type: new
+capabilities:
+  new:
+    - name: tenant-resource-isolation
+      description: "租户级并发、容量、队列和资源生命周期隔离。"
+    - name: tenant-failure-matrix
+      description: "统一、显式、可观测的租户失败、超时、取消和降级契约。"
+    - name: v0.3-aggregate-acceptance
+      description: "身份、策略、证据、观测、资源和兼容性的联合验收。"
+  modified:
+    - name: flow-runtime
+      description: "在租户资源上下文中执行，同时保持 Flow 核心租户中立。"
+    - name: provider-proxy
+      description: "在租户资源和失败策略约束下执行 Provider 调用。"
+    - name: streaming-and-post-audit
+      description: "SSE、buffer、post-audit 和异步路径遵循同一资源快照与失败语义。"
+    - name: legacy-compatibility
+      description: "未启用租户功能的旧配置和单租户调用路径保持兼容。"
+constraints:
+  - "严格执行 Understand → Spec → Slice → Build → Verify → Deliver，每个切片执行 RED → GREEN → REFACTOR。"
+  - "所有配额、上限、超时、取消、降级和失败 reason code 必须显式、有界、可观测。"
+  - "不引入数据库、缓存、控制面、新 Provider/Detector 或新的外部服务。"
+  - "保持包版本 v0.2.2，直到 v0.3.0 四项变更完成并通过整体验收。"
+stakeholders:
+  - "网关部署者与运维人员"
+  - "多租户应用开发者"
+  - "安全策略与合规审计人员"
+  - "Provider 和 Detector 插件维护者"
+  - "现有单租户用户"
+risk_areas:
+  - capability: tenant-resource-isolation
+    risk: "共享信号量或队列设计错误造成跨租户饥饿、资源泄漏或无界等待。"
+    mitigation: "不可变租户资源快照、有界队列、确定性并发屏障和资源释放测试。"
+  - capability: tenant-failure-matrix
+    risk: "不同请求路径失败语义不一致，导致客户端误判或安全策略绕过。"
+    mitigation: "统一稳定 reason code，覆盖 sync/async/SSE/buffer/post-audit 的失败矩阵。"
+  - capability: provider-proxy
+    risk: "Provider 超时、取消和重试放大资源占用或跨租户影响。"
+    mitigation: "单次请求 deadline、取消传播、重试上限和 Provider 零调用断言。"
+  - capability: legacy-compatibility
+    risk: "新资源配置改变旧单租户响应或错误协议。"
+    mitigation: "旧配置 corpus、HTTP/SSE/Provider 回归和负向兼容测试。"
+non_goals:
+  - "租户数据库、缓存、控制面 API、热更新或物理日志分库。"
+  - "新增 Provider、Detector、OAuth、多模态或其他产品能力。"
+  - "改变租户身份格式和既有策略 schema。"
+  - "发布 v0.3.0、创建 tag 或推送 GitHub。"
+critical:
+  is_critical: true
+  risk_assessment:
+    safety_critical: true
+    financial: false
+    cross_system: true
+anchoring:
+  level: L3
+  reference_changes:
+    - 2026-08-30-tenant-identity-config-contract
+    - 2026-09-01-tenant-flow-policy-resolution
+    - 2026-09-08-tenant-evidence-observability-isolation
+  anchor_implementations: []
+principle_check:
+  plugin_flow: "资源隔离、生命周期和失败处理属于核心运行机制；租户安全领域行为仍由插件提供，执行组合仍由 Flow 决定。"
+  explicit_policy_failure: "配额、队列、超时、取消、资源耗尽和降级动作均配置化、可观测，并使用稳定失败代码。"
+  transparent_contracts: "保留旧单租户、HTTP、SSE、Provider 和错误响应语义；资源成本设置明确上限。"
+  evidence_data_protection: "资源拒绝、失败和降级记录最小租户归属与策略证据，不记录原始内容、密钥或无界标签。"
+  tradeoffs_or_departures: "none"
+success_criteria:
+  - "任一租户达到资源上限时，仅该租户受到稳定、可观测的拒绝或排队结果，其他租户仍可运行。"
+  - "同步、异步、SSE、buffer、post-audit 和 Provider 调用均遵循同一租户资源快照。"
+  - "超时、取消、初始化失败、Provider 不可用和资源耗尽均命中明确失败矩阵，无静默跨租户 fallback。"
+  - "旧单租户配置和既有 HTTP/SSE/Provider 协议回归通过，响应语义保持兼容。"
+  - "通过跨租户隔离、失败模式、资源有界性、隐私、Ruff、mypy 和完整测试质量门。"
+  - "v0.3.0 四项变更的聚合验收矩阵全部通过，文档、canonical specs、代码索引和归档证据一致。"

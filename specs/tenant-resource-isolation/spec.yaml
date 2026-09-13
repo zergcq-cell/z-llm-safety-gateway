@@ -1,0 +1,33 @@
+capability: tenant-resource-isolation
+requirements:
+  - id: TRI-001
+    confidence: high
+    text: "系统 SHALL 为每个可信租户请求创建冻结且有界的 ResourceBudget。"
+    scenarios:
+      - id: TRI-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[0]
+        given: "两个租户拥有不同并发和队列预算"
+        when: "并发请求同时进入网关"
+        then: "每个请求 SHALL 只消费所属租户的预算"
+        and: "一个租户达到上限 SHALL 不阻断另一个租户"
+  - id: TRI-002
+    confidence: high
+    text: "资源租约 SHALL 在完成、异常、超时和取消后释放。"
+    scenarios:
+      - id: TRI-002-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[1]
+        given: "请求持有 Flow、Provider 或 SSE 资源租约"
+        when: "请求以成功、失败、超时或取消结束"
+        then: "租约 SHALL 被释放且 active count SHALL 回到基线"
+  - id: TRI-003
+    confidence: high
+    text: "队列、等待时间、连接数和后台任务数 SHALL 有显式上限。"
+    scenarios:
+      - id: TRI-003-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[0]
+        given: "租户队列已达到声明上限"
+        when: "新请求尝试获取资源"
+        then: "系统 SHALL 在不等待无限时间的情况下返回 tenant_resource_exhausted"

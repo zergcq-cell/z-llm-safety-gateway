@@ -275,6 +275,19 @@ security:
     detector: "5s"                   # 检测器默认超时
 ```
 
+## tenant_resources
+
+```yaml
+tenant_resources:
+  max_concurrency: 16          # 每租户同时执行的请求数，1–4096
+  queue_limit: 32              # 等待队列上限，0–4096
+  request_timeout_seconds: 120 # 单请求资源 deadline，最多 3600 秒
+  max_streams: 16              # 每租户流式连接上限
+  max_background_tasks: 32     # 每租户后台任务上限
+```
+
+资源限制默认采用进程内有界闸门；达到队列或并发上限时返回稳定的 `tenant_resource_exhausted`，等待超时返回 `tenant_resource_timeout`。未启用租户模式时，旧配置行为保持不变。
+
 ## observability
 
 ```yaml

@@ -1,0 +1,23 @@
+capability: v0.3-aggregate-acceptance
+requirements:
+  - id: V03-001
+    confidence: high
+    text: "整体验收 SHALL 覆盖四项 v0.3.0 变更的身份、策略、证据、观测、资源和兼容性契约。"
+    scenarios:
+      - id: V03-001-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[5]
+        given: "前三项变更的归档测试和当前 change 测试均可执行"
+        when: "运行聚合验收矩阵"
+        then: "所有 P0 契约 SHALL 通过且无跨租户泄漏"
+        and: "文档、canonical specs、代码索引和归档证据 SHALL 一致"
+  - id: V03-002
+    confidence: high
+    text: "旧单租户配置和透明 Provider 协议 SHALL 保持兼容。"
+    scenarios:
+      - id: V03-002-S1
+        confidence: high
+        evidence: proposal.yaml#success_criteria[3]
+        given: "未启用 tenancy 的旧配置和既有 HTTP/SSE/Provider 测试"
+        when: "运行完整兼容回归"
+        then: "响应状态、body、headers、SSE 事件和 Provider bytes SHALL 保持既有语义"

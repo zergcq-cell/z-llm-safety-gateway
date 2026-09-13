@@ -25,4 +25,24 @@ __all__ = [
     "ObservationScope",
     "TenantObservationContext",
     "build_tenant_observation_context",
+    "ResourceBudget",
+    "ResourceLease",
+    "ResourceSnapshot",
+    "TenantResourceError",
+    "TenantResourceExhausted",
+    "TenantResourceManager",
+    "TenantResourceTimeout",
+    "FailureKind",
+    "FailureOutcome",
 ]
+
+from z_llm_safety_gateway.tenancy.failures import FailureKind, FailureOutcome
+from z_llm_safety_gateway.tenancy.resources import (
+    ResourceBudget,
+    ResourceLease,
+    ResourceSnapshot,
+    TenantResourceError,
+    TenantResourceExhausted,
+    TenantResourceManager,
+    TenantResourceTimeout,
+)

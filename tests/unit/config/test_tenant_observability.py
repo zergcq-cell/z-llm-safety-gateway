@@ -35,11 +35,11 @@ def test_tenant_metric_ids_require_enabled_declared_tenants() -> None:
         GatewayConfig(**data)
 
 
-def test_roadmap_keeps_this_change_pending_until_gate_three_delivery() -> None:
+def test_roadmap_records_change_four_delivery() -> None:
     """TC-TOC-004: no roadmap claims delivery before Gate 3."""
     root = Path(__file__).parents[3]
     readme = (root / "README.md").read_text()
     design = (root / "DESIGN.md").read_text()
 
-    assert "changes 3/4 and 4/4" in readme
-    assert "changes 3/4 and 4/4 remain pending" in design
+    assert "all four changes are delivered" in readme
+    assert "change 4/4 delivered" in design

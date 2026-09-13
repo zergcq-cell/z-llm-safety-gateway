@@ -48,6 +48,7 @@ from z_llm_safety_gateway.middleware.rate_limit import RateLimitMiddleware
 from z_llm_safety_gateway.middleware.request_id import RequestIDMiddleware
 from z_llm_safety_gateway.middleware.request_size import RequestSizeMiddleware
 from z_llm_safety_gateway.middleware.safety_headers import SafetyHeadersMiddleware
+from z_llm_safety_gateway.middleware.tenant_resources import TenantResourceMiddleware
 from z_llm_safety_gateway.observability import metrics as observability_metrics
 from z_llm_safety_gateway.observability import tracing as observability_tracing
 from z_llm_safety_gateway.pipeline import FlagEscalationRule, PipelineEngine
@@ -59,6 +60,7 @@ from z_llm_safety_gateway.routes.health import router as health_router
 from z_llm_safety_gateway.routes.health import set_ready
 from z_llm_safety_gateway.routes.models import router as models_router
 from z_llm_safety_gateway.tenancy import TenantPolicyResolver, TenantRuntimeBundle
+from z_llm_safety_gateway.tenancy.resources import ResourceBudget, TenantResourceManager
 from z_llm_safety_gateway.tenancy.runtime import TenantRuntimeCompiler
 
 logger = structlog.get_logger()
@@ -570,6 +572,28 @@ def create_app(config_path: str) -> FastAPI:
         _identity_tenant_bundles(config),
     )
     app.state.tenant_policy_resolver = tenant_policy_resolver
+    resource_cfg = config.tenant_resources
+    if isinstance(resource_cfg, dict):
+        budgets = {
+            tenant_id: ResourceBudget(
+                max_concurrency=value.max_concurrency,
+                queue_limit=value.queue_limit,
+                request_timeout_seconds=value.request_timeout_seconds,
+                max_streams=value.max_streams,
+                max_background_tasks=value.max_background_tasks,
+            )
+            for tenant_id, value in resource_cfg.items()
+        }
+    else:
+        budget = ResourceBudget(
+            max_concurrency=resource_cfg.max_concurrency,
+            queue_limit=resource_cfg.queue_limit,
+            request_timeout_seconds=resource_cfg.request_timeout_seconds,
+            max_streams=resource_cfg.max_streams,
+            max_background_tasks=resource_cfg.max_background_tasks,
+        )
+        budgets = {tenant.id: budget for tenant in config.tenancy.tenants}
+    app.state.tenant_resource_manager = TenantResourceManager(budgets)
 
     # 3. Register middleware (order matters in Starlette!)
     #    add_middleware() adds to the *outer* end, so we register inner-first.
@@ -578,6 +602,7 @@ def create_app(config_path: str) -> FastAPI:
     app.add_middleware(SafetyHeadersMiddleware)
     app.add_middleware(RequestSizeMiddleware, max_request_size=config.security.max_request_size)
     app.add_middleware(RateLimitMiddleware, config=config.security.rate_limit)
+    app.add_middleware(TenantResourceMiddleware, manager=app.state.tenant_resource_manager)
     app.add_middleware(
         TenantPolicyResolutionMiddleware,
         resolver=tenant_policy_resolver,

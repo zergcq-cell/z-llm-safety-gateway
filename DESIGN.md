@@ -2954,9 +2954,8 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 AGENTS, issues, and release notes may summarize or link here, but they do not define independent
 milestone scope or completion commitments.
 
-**Runtime status:** Change 1/4 (`tenant-identity-config-contract`) is delivered. Change 2/4
-(`tenant-flow-policy-resolution`) and change 3/4 (`tenant-evidence-observability-isolation`) are delivered;
-change 4/4 remains pending. There is no package version change
+**Runtime status:** All four v0.3.0 implementation changes are delivered. The foundation is complete;
+there is no package version change
 or completed-milestone claim.
 
 Internal `v0.0.3` delivered Streaming & Audit during pre-public development. The public `v0.3.0`
@@ -2967,7 +2966,7 @@ is a distinct future milestone and does not repeat those completed capabilities.
 | v0.2.0 | Flow Foundation | Tag published 2026-08-23; Release workflow failed | v0.1.x production baseline | Flow contracts, runtime, policy, evidence, compatibility, and quality gates completed |
 | v0.2.1 | Release version hotfix | Released 2026-08-24 | Diagnose v0.2.0 release failure | Independent Gateway/SDK version validation repaired and release verified |
 | v0.2.2 | Release reproducibility and evidence | Released 2026-08-26 | v0.2.1 release baseline | Reproducible draft-first release and evidence contracts verified |
-| v0.3.0 | Multi-tenant safety policy isolation foundation | In progress; changes 1/4, 2/4, and 3/4 delivered, change 4/4 pending | This roadmap contract is delivered and each implementation unit starts an independent STDD change | All four implementation changes below are delivered and aggregate compatibility, failure, resource, evidence, privacy, and quality gates pass |
+| v0.3.0 | Multi-tenant safety policy isolation foundation | Foundation complete; all four changes delivered | This roadmap contract is delivered and each implementation unit starts an independent STDD change | All four implementation changes below are delivered and aggregate compatibility, failure, resource, evidence, privacy, and quality gates pass |
 | v0.4.0 | Unassigned later milestone | Planned; scope not committed | Independent STDD scope decision | Defined by its future confirmed STDD proposal |
 
 #### v0.3.0 Scope Contract
@@ -2997,9 +2996,8 @@ The implementation sequence is:
 4. `tenant-resource-failure-compatibility` — capacity and concurrency isolation, explicit failure
    matrices, compatibility, and aggregate acceptance.
 
-Each implementation change requires explicit Gate 1, Gate 2, and Gate 3 approval. Public v0.3.0
-must not be marked complete or release-ready until all four changes are delivered and the aggregate
-acceptance matrix passes.
+Each implementation change requires explicit Gate 1, Gate 2, and Gate 3 approval. Public v0.3.0 foundation is complete after all four changes and the aggregate acceptance matrix pass;
+release publication remains a separate versioned delivery decision.
 
 #### v0.3 Candidate Classification
 

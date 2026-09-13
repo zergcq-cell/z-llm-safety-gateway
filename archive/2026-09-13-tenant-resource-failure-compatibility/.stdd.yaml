@@ -1,0 +1,104 @@
+version: '2.0'
+change_id: 2026-09-13-tenant-resource-failure-compatibility
+status: archived
+task_type: code
+mode: thorough
+complexity_score: 14
+score_confidence: preliminary
+current_phase: deliver
+phases:
+  understand:
+    status: completed
+    confirmed_at: '2026-09-13T00:00:00+08:00'
+    approval_text: '确认gate 1'
+  spec:
+    status: completed
+    confirmed_at: '2026-09-13T00:10:00+08:00'
+  slice:
+    status: completed
+    completed_at: '2026-09-13T00:15:00+08:00'
+  build:
+    status: completed
+    completed_at: '2026-09-13T01:00:00+08:00'
+  verify:
+    status: completed
+    completed_at: '2026-09-13T01:10:00+08:00'
+  deliver:
+    status: pending
+gates:
+  gate1_understand: approved
+  gate2_spec: approved
+  gate3_verify: approved
+confirmed_at:
+  gate3_verify: '2026-09-13T01:30:00+08:00'
+  gate1_understand: '2026-09-13T00:00:00+08:00'
+  gate2_spec: '2026-09-13T00:10:00+08:00'
+long_range:
+  enabled: true
+  mode: full_auto
+  pre_auth_completed: true
+  pre_auth_timestamp: '2026-09-13T00:20:00+08:00'
+  authorization: user_confirmed_all
+  max_iterations: 10
+  auto_fix_failure_limit: 3
+  gate3_mandatory: true
+artifacts:
+  proposal_yaml: canonical/proposals/2026-09-13-tenant-resource-failure-compatibility.yaml
+  proposal_md: proposal.md
+  design_md: design.md
+  test_plan_md: test-plan.md
+  slices_md: slices.md
+  tasks_md: tasks.md
+
+phase2:
+  status: pending_confirmation
+  requirements: 7
+  scenarios: 8
+  capabilities: 3
+  confidence:
+    high: 8
+    medium: 0
+    low: 0
+  priority:
+    P0: 8
+    P1: 0
+    P2: 0
+  anchoring:
+    actual: L3
+    minimum: L3
+    status: passed
+  review:
+    status: passed
+    findings: 0
+
+phase3:
+  status: completed
+  slices: 5
+  requirements_covered: 7
+  scenarios_covered: 8
+  dependency_cycles: 0
+  execution: serial_due_to_shared_workspace
+
+phase4:
+  status: completed
+  slices_completed:
+    S1: {status: done, focused: 3_passed, red: queue_limit_boundary}
+    S2: {status: done, focused: 1_passed, red: none}
+    S3: {status: done, focused: 1_passed, red: python_3_10_StrEnum}
+    S4: {status: done, focused: streaming_lease_lifecycle_review, red: body_iterator_typing}
+    S5: {status: done, focused: 26_documentation_contracts_passed, red: stale_status_assertions}
+phase5:
+  status: completed
+  test_report: test-report.md
+  design_adjustments: design-adjustments.yaml
+  full_regression: 1190_passed_1_skipped_excluding_sandbox_grpc_and_perf
+  focused_regression: 275_passed_1_skipped
+  coverage: 93_percent_baseline
+  lint: passed
+  typecheck: passed
+  failure_modes: a_to_l_checked
+  review: 3_parallel_agents_completed_c0_h0_m0_l0
+
+phase6:
+  status: completed
+  archived_at: '2026-09-13T01:40:00+08:00'

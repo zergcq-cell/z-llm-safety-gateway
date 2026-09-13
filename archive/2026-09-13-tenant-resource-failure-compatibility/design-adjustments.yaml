@@ -1,0 +1,18 @@
+change_id: 2026-09-13-tenant-resource-failure-compatibility
+requires_re_spec: false
+adjustments:
+  - id: ADJ-001
+    type: boundary_case
+    description: "队列上限只计入无法立即获得并发槽位的等待者，首个可用槽位请求不应被 queue_limit=0 拒绝。"
+    reason: "首轮聚焦测试捕获了 active 与 waiter 计数边界。"
+    evidence: "tests/unit/tenancy/test_resources.py"
+  - id: ADJ-002
+    type: compatibility
+    description: "资源配置放置在 GatewayConfig.tenant_resources，保留 TenancyConfig identity-only 字段契约。"
+    reason: "既有配置契约要求 TenancyConfig 只包含 enabled、tenants、policies。"
+    evidence: "tests/unit/config/test_tenancy.py"
+  - id: ADJ-003
+    type: environment
+    description: "gRPC 端口绑定和历史吞吐微基准在当前沙箱/宿主不可稳定执行，作为环境信号单独记录。"
+    reason: "系统禁止本地端口绑定，非插桩吞吐受宿主调度影响。"
+    evidence: "test-report.md"
