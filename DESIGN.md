@@ -2954,7 +2954,7 @@ Estimated based on AI-assisted programming efficiency (using tools like Trae, Co
 AGENTS, issues, and release notes may summarize or link here, but they do not define independent
 milestone scope or completion commitments.
 
-**Runtime status:** All four v0.3.0 implementation changes are delivered. The foundation is complete;
+**Runtime status:** All four v0.3.0 implementation changes are delivered. Change 4/4 delivered. The foundation is complete;
 there is no package version change
 or completed-milestone claim.
 
