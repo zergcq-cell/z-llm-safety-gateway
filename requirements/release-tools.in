@@ -1,5 +1,5 @@
 # Direct release tool inputs. Regenerate release-tools.lock using requirements/README.md.
-pip==26.2.1
+pip==26.2.2
 build==1.5.0
 twine==7.0.0
 pip-audit==2.10.1
